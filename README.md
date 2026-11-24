@@ -26,4 +26,5 @@ Este repositorio solo tiene el sitio generado. El curso está en preparación: l
 | 16 | Evaluar una aplicación con IA |
 | 17 | Observabilidad y KPIs |
 | 18 | Seguridad de las aplicaciones con IA |
-| 19 | Integrar con el producto y llevarlo a la empresa |
+| 19 | Prompts para generar una aplicación con IA de producción |
+| 20 | Integrar con el producto y llevarlo a la empresa |
