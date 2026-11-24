@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Integrar y escalar · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="integrar-y-escalar">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 20 DE 20</span><h1>Integrar con el producto y llevarlo a la empresa</h1><p class="lede">El asistente de atención ya responde, recuerda, actúa, persigue objetivos y se mide. Falta que los otros sistemas de la empresa puedan usarlo como cualquier otro servicio y que el camino recorrido se repita en otras áreas. Este capítulo expone el asistente como una API REST con los lineamientos de referencia, con SSE y 202 Accepted, ordena las herramientas de cada nivel y los casos por área, arma el plan técnico de 12 meses y cierra la ruta del curso.</p></header>
+<section><div class="prose"><p>El curso empezó con una demo de viernes por la tarde: un modelo, un documento de tarifas y una respuesta correcta en dos segundos. Después vino el pedido del lunes, «lo mismo, pero que atienda a todos, conozca las facturas y haga los reembolsos», y diecinueve capítulos para construirlo pieza por pieza.</p><p>Hoy el asistente de atención es otra cosa. Responde con citas o dice «no lo sé», conoce a Carmen Rojas y su factura F-88213, reprograma la visita 4471, propone el reembolso del ticket T-55190 y espera a la supervisora, atiende una avería masiva con un agente que tiene presupuesto y botón de parada, y cada respuesta tiene su traza. La directora de operaciones hizo la pregunta siguiente: «¿Pueden usarlo también la aplicación de técnicos, el portal de clientes y ventas? ¿Y cómo hacemos lo mismo en finanzas?». Este capítulo responde las dos partes: integrar y escalar.</p></div></section>
+<section><h2>Exponer el asistente como API REST con los lineamientos de referencia</h2><div class="analogia"><b>Imagínalo así</b><p>En un banco, cualquier ventanilla recibe el mismo formulario de depósito, con los mismos campos en el mismo orden. No importa qué cajero te atienda ni en qué sucursal estés: el formulario es el contrato. Si cada ventanilla inventara el suyo, nadie sabría qué llenar.</p></div><div class="prose"><p>Hasta aquí, el asistente tenía un solo cliente: el panel al costado de la pantalla de tickets. Para que lo usen otros equipos tiene que comportarse como cualquier servicio de la empresa, con una <b>API REST</b> (<i>Representational State Transfer</i>, el estilo de API que usa recursos y los verbos de HTTP) que siga las mismas reglas que las demás. El curso <a href="https://aaramirez.github.io/backend/temario.html" target="_blank" rel="noopener">Backend y APIs</a> presenta algunos lineamientos de referencia; aplicados al asistente, se ven así:</p><ul><li><b>Recursos en plural y la versión en la ruta</b>: <code>POST /api/v1/consultas</code>, <code>GET /api/v1/operaciones/{id}</code>. La ruta corta <code>/v1/consultas</code> que usó el curso pasa a la forma completa.</li><li><b>JSON en <code>camelCase</code></b>: <code>sinEvidencia</code>, <code>traceId</code>, <code>montoTotal</code>.</li><li><b>Un sobre para el éxito</b>: la respuesta va dentro de <code>data</code>, sin campos redundantes como <code>success</code>.</li><li><b>Un sobre para el error</b>: <code>error</code> con <code>code</code>, <code>message</code>, <code>details</code> y <code>traceId</code>, para que quien llama pueda reaccionar sin leer texto libre.</li><li><b>Dinero sin decimales flotantes</b>: los montos van como texto decimal con su moneda (<code>"35.00"</code>, <code>"USD"</code>), porque <code>0.1 + 0.2</code> no da <code>0.3</code> en coma flotante.</li></ul><div class="code-copia"><pre><code>POST /api/v1/consultas
+Content-Type: application/json
+Authorization: Bearer &lt;token de la persona&gt;
+
+{"pregunta": "¿Cuánto debe pagar Carmen para reconectar?", "ticketId": "T-55190"}
+
+200 OK
+X-Trace-Id: 6c2e91
+
+{"data": {"respuesta": "Debe US$ 35,00: la factura F-88213 y el cargo de reconexión.",
+          "fuentes": ["politica-reconexion-2026"],
+          "montoTotal": {"valor": "35.00", "moneda": "USD"},
+          "sinEvidencia": false}}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Los <b>códigos de estado</b> (<i>status codes</i>) dicen lo que pasó sin abrir el cuerpo. Una API con IA usa los de siempre, con algunos significados propios:</p><div class="tbl"><table><thead><tr><th>Código</th><th>Cuándo lo devuelve el asistente</th></tr></thead><tbody><tr><td><code>200 OK</code></td><td>Respuesta lista, incluida la abstención («no lo sé» es una respuesta válida)</td></tr><tr><td><code>202 Accepted</code></td><td>Recibió una tarea larga o una acción que espera aprobación</td></tr><tr><td><code>401</code> / <code>403</code></td><td>Sin token, o la persona no tiene permiso sobre ese ticket o esa cuenta</td></tr><tr><td><code>422</code></td><td>La entrada no cumple el contrato, o una clave de idempotencia repetida con otro cuerpo</td></tr><tr><td><code>429</code></td><td>Se agotó el límite de peticiones o el presupuesto</td></tr><tr><td><code>503</code></td><td>El modelo principal y el de respaldo no responden</td></tr></tbody></table></div><p>Antes de escribir código, el contrato se escribe en <b>OpenAPI</b>, el formato estándar para describir una API REST. Con él se generan la documentación y los clientes, y la batería del capítulo 19 prueba contra él.</p></div><figure class="fig fig-arquitectura" id="20-diagrama-2"><div class="lienzo"><svg viewBox="0 0 900 540" style="min-width:740px" role="img" aria-label="Arquitectura del asistente como servicio: arriba cuatro clientes (panel de tickets, aplicación de técnicos, portal de clientes y herramienta de ventas) entran por la API REST /api/v1 con identidad y límites; en el centro el asistente con sus piezas por nivel y la base común; abajo los sistemas de la empresa, a los que se llega por herramientas y servidores MCP">
+<defs><marker id="c20d2-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker></defs>
+<rect x="14" y="14" width="872" height="86" rx="12" class="d-inet"/>
+<text x="28" y="34" class="t t-xs t-b k-inet">CLIENTES</text>
+<rect x="40" y="46" width="190" height="40" rx="8" class="caja"/>
+<text x="135" y="71" class="t" style="font-size:12px" text-anchor="middle">Panel de tickets</text>
+<line x1="135" y1="86" x2="135" y2="126" class="ln" style="stroke-width:1.6" marker-end="url(#c20d2-m)"/>
+<rect x="250" y="46" width="190" height="40" rx="8" class="caja"/>
+<text x="345" y="71" class="t" style="font-size:12px" text-anchor="middle">App de técnicos</text>
+<line x1="345" y1="86" x2="345" y2="126" class="ln" style="stroke-width:1.6" marker-end="url(#c20d2-m)"/>
+<rect x="460" y="46" width="190" height="40" rx="8" class="caja"/>
+<text x="555" y="71" class="t" style="font-size:12px" text-anchor="middle">Portal de clientes</text>
+<line x1="555" y1="86" x2="555" y2="126" class="ln" style="stroke-width:1.6" marker-end="url(#c20d2-m)"/>
+<rect x="670" y="46" width="190" height="40" rx="8" class="caja"/>
+<text x="765" y="71" class="t" style="font-size:12px" text-anchor="middle">Herramienta de ventas</text>
+<line x1="765" y1="86" x2="765" y2="126" class="ln" style="stroke-width:1.6" marker-end="url(#c20d2-m)"/>
+<rect x="40" y="128" width="820" height="44" rx="10" class="d-casa" style="stroke-width:2"/>
+<text x="56" y="155" class="t t-b k-casa" style="font-size:13px">API REST /api/v1</text>
+<text x="250" y="155" class="t t-s">identidad y permisos · límites y presupuesto · contrato OpenAPI · JSON o SSE · 202 para lo largo</text>
+<rect x="14" y="186" width="872" height="236" rx="12" class="caja"/>
+<text x="28" y="206" class="t t-xs t-b t-m">EL ASISTENTE DE ATENCIÓN</text>
+<rect x="40" y="216" width="580" height="32" rx="7" class="c-fis"/>
+<text x="54" y="237" class="t t-b k-fis" style="font-size:12px">N1</text>
+<text x="110" y="237" class="t t-s">contexto y plantillas · esquema validado · RAG con citas</text>
+<rect x="40" y="256" width="580" height="32" rx="7" class="c-enl"/>
+<text x="54" y="277" class="t t-b k-enl" style="font-size:12px">N2</text>
+<text x="110" y="277" class="t t-s">sesión · memoria con permisos · canales</text>
+<rect x="40" y="296" width="580" height="32" rx="7" class="c-red"/>
+<text x="54" y="317" class="t t-b k-red" style="font-size:12px">N3</text>
+<text x="110" y="317" class="t t-s">herramientas · política · aprobaciones · flujos</text>
+<rect x="40" y="336" width="580" height="32" rx="7" class="c-tra"/>
+<text x="54" y="357" class="t t-b k-tra" style="font-size:12px">N4-5</text>
+<text x="110" y="357" class="t t-s">agente con presupuesto · clasificador ajustado</text>
+<rect x="640" y="216" width="220" height="152" rx="8" class="caja" style="stroke-width:2;stroke-dasharray:5 4"/>
+<text x="654" y="238" class="t t-xs t-b t-m">BASE COMÚN</text>
+<text x="654" y="262" class="t t-s">puerta a los modelos</text>
+<text x="654" y="284" class="t t-s">trazas y KPIs</text>
+<text x="654" y="306" class="t t-s">batería de evaluación</text>
+<text x="654" y="328" class="t t-s">guardrails</text>
+<text x="654" y="350" class="t t-s">secretos</text>
+<text x="40" y="400" class="t t-s t-m">Los clientes no ven estas piezas: solo el contrato de la API.</text>
+<line x1="520" y1="368" x2="520" y2="446" class="ln s-red" style="stroke-width:2" marker-end="url(#c20d2-m)"/>
+<text x="530" y="440" class="t t-s k-red">herramientas y servidores MCP</text>
+<rect x="14" y="448" width="872" height="78" rx="12" class="d-sis"/>
+<text x="28" y="468" class="t t-xs t-b k-sis">SISTEMAS DE LA EMPRESA</text>
+<rect x="40" y="478" width="190" height="36" rx="8" class="caja"/>
+<text x="135" y="501" class="t" style="font-size:12px" text-anchor="middle">CRM</text>
+<rect x="250" y="478" width="190" height="36" rx="8" class="caja"/>
+<text x="345" y="501" class="t" style="font-size:12px" text-anchor="middle">Tickets</text>
+<rect x="460" y="478" width="190" height="36" rx="8" class="caja"/>
+<text x="555" y="501" class="t" style="font-size:12px" text-anchor="middle">Órdenes de trabajo</text>
+<rect x="670" y="478" width="190" height="36" rx="8" class="caja"/>
+<text x="765" y="501" class="t" style="font-size:12px" text-anchor="middle">Facturación</text>
+</svg></div><figcaption><b>El asistente como servicio de la empresa.</b> Arriba, los clientes: el panel de tickets, la aplicación de técnicos, el portal de clientes y la herramienta de ventas. Todos entran por la misma API REST (<code>/api/v1</code>), que autentica con el proveedor de identidad y aplica los límites. En el centro, el asistente con sus piezas por nivel, coloreadas como en el resto del curso, y la base común punteada: puerta a los modelos, trazas, evaluación y secretos. Abajo, los sistemas de la empresa, a los que solo se llega por herramientas y servidores MCP: CRM, tickets, órdenes de trabajo y facturación.</figcaption></figure></section>
+<section><h2>SSE para la respuesta en <i>streaming</i> y <code>202 Accepted</code> para las operaciones largas</h2><div class="prose"><p>Hay dos situaciones en las que el par «pregunta y respuesta» de HTTP no alcanza.</p></div><div class="analogia"><b>Imagínalo así</b><p>En un restaurante, la sopa llega en cuanto está y el plato fuerte después: no esperas a que todo esté listo para empezar a comer. Y si pides una torta de cumpleaños para el sábado, no te quedas parado en el mostrador hasta el sábado: te dan un número de pedido y pasas a buscarla, o te llaman cuando está.</p></div><div class="prose"><p><b>Cuando la respuesta tarda unos segundos</b>, conviene mostrarla mientras se escribe, como en el capítulo 3. Para eso se usa <b>SSE</b> (<i>Server-Sent Events</i>, eventos enviados por el servidor): el cliente pide con <code>Accept: text/event-stream</code> y el servidor mantiene abierta la respuesta y manda eventos de texto, cada uno con un nombre y sus datos. El asistente usa cuatro: <code>delta</code> (un pedazo de la respuesta), <code>fuente</code> (una cita confirmada), <code>fin</code> (con el <code>traceId</code> y el uso de tokens) y <code>error</code>. SSE es HTTP común en un solo sentido, del servidor al cliente; pasa por los mismos proxies y balanceadores, y el navegador se reconecta solo. Un <b>WebSocket</b> (canal de dos vías sobre una sola conexión) solo hace falta si el cliente también tiene que mandar datos mientras recibe, como en la voz del capítulo 6.</p><p>Una regla nace de los <b>guardrails</b> (<i>guardrails</i>, los controles en código sobre lo que entra y sale del modelo): el texto que sale por <code>delta</code> todavía no pasó el guardrail de salida, que necesita la respuesta completa. Por eso el panel lo muestra como borrador, el evento <code>fin</code> confirma, y si el guardrail bloquea, llega un evento <code>error</code> que reemplaza el borrador.</p><p><b>Cuando la tarea tarda minutos</b> o espera a una persona, mantener la conexión abierta es mala idea. La API responde <b><code>202 Accepted</code></b>: «recibí el pedido y lo voy a procesar». En el encabezado <code>Location</code> va la dirección de una <b>operación</b> (<i>operation</i>) que el cliente consulta cuando quiera, con su estado: <code>en-curso</code>, <code>esperando-aprobacion</code>, <code>terminada</code> o <code>fallida</code>. Así funcionan el informe del agente de avería masiva, que recorre 340 tickets, y el reembolso que espera a la supervisora. Si el cliente no quiere preguntar cada tanto, se registra un <b>webhook</b> (<i>webhook</i>, una URL del cliente a la que el servidor avisa cuando termina).</p></div><figure class="fig fig-flujo" id="20-diagrama-1"><div class="lienzo"><svg viewBox="0 0 900 600" style="min-width:740px" role="img" aria-label="Diagrama de secuencia con dos formas de responder: arriba, el panel pide con Accept text/event-stream, la API llama al modelo en streaming y manda eventos delta, fuente y fin con el traceId; abajo, el panel pide un informe, la API responde 202 Accepted con Location, un trabajador procesa los tickets y el panel consulta la operación hasta que está terminada">
+<defs>
+<marker id="c20d1-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c20d1-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+<marker id="c20d1-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+</defs>
+<rect x="22" y="14" width="116" height="50" rx="10" class="d-inet"/>
+<text x="80" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Panel</text>
+<text x="80" y="52" class="t t-s t-m" text-anchor="middle">cliente</text>
+<line x1="80" y1="64" x2="80" y2="584" class="vida"/>
+<rect x="202" y="14" width="116" height="50" rx="10" class="d-casa"/>
+<text x="260" y="35" class="t t-b k-casa" text-anchor="middle" style="font-size:12px">API</text>
+<text x="260" y="52" class="t t-s t-m" text-anchor="middle">/api/v1</text>
+<line x1="260" y1="64" x2="260" y2="584" class="vida"/>
+<rect x="382" y="14" width="116" height="50" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="440" y="35" class="t t-b k-warm" text-anchor="middle" style="font-size:12px">Modelo</text>
+<text x="440" y="52" class="t t-s t-m" text-anchor="middle">por la puerta</text>
+<line x1="440" y1="64" x2="440" y2="584" class="vida"/>
+<rect x="562" y="14" width="116" height="50" rx="10" class="d-casa"/>
+<text x="620" y="35" class="t t-b k-casa" text-anchor="middle" style="font-size:12px">Trabajador</text>
+<text x="620" y="52" class="t t-s t-m" text-anchor="middle">segundo plano</text>
+<line x1="620" y1="64" x2="620" y2="584" class="vida"/>
+<line x1="80" y1="102" x2="258" y2="102" class="ln" style="stroke:var(--d-inet);stroke-width:2" marker-end="url(#c20d1-m)"/>
+<text x="88" y="80" class="t" style="font-size:12px">① POST /consultas</text>
+<text x="88" y="94" class="t t-s t-mono">text/event-stream</text>
+<line x1="260" y1="134" x2="438" y2="134" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c20d1-s)"/>
+<text x="268" y="126" class="t" style="font-size:12px">② stream: true</text>
+<line x1="440" y1="164" x2="262" y2="164" class="ln s-warm" style="stroke-width:1.6" marker-end="url(#c20d1-w)"/>
+<line x1="260" y1="164" x2="82" y2="164" class="ln" style="stroke:var(--d-casa);stroke-width:1.6" marker-end="url(#c20d1-s)"/>
+<line x1="440" y1="180" x2="262" y2="180" class="ln s-warm" style="stroke-width:1.6" marker-end="url(#c20d1-w)"/>
+<line x1="260" y1="180" x2="82" y2="180" class="ln" style="stroke:var(--d-casa);stroke-width:1.6" marker-end="url(#c20d1-s)"/>
+<line x1="440" y1="196" x2="262" y2="196" class="ln s-warm" style="stroke-width:1.6" marker-end="url(#c20d1-w)"/>
+<line x1="260" y1="196" x2="82" y2="196" class="ln" style="stroke:var(--d-casa);stroke-width:1.6" marker-end="url(#c20d1-s)"/>
+<text x="460" y="184" class="t" style="font-size:12px">③ event: delta, palabra a palabra</text>
+<line x1="260" y1="232" x2="82" y2="232" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c20d1-s)"/>
+<text x="100" y="224" class="t" style="font-size:12px">④ event: fuente</text>
+<line x1="260" y1="268" x2="82" y2="268" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c20d1-s)"/>
+<text x="100" y="260" class="t" style="font-size:12px">⑤ event: fin · traceId</text>
+<line x1="14" y1="300" x2="700" y2="300" class="ln ln-d"/>
+<line x1="80" y1="340" x2="258" y2="340" class="ln" style="stroke:var(--d-inet);stroke-width:2" marker-end="url(#c20d1-m)"/>
+<text x="88" y="332" class="t" style="font-size:12px">⑥ POST /analisis-averia</text>
+<line x1="260" y1="390" x2="82" y2="390" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c20d1-s)"/>
+<text x="92" y="366" class="t t-b k-casa" style="font-size:12px">⑦ 202 Accepted</text>
+<text x="92" y="380" class="t t-s t-mono">Location: …/op-0001</text>
+<line x1="260" y1="410" x2="618" y2="410" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c20d1-s)"/>
+<text x="460" y="402" class="t" style="font-size:12px">⑧ encola la tarea</text>
+<path d="M620 424 h40 v40 h-38" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c20d1-s)"/>
+<text x="668" y="440" class="t t-s">revisa los 340</text>
+<text x="668" y="454" class="t t-s">tickets</text>
+<line x1="80" y1="470" x2="258" y2="470" class="ln" style="stroke:var(--d-inet);stroke-width:2" marker-end="url(#c20d1-m)"/>
+<text x="88" y="462" class="t" style="font-size:12px">⑨ GET /operaciones/op-0001</text>
+<line x1="260" y1="494" x2="82" y2="494" class="ln ln-d" style="stroke-width:1.6" marker-end="url(#c20d1-m)"/>
+<text x="100" y="510" class="t t-s t-m">200 · en-curso</text>
+<line x1="80" y1="538" x2="258" y2="538" class="ln" style="stroke:var(--d-inet);stroke-width:2" marker-end="url(#c20d1-m)"/>
+<text x="88" y="530" class="t" style="font-size:12px">⑩ GET otra vez</text>
+<line x1="260" y1="562" x2="82" y2="562" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c20d1-s)"/>
+<text x="100" y="578" class="t t-s k-casa">200 · terminada + resultado</text>
+<path d="M760 86v196" class="ln s-warm" style="stroke-width:3"/>
+<text x="772" y="170" class="t t-xs t-b k-warm">SEGUNDOS</text>
+<text x="772" y="186" class="t t-s t-m">SSE: se ve</text>
+<text x="772" y="200" class="t t-s t-m">mientras se escribe</text>
+<path d="M760 320v256" class="ln" style="stroke:var(--d-casa);stroke-width:3"/>
+<text x="772" y="440" class="t t-xs t-b k-casa">MINUTOS</text>
+<text x="772" y="456" class="t t-s t-m">202 y una operación</text>
+<text x="772" y="470" class="t t-s t-m">que se consulta</text>
+</svg></div><figcaption><b>Dos formas de responder.</b> Participantes: el panel, la API del asistente, el modelo y el trabajador que procesa en segundo plano. Arriba, el <i>streaming</i>: ① el panel pide con <code>Accept: text/event-stream</code>; ② la API llama al modelo en modo <i>streaming</i>; ③ llegan eventos <code>delta</code> a medida que el modelo escribe; ④ un evento <code>fuente</code> con la cita; ⑤ el evento <code>fin</code> con el <code>traceId</code>. Abajo, la operación larga: ⑥ el panel pide el informe de una avería; ⑦ la API responde <code>202 Accepted</code> con <code>Location</code>; ⑧ el trabajador procesa los tickets; ⑨ el panel consulta y recibe <code>en-curso</code>; ⑩ vuelve a consultar y recibe <code>terminada</code> con el resultado. A la derecha, las fases: segundos y minutos.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Una respuesta por partes y una operación que se consulta</h3></div><p>Vas a levantar una API local de juguete con las dos formas de responder y a probarlas con <code>curl</code>. No necesitas Ollama: el modelo está simulado para que veas el protocolo. Guarda este programa como <code>api_local.py</code>:</p><div class="code-copia"><pre><code>import json, threading, time, uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+OPERACIONES = {}
+RESPUESTA = "Carmen debe US$ 35,00: la factura F-88213 más el cargo de reconexión."
+
+def informe(op_id):
+    time.sleep(8)  # el agente revisa los tickets de la avería
+    OPERACIONES[op_id] = {"id": op_id, "estado": "terminada",
+                          "resultado": {"ticketsRevisados": 340, "visitasNecesarias": 23}}
+
+class Api(BaseHTTPRequestHandler):
+    def enviar_json(self, estado, cuerpo, extra=None):
+        datos = json.dumps(cuerpo, ensure_ascii=False).encode("utf-8")
+        self.send_response(estado)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("X-Trace-Id", uuid.uuid4().hex[:6])
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(datos)
+
+    def evento(self, nombre, datos):
+        self.wfile.write(f"event: {nombre}\ndata: {json.dumps(datos, ensure_ascii=False)}\n\n".encode("utf-8"))
+        self.wfile.flush()
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        if self.path == "/api/v1/consultas":
+            if "text/event-stream" not in self.headers.get("Accept", ""):
+                return self.enviar_json(200, {"data": {"respuesta": RESPUESTA,
+                                              "fuentes": ["politica-reconexion-2026"]}})
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            for palabra in RESPUESTA.split(" "):
+                self.evento("delta", {"texto": palabra + " "})
+                time.sleep(0.25)  # el modelo escribe
+            self.evento("fuente", {"id": "politica-reconexion-2026"})
+            self.evento("fin", {"traceId": uuid.uuid4().hex[:6], "tokensSalida": 21})
+        elif self.path == "/api/v1/analisis-averia":
+            op_id = f"op-{len(OPERACIONES) + 1:04d}"
+            OPERACIONES[op_id] = {"id": op_id, "estado": "en-curso"}
+            threading.Thread(target=informe, args=(op_id,), daemon=True).start()
+            self.enviar_json(202, {"data": OPERACIONES[op_id]},
+                             {"Location": f"/api/v1/operaciones/{op_id}"})
+        else:
+            self.enviar_json(404, {"error": {"code": "NO_EXISTE", "message": self.path}})
+
+    def do_GET(self):
+        op = OPERACIONES.get(self.path.rsplit("/", 1)[-1])
+        if not self.path.startswith("/api/v1/operaciones/") or op is None:
+            return self.enviar_json(404, {"error": {"code": "NO_EXISTE", "message": self.path}})
+        self.enviar_json(200, {"data": op})
+
+    def log_message(self, *args):
+        pass
+
+print("API en http://127.0.0.1:8791 (Ctrl+C para salir)", flush=True)
+ThreadingHTTPServer(("127.0.0.1", 8791), Api).serve_forever()</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>En la misma carpeta, crea <code>consulta.json</code> con este contenido:</p><div class="code-copia"><pre><code>{"pregunta": "¿Cuánto debe pagar Carmen para reconectar?", "ticketId": "T-55190"}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Deja la API corriendo en una terminal:</p><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python api_local.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 api_local.py</code><button type="button" class="copiar">Copiar</button></div></div></div><p>En otra terminal, en la misma carpeta, pide la respuesta completa, después por partes, después lanza el informe y consulta la operación dos veces, la segunda pasados unos diez segundos:</p><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>curl.exe -s -X POST -H "Content-Type: application/json" --data-binary "@consulta.json" http://127.0.0.1:8791/api/v1/consultas</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl.exe -N -s -X POST -H "Accept: text/event-stream" -H "Content-Type: application/json" --data-binary "@consulta.json" http://127.0.0.1:8791/api/v1/consultas</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl.exe -i -s -X POST http://127.0.0.1:8791/api/v1/analisis-averia</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl.exe -s http://127.0.0.1:8791/api/v1/operaciones/op-0001</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>curl -s -X POST -H "Content-Type: application/json" --data-binary "@consulta.json" http://127.0.0.1:8791/api/v1/consultas</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl -N -s -X POST -H "Accept: text/event-stream" -H "Content-Type: application/json" --data-binary "@consulta.json" http://127.0.0.1:8791/api/v1/consultas</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl -i -s -X POST http://127.0.0.1:8791/api/v1/analisis-averia</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl -s http://127.0.0.1:8791/api/v1/operaciones/op-0001</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Compara la primera respuesta, un solo JSON dentro de <code>data</code>, con la segunda, que llega palabra por palabra.</span></li><li><span>En la tercera, busca el código <code>202</code> y el encabezado <code>Location</code>.</span></li><li><span>Consulta la operación enseguida y otra vez a los diez segundos. Detén la API con Ctrl+C.</span></li></ol><p><b>Qué observar:</b> con <code>Accept: text/event-stream</code> la respuesta llega en eventos <code>delta</code> y termina con <code>fuente</code> y <code>fin</code>; la opción <code>-N</code> le dice a <code>curl</code> que no espere el final para mostrar. El informe no bloquea a nadie: el <code>202</code> vuelve al instante con la dirección de la operación, que pasa de <code>en-curso</code> a <code>terminada</code> con su resultado. Es el mismo contrato que usaría el panel de tickets con el asistente real. Si el puerto 8791 está ocupado, cámbialo en el programa y en los comandos.</p></div></section>
+<section><h2>Las herramientas que necesita cada nivel</h2><div class="prose"><p>Cada peldaño de la escalera agregó piezas. Esta tabla las junta con ejemplos del mercado, abiertos y comerciales. Ninguno es una recomendación: son nombres para buscar y comparar.</p><div class="tbl"><table><thead><tr><th>Nivel</th><th>Pieza</th><th>Ejemplos del mercado</th></tr></thead><tbody><tr><td>Base común</td><td>Puerta a los modelos, trazas, evaluación, secretos</td><td>LiteLLM; Langfuse, Arize Phoenix, OpenTelemetry; promptfoo, Ragas; Vault o el gestor de secretos de la nube</td></tr><tr><td>1 · Generación contextualizada</td><td>Modelos, índice vectorial, lectura de documentos</td><td>Ollama y proveedores por API; pgvector, Qdrant, OpenSearch; Docling, Unstructured</td></tr><tr><td>2 · Interacciones personalizadas</td><td>Identidad, sesión, memoria, canales</td><td>Keycloak o el proveedor de identidad de la empresa; Redis o Valkey; PostgreSQL</td></tr><tr><td>3 · Automatizaciones con herramientas</td><td>Servidores <b>MCP</b> (<i>Model Context Protocol</i>), políticas, orquestación, colas</td><td>SDK oficiales de MCP; OPA, Cedar; Temporal, n8n; RabbitMQ</td></tr><tr><td>4 · Agentes con objetivos</td><td>Marco de agentes, bus de eventos</td><td>LangGraph y los SDK de agentes de los proveedores; Kafka, NATS</td></tr><tr><td>5 · Modelos ajustados</td><td>Ajuste, registro de modelos, servir modelos</td><td>Unsloth, Axolotl o los servicios de ajuste de los proveedores; MLflow; vLLM</td></tr></tbody></table></div><p>Dos observaciones. La fila de la base común es la más importante y la que menos se ve en las demos: sin ella, ninguna otra fila se puede medir. Y la mayoría de las piezas no son «de IA»: identidad, colas, bases relacionales, orquestadores. Un equipo que ya opera bien sus sistemas tiene la mitad del camino hecho. Cómo se opera un modelo propio en producción está en <a href="https://aaramirez.github.io/mlops/temario.html" target="_blank" rel="noopener">IA en producción</a>, y el despliegue y el monitoreo en general, en <a href="https://aaramirez.github.io/devops/temario.html" target="_blank" rel="noopener">DevOps</a>.</p></div></section>
+<section><h2>Casos por área: dirección, red, sistemas, ventas, atención, finanzas, legal, personas y compras</h2><div class="prose"><p>La segunda parte de la pregunta de la directora era cómo repetir el camino en otras áreas. La buena noticia es que casi nada se construye de cero: la puerta, las trazas, la batería, el recuperador con permisos y el registro de herramientas ya existen. Cada caso nuevo reutiliza la plataforma y agrega lo propio.</p><div class="tbl"><table><thead><tr><th>Área</th><th>Caso</th><th>Nivel inicial</th><th>Pieza técnica que más pesa</th></tr></thead><tbody><tr><td>Dirección</td><td>Preguntas en lenguaje natural sobre los indicadores del mes</td><td>1</td><td>Consultas de solo lectura sobre un modelo de datos con definiciones fijas; la respuesta cita la consulta</td></tr><tr><td>Red (operaciones técnicas)</td><td>El agente de avería masiva</td><td>4</td><td>Eventos del monitoreo, presupuestos y un punto de control humano</td></tr><tr><td>Sistemas</td><td>Asistente de incidentes con los procedimientos de operación</td><td>1 → 3</td><td><b>RAG</b> (<i>Retrieval-Augmented Generation</i>, responder con fragmentos recuperados) sobre procedimientos y herramientas de solo lectura sobre los registros</td></tr><tr><td>Ventas</td><td>Borrador de propuesta comercial con los datos del cliente</td><td>2</td><td>Plantillas versionadas y datos del CRM filtrados por permisos</td></tr><tr><td>Atención</td><td>El asistente de este curso</td><td>1 → 4</td><td>Todas las del curso</td></tr><tr><td>Finanzas</td><td>Extraer facturas de proveedores y conciliar pagos</td><td>1 → 3</td><td>Salidas estructuradas validadas contra el sistema contable; nada se paga sin aprobación</td></tr><tr><td>Legal</td><td>Revisar contratos contra las cláusulas estándar</td><td>1</td><td>Extracción con citas al párrafo; marca diferencias, no decide</td></tr><tr><td>Personas</td><td>Preguntas sobre políticas internas</td><td>1 → 2</td><td>RAG con permisos por rol; los datos personales de los empleados quedan fuera</td></tr><tr><td>Compras</td><td>Comparar cotizaciones de proveedores</td><td>1 → 3</td><td>Extracción a un esquema común y aprobación de la compra</td></tr></tbody></table></div><p>El catálogo completo de casos, con su valor y su prioridad para el negocio, está en <a href="https://aaramirez.github.io/adopcion-de-ia/13-casos-por-area.html" target="_blank" rel="noopener">Casos por área de IA en la empresa</a>. La regla técnica es la misma que en el capítulo 1: cada caso empieza en el nivel más bajo que resuelve el problema y sube solo cuando el anterior cumple su meta.</p></div></section>
+<section><h2>El plan técnico de 12 meses</h2><div class="analogia"><b>Imagínalo así</b><p>Una mudanza grande no se hace en un día. Primero se contrata el camión y se consiguen las cajas, después se embala por cuartos, se lleva lo esencial, se instala la cocina antes de traer las visitas, y recién al final se cuelgan los cuadros. Si cuelgas los cuadros antes de que lleguen las paredes, no tienes dónde colgarlos.</p></div><div class="prose"><p>El plan técnico es el orden en que se construyen las piezas, con lo que tiene que estar listo para pasar a la siguiente etapa. El plan de adopción de la empresa (presupuesto, personas, comunicación y la decisión de seguir o cerrar cada piloto) está en <a href="https://aaramirez.github.io/adopcion-de-ia/11-pilotos-que-escalan.html" target="_blank" rel="noopener">Pilotos que escalan</a>. Este es el de ingeniería:</p><div class="tbl"><table><thead><tr><th>Meses</th><th>Etapa</th><th>Qué se construye</th><th>Para pasar a la siguiente</th></tr></thead><tbody><tr><td>1-2</td><td>Fundación</td><td>Puerta a los modelos, trazas, secretos, identidad, la batería mínima en CI</td><td>Toda llamada pasa por la puerta y tiene traza</td></tr><tr><td>3-4</td><td>Nivel 1</td><td>Plantillas versionadas, salidas con esquema, RAG con citas para el equipo de reclamos</td><td>80 % de respuestas correctas y ninguna sin fuente</td></tr><tr><td>5-6</td><td>Nivel 2</td><td>Sesión, memoria con permisos, canales, filtro por rol en la búsqueda</td><td>Ningún caso de permisos falla en la batería</td></tr><tr><td>7-9</td><td>Nivel 3</td><td>Servidores MCP, herramientas, política, aprobaciones, flujos, revisión de seguridad</td><td>Dos semanas en modo sombra sin acciones incorrectas</td></tr><tr><td>10-12</td><td>Piloto de nivel 4</td><td>Agente de avería masiva con presupuesto y botón de parada</td><td>Tres eventos reales en sombra y uno con ejecución supervisada</td></tr></tbody></table></div><p>Dos dependencias se rompen con frecuencia. La primera: empezar el nivel 3 antes de tener servidores MCP de facturación y órdenes, y terminar escribiendo integraciones a mano que después hay que tirar. La segunda: dejar la revisión de seguridad para después del piloto del agente, cuando el agente ya tiene permisos de escritura.</p></div><div class="lab" id="20-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>El plan de 12 meses: mueve los hitos</h3></div><p class="hint">Cada fila es un hito con su duración. Mueve el mes de inicio de cada uno y mira el diagrama de Gantt: las dependencias que se rompen se marcan, y la lectura explica qué hito empieza antes de que esté listo lo que necesita.</p><style>
+[id="20-lab-2"] .c20l2-gantt{display:grid;gap:5px}
+[id="20-lab-2"] .c20l2-fila{display:grid;grid-template-columns:minmax(0,13em) minmax(0,1fr);gap:8px;align-items:center}
+[id="20-lab-2"] .c20l2-nom{font:600 .76rem/1.25 var(--f-display);color:var(--ink)}
+[id="20-lab-2"] .c20l2-nom small{display:block;font:500 .68rem var(--f-display);color:var(--muted)}
+[id="20-lab-2"] .c20l2-nom input{width:100%;margin:2px 0 0}
+[id="20-lab-2"] .c20l2-pista{position:relative;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));height:28px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+[id="20-lab-2"] .c20l2-pista>i{border-left:1px dashed var(--grid)}
+[id="20-lab-2"] .c20l2-pista>i:first-child{border-left:0}
+[id="20-lab-2"] .c20l2-bar{position:absolute;top:3px;bottom:3px;border-radius:5px;display:flex;align-items:center;justify-content:center;font:700 .66rem var(--f-mono);color:var(--ink);border:2px solid transparent;transition:left .2s,width .2s;overflow:hidden;white-space:nowrap}
+[id="20-lab-2"] .c20l2-bar.mal{border-color:var(--warm);border-style:dashed}
+[id="20-lab-2"] .c20l2-meses{display:grid;grid-template-columns:minmax(0,13em) minmax(0,1fr);gap:8px}
+[id="20-lab-2"] .c20l2-meses div{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));font:600 .66rem var(--f-mono);color:var(--muted);text-align:center}
+[id="20-lab-2"] .c20l2-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr));gap:8px}
+[id="20-lab-2"] .c20l2-k{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--paper)}
+[id="20-lab-2"] .c20l2-k span{display:block;font:600 .72rem var(--f-display);color:var(--muted)}
+[id="20-lab-2"] .c20l2-k output{font:700 1.1rem var(--f-mono);color:var(--ink)}
+[id="20-lab-2"] .c20l2-k.mal output{color:var(--warm)}
+[id="20-lab-2"] .c20l2-k.bien output{color:var(--good)}
+@media (max-width:560px){[id="20-lab-2"] .c20l2-fila,[id="20-lab-2"] .c20l2-meses{grid-template-columns:minmax(0,1fr)}[id="20-lab-2"] .c20l2-meses>span{display:none}}
+@media (prefers-reduced-motion:reduce){[id="20-lab-2"] .c20l2-bar{transition:none}}
+</style>
+<div class="btns"><button type="button" id="c20l2-base">Volver al plan base</button><button type="button" id="c20l2-prisa">Plan apurado de la gerencia</button></div>
+<div class="c20l2-meses"><span></span><div id="c20l2-meses"></div></div>
+<div class="c20l2-gantt" id="c20l2-gantt"></div>
+<div class="c20l2-kpis">
+  <div class="c20l2-k" id="c20l2-kr"><span>Dependencias rotas</span><output id="c20l2-k1"></output></div>
+  <div class="c20l2-k" id="c20l2-ks"><span>Hitos fuera del año</span><output id="c20l2-k2"></output></div>
+  <div class="c20l2-k"><span>El piloto del agente termina</span><output id="c20l2-k3"></output></div>
+</div>
+<div class="readout texto" id="c20l2-out" aria-live="polite"></div></div></section>
+<section><h2>Principios de operación: empezar angosto, el modelo más pequeño, humano en el bucle y cambios reversibles</h2><div class="prose"><p>Cuatro principios resumen cómo se opera todo lo anterior, y valen para cualquier área:</p><ul><li><b>Empezar angosto.</b> Un equipo, un tipo de consulta, una métrica con línea base. El asistente empezó con diez agentes y tres temas, no con los 90 agentes y todos los temas.</li><li><b>El modelo más pequeño que alcanza.</b> Se elige con la batería, no con la intuición, y el enrutador del capítulo 14 manda a un modelo más grande solo lo que lo necesita. Cada respuesta cuesta menos y llega antes.</li><li><b>Humano en el bucle donde importa.</b> No en todo, porque nadie aprueba mil cosas por día con atención, sino en lo irreversible, en lo caro y en lo nuevo. La política del capítulo 11 decide dónde.</li><li><b>Cambios reversibles.</b> Los prompts, los modelos y los umbrales se cambian por configuración, con versión, detrás de un interruptor y con la posibilidad de volver atrás en minutos. Un cambio que no se puede deshacer necesita más revisión que uno que sí.</li></ul></div><div class="ml"><b>En la práctica</b><p><b>El portal de clientes, sin escribir un asistente nuevo.</b> El equipo del portal integró el asistente en tres semanas. No construyó RAG, ni memoria, ni trazas: consumió <code>POST /api/v1/consultas</code> con SSE y su propio token de servicio, con un alcance distinto. Para el canal de clientes se agregó una versión de la plantilla con otro tono, un filtro que deja fuera los documentos internos y una regla en la política: desde el portal no se proponen reembolsos, solo se abre un ticket. La batería sumó 40 casos del canal nuevo, incluidos los intentos de inyección directa que en el panel interno eran raros. El piloto empezó con el 5 % de las visitas del portal.</p></div></section>
+<section><h2>Riesgos y ética</h2><div class="prose"><p>Este curso trató la seguridad, la privacidad de los datos en el contexto y en los registros, y el control de las acciones. Hay otra familia de riesgos que no se resuelve con código: el sesgo en las decisiones que el asistente ayuda a tomar, la transparencia con los clientes sobre cuándo les responde una IA, los derechos sobre los textos generados y la regulación que ya alcanza a algunos usos. Una empresa que lleva la IA a todas sus áreas necesita una evaluación de impacto para cada caso y un responsable que la firme. Todo eso es el tema de <a href="https://aaramirez.github.io/ia-responsable/temario.html" target="_blank" rel="noopener">IA responsable</a>, y conviene leerlo antes de abrir un asistente a los clientes, no después.</p></div><div class="caso"><b>Un caso real</b><p><b>Avisar que hay una IA.</b> Varios marcos regulatorios recientes, entre ellos la Ley de IA europea, piden que una persona sepa cuándo está conversando con un sistema de IA y no con otra persona. Para el asistente interno es fácil: los agentes lo saben. Para el portal de clientes, el equipo agregó una línea fija al abrir la conversación, una marca en cada respuesta generada y la opción de pedir una persona en cualquier momento. Son tres cambios de interfaz, pero salen de una decisión que no es técnica.</p></div></section>
+<section><h2>De la demo del viernes al producto</h2><figure class="fig fig-mapa" id="20-diagrama-3"><div class="lienzo"><svg viewBox="0 0 960 470" style="min-width:740px" role="img" aria-label="La ruta completa del curso con lo construido: el mapa con la escalera y el envoltorio; nivel 1 con contexto, plantillas y esquema; nivel 2 con canales, memoria y RAG con citas; nivel 3 con herramientas, servidores MCP, aprobaciones y flujos; niveles 4 y 5 con el agente y el clasificador ajustado; calidad y operación con patrones, batería, trazas, defensa en capas, prompts de producción y la API; una flecha vuelve del final al nivel 1 para un caso nuevo">
+<defs><marker id="c20d3-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker></defs>
+<rect x="20" y="16" width="860" height="62" rx="10" class="caja" style="stroke-width:2;stroke-dasharray:5 4"/>
+<text x="34" y="38" class="t t-xs t-b t-m">EL MAPA</text>
+<text x="34" y="60" class="t t-m" style="font-size:12px">escalera y envoltorio</text>
+<rect x="705" y="34" width="163" height="26" rx="6" class="caja"/>
+<text x="786" y="51" class="t" style="font-size:11px" text-anchor="middle">envoltorio determinista</text>
+<rect x="555" y="34" width="144" height="26" rx="6" class="caja"/>
+<text x="627" y="51" class="t" style="font-size:11px" text-anchor="middle">escalera por niveles</text>
+
+<rect x="20" y="88" width="860" height="62" rx="10" class="c-fis"/>
+<text x="34" y="110" class="t t-xs t-b k-fis">NIVEL 1</text>
+<text x="34" y="132" class="t t-m" style="font-size:12px">v0.1 a v0.3 · responde y clasifica</text>
+<rect x="749" y="106" width="119" height="26" rx="6" class="caja"/>
+<text x="808" y="123" class="t" style="font-size:11px" text-anchor="middle">esquema validado</text>
+<rect x="586" y="106" width="157" height="26" rx="6" class="caja"/>
+<text x="664" y="123" class="t" style="font-size:11px" text-anchor="middle">plantillas versionadas</text>
+<rect x="436" y="106" width="144" height="26" rx="6" class="caja"/>
+<text x="508" y="123" class="t" style="font-size:11px" text-anchor="middle">contexto consolidado</text>
+
+<rect x="20" y="160" width="860" height="62" rx="10" class="c-enl"/>
+<text x="34" y="182" class="t t-xs t-b k-enl">NIVEL 2</text>
+<text x="34" y="204" class="t t-m" style="font-size:12px">v0.4 a v0.6 · conoce a Carmen y cita</text>
+<rect x="768" y="178" width="100" height="26" rx="6" class="caja"/>
+<text x="818" y="195" class="t" style="font-size:11px" text-anchor="middle">RAG con citas</text>
+<rect x="618" y="178" width="144" height="26" rx="6" class="caja"/>
+<text x="690" y="195" class="t" style="font-size:11px" text-anchor="middle">memoria con permisos</text>
+<rect x="550" y="178" width="62" height="26" rx="6" class="caja"/>
+<text x="581" y="195" class="t" style="font-size:11px" text-anchor="middle">canales</text>
+
+<rect x="20" y="232" width="860" height="62" rx="10" class="c-red"/>
+<text x="34" y="254" class="t t-xs t-b k-red">NIVEL 3</text>
+<text x="34" y="276" class="t t-m" style="font-size:12px">v0.7 a v0.9 · actúa con aprobación</text>
+<rect x="812" y="250" width="56" height="26" rx="6" class="caja"/>
+<text x="840" y="267" class="t" style="font-size:11px" text-anchor="middle">flujos</text>
+<rect x="712" y="250" width="94" height="26" rx="6" class="caja"/>
+<text x="759" y="267" class="t" style="font-size:11px" text-anchor="middle">aprobaciones</text>
+<rect x="600" y="250" width="106" height="26" rx="6" class="caja"/>
+<text x="653" y="267" class="t" style="font-size:11px" text-anchor="middle">servidores MCP</text>
+<rect x="500" y="250" width="94" height="26" rx="6" class="caja"/>
+<text x="547" y="267" class="t" style="font-size:11px" text-anchor="middle">herramientas</text>
+
+<rect x="20" y="304" width="860" height="62" rx="10" class="c-tra"/>
+<text x="34" y="326" class="t t-xs t-b k-tra">NIVELES 4 Y 5</text>
+<text x="34" y="348" class="t t-m" style="font-size:12px">v1.0 · avería masiva y clasificador</text>
+<rect x="718" y="322" width="150" height="26" rx="6" class="caja"/>
+<text x="793" y="339" class="t" style="font-size:11px" text-anchor="middle">clasificador ajustado</text>
+<rect x="555" y="322" width="157" height="26" rx="6" class="caja"/>
+<text x="634" y="339" class="t" style="font-size:11px" text-anchor="middle">agente con presupuesto</text>
+
+<rect x="20" y="376" width="860" height="62" rx="10" class="caja" style="stroke-width:2;stroke-dasharray:5 4"/>
+<text x="34" y="398" class="t t-xs t-b t-m">CALIDAD Y OPERACIÓN</text>
+<text x="34" y="420" class="t t-m" style="font-size:12px">en todas las versiones</text>
+<rect x="781" y="394" width="87" height="26" rx="6" class="caja"/>
+<text x="824" y="411" class="t" style="font-size:11px" text-anchor="middle">API /api/v1</text>
+<rect x="625" y="394" width="150" height="26" rx="6" class="caja"/>
+<text x="700" y="411" class="t" style="font-size:11px" text-anchor="middle">prompts de producción</text>
+<rect x="500" y="394" width="119" height="26" rx="6" class="caja"/>
+<text x="560" y="411" class="t" style="font-size:11px" text-anchor="middle">defensa en capas</text>
+<rect x="394" y="394" width="100" height="26" rx="6" class="caja"/>
+<text x="444" y="411" class="t" style="font-size:11px" text-anchor="middle">trazas y KPIs</text>
+<rect x="326" y="394" width="62" height="26" rx="6" class="caja"/>
+<text x="357" y="411" class="t" style="font-size:11px" text-anchor="middle">batería</text>
+<rect x="252" y="394" width="68" height="26" rx="6" class="caja"/>
+<text x="286" y="411" class="t" style="font-size:11px" text-anchor="middle">patrones</text>
+
+<path d="M884 410 H912 V119 H888" class="ln" style="stroke-width:2;fill:none" marker-end="url(#c20d3-m)"/>
+<text x="936" y="264" class="t t-s t-m" text-anchor="middle" transform="rotate(-90 936 264)">un caso nuevo en otra área empieza en el nivel 1</text>
+</svg></div><figcaption><b>La ruta completa.</b> Es la misma figura del capítulo 1, ahora con lo que quedó construido en cada franja. Arriba, el mapa: la escalera y el envoltorio determinista. En cada nivel, las piezas que funcionan hoy: la puerta, las plantillas, el esquema y el RAG con citas (nivel 1); la sesión, la memoria y los canales (nivel 2); las herramientas, los servidores MCP, las aprobaciones y los flujos (nivel 3); el agente de averías y el clasificador propio (niveles 4 y 5). Abajo, la base que acompaña a todos: patrones, batería, trazas, defensa en capas, prompts de producción y la API. La flecha de la derecha vuelve al principio: un caso nuevo en otra área empieza otra vez por el nivel 1, con toda la base ya hecha.</figcaption></figure><div class="lab" id="20-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Proyecto: el asistente sube del nivel 1 al 3</h3></div><p class="hint">Elige el nivel del asistente y un pedido. Mira la petición HTTP, las piezas de la arquitectura que se encienden y la respuesta, en JSON o en eventos SSE. En el nivel 3, el reembolso devuelve <code>202 Accepted</code> y espera a que la supervisora apruebe.</p><style>
+[id="20-lab-1"] .c20l1-g{display:grid;gap:4px;align-content:start}
+[id="20-lab-1"] .c20l1-g>span{font:700 .72rem var(--f-display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+[id="20-lab-1"] .c20l1-chips{display:flex;flex-wrap:wrap;gap:5px}
+[id="20-lab-1"] .c20l1-chip{font:600 .72rem var(--f-display);padding:4px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:var(--paper);opacity:.55}
+[id="20-lab-1"] .c20l1-chip.on{opacity:1;color:var(--ink)}
+[id="20-lab-1"] .c20l1-chip.on.b{border-color:var(--muted);border-style:dashed}
+[id="20-lab-1"] .c20l1-chip.on.n1{background:var(--c-fis-s);border-color:var(--c-fis)}
+[id="20-lab-1"] .c20l1-chip.on.n2{background:var(--c-enl-s);border-color:var(--c-enl)}
+[id="20-lab-1"] .c20l1-chip.on.n3{background:var(--c-red-s);border-color:var(--c-red)}
+[id="20-lab-1"] .c20l1-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px;align-items:start}
+[id="20-lab-1"] pre.c20l1-http{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:500 .72rem/1.5 var(--f-mono);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--ink);min-height:6em}
+[id="20-lab-1"] pre.c20l1-http b{color:var(--accent)}
+[id="20-lab-1"] pre.c20l1-http i{font-style:normal;color:var(--warm)}
+</style>
+<div class="c20l1-g"><span>Nivel del asistente</span>
+<div class="btns" role="group" aria-label="Nivel">
+  <button type="button" data-n="1" aria-pressed="false">Nivel 1 · responde</button>
+  <button type="button" data-n="2" aria-pressed="false">Nivel 2 · conoce a Carmen</button>
+  <button type="button" data-n="3" aria-pressed="true">Nivel 3 · actúa</button>
+</div></div>
+<div class="c20l1-g"><span>Pedido de la agente</span>
+<div class="btns" role="group" aria-label="Pedido">
+  <button type="button" data-p="deuda" aria-pressed="true">¿Cuánto debe Carmen para reconectar?</button>
+  <button type="button" data-p="visita" aria-pressed="false">Mueve la visita 4471 al jueves en la tarde</button>
+  <button type="button" data-p="reembolso" aria-pressed="false">Reembolsa el cobro duplicado del T-55190</button>
+</div></div>
+<div class="c20l1-g"><span>Formato de la respuesta</span>
+<div class="btns" role="group" aria-label="Formato">
+  <button type="button" data-m="json" aria-pressed="true">JSON completo</button>
+  <button type="button" data-m="sse" aria-pressed="false">Eventos SSE</button>
+</div></div>
+<div class="c20l1-g"><span>Piezas que trabajan en este pedido</span><div class="c20l1-chips" id="c20l1-chips"></div></div>
+<div class="c20l1-cols">
+  <div class="c20l1-g"><span>Petición</span><pre class="c20l1-http" id="c20l1-req"></pre></div>
+  <div class="c20l1-g"><span>Respuesta</span><pre class="c20l1-http" id="c20l1-res"></pre></div>
+</div>
+<div class="btns" id="c20l1-apr-w" style="display:none"><button type="button" class="primary" id="c20l1-apr">La supervisora aprueba</button></div>
+<div class="readout texto" id="c20l1-out" aria-live="polite"></div></div><div class="prose"><p>La demo del viernes y el asistente de hoy usan el mismo modelo pequeño. Lo que cambió es todo lo que hay alrededor: un contexto que se consolida y se versiona, salidas que el código valida, memoria con permisos, herramientas con contrato, aprobaciones, flujos, un agente con límites, una batería que decide qué se publica, trazas para cada respuesta, una defensa que no depende de que el modelo se porte bien y una API que cualquier equipo puede usar. Eso es una aplicación con IA.</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>Un camino por niveles, cada uno con su arquitectura, sus KPIs y su plan. El asistente se integra como cualquier servicio, con una API REST predecible, SSE para mostrar la respuesta mientras se escribe y <code>202 Accepted</code> para lo que tarda o espera a una persona. Cada área nueva reutiliza la base común y sube la escalera desde el primer peldaño, con un plan técnico que respeta las dependencias y con cuatro principios: empezar angosto, el modelo más pequeño que alcanza, humano en el bucle donde importa y cambios reversibles.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>¿Por qué la respuesta «no lo sé» del asistente se devuelve con <code>200 OK</code> y no con un código de error?</summary><p>Porque es una respuesta válida y esperada: el servicio funcionó y decidió abstenerse por falta de evidencia. Los códigos de error son para cuando el pedido no se pudo atender (entrada inválida, sin permiso, modelo caído).</p></details><details><summary>¿Cuándo conviene SSE y cuándo <code>202 Accepted</code>?</summary><p>SSE, cuando la respuesta tarda segundos y se quiere mostrar mientras se escribe. <code>202 Accepted</code>, cuando la tarea tarda minutos o espera a una persona: se devuelve la dirección de una operación que el cliente consulta o que avisa por webhook.</p></details><details><summary>¿Por qué el texto que llega en los eventos <code>delta</code> se muestra como borrador?</summary><p>Porque el guardrail de salida necesita la respuesta completa para revisarla. El evento <code>fin</code> la confirma; si el guardrail la bloquea, un evento <code>error</code> reemplaza el borrador.</p></details><details><summary>Un equipo quiere empezar el nivel 3 en el mes 6, pero los servidores MCP de facturación estarán listos en el mes 7. ¿Qué riesgo corre?</summary><p>Escribir integraciones a mano con facturación para no esperar, que después hay que tirar o mantener en paralelo, y llegar al nivel 3 sin el control de permisos que da el servidor MCP.</p></details><details><summary>Nombra los cuatro principios de operación del capítulo.</summary><p>Empezar angosto, el modelo más pequeño que alcanza, humano en el bucle donde importa (lo irreversible, lo caro y lo nuevo) y cambios reversibles (por configuración, con versión y con vuelta atrás).</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué hace el encabezado <code>Last-Event-ID</code> en SSE y cómo permite retomar un flujo de eventos después de una desconexión?<small>Pista: mira la especificación de HTML sobre <i>server-sent events</i>.</small></li><li>¿Qué es el formato de errores <i>Problem Details</i> (<a href="https://www.rfc-editor.org/rfc/rfc9457" target="_blank" rel="noopener">RFC 9457</a>) y en qué se parece al sobre de error de los lineamientos?</li><li>¿Qué es la limitación de tasa con cubeta de fichas (<i>token bucket</i>) y cómo se usaría para limitar los tokens de modelo por equipo?</li><li>¿Qué es un despliegue canario (<i>canary release</i>) y en qué se diferencia de un despliegue azul-verde?</li><li>¿Qué es la ley de Conway y qué dice sobre la forma de una plataforma compartida que usan varios equipos?</li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://developer.mozilla.org/es/docs/Web/API/Server-sent_events/Using_server-sent_events" target="_blank" rel="noopener">Usar eventos enviados por el servidor <small>MDN, en español</small></a><a class="vid" href="https://www.rfc-editor.org/rfc/rfc9110.html" target="_blank" rel="noopener">RFC 9110: semántica de HTTP <small>el significado de cada código de estado, en inglés</small></a><a class="vid" href="https://aaramirez.github.io/adopcion-de-ia/11-pilotos-que-escalan.html" target="_blank" rel="noopener">Pilotos que escalan, en IA en la empresa <small>curso del sitio</small></a><a class="vid" href="https://aaramirez.github.io/ia-responsable/temario.html" target="_blank" rel="noopener">IA responsable <small>curso del sitio</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const H=[
+    {k:'fund',n:'Fundación',d:'puerta, trazas, identidad',dur:2,dep:[],col:'var(--grid)'},
+    {k:'n1',n:'Nivel 1',d:'respuestas con citas',dur:2,dep:['fund'],col:'var(--c-fis-s)'},
+    {k:'bat',n:'Batería en CI',d:'evaluación en cada cambio',dur:1,dep:['fund'],col:'var(--accent-soft)'},
+    {k:'n2',n:'Nivel 2',d:'memoria, canales, permisos',dur:2,dep:['n1'],col:'var(--c-enl-s)'},
+    {k:'mcp',n:'Servidores MCP',d:'facturación y órdenes',dur:2,dep:['fund'],col:'var(--c-red-s)'},
+    {k:'n3',n:'Nivel 3',d:'herramientas y aprobaciones',dur:3,dep:['n2','mcp','bat'],col:'var(--c-red-s)'},
+    {k:'seg',n:'Revisión de seguridad',d:'equipo rojo',dur:1,dep:['n3'],col:'var(--warm-soft)'},
+    {k:'n4',n:'Piloto nivel 4',d:'agente de avería masiva',dur:2,dep:['n3','seg'],col:'var(--c-tra-s)'}
+  ];
+  const BASE={fund:1,n1:3,bat:3,n2:5,mcp:4,n3:7,seg:10,n4:11};
+  const PRISA={fund:1,n1:2,bat:8,n2:4,mcp:7,n3:5,seg:12,n4:9};
+  const ini={...BASE};
+  const nom=k=>H.find(h=>h.k===k).n;
+  const fin=k=>ini[k]+H.find(h=>h.k===k).dur-1;
+  $('#c20l2-meses').innerHTML=Array.from({length:12},(_,i)=>'<span>'+(i+1)+'</span>').join('');
+  $('#c20l2-gantt').innerHTML=H.map(h=>'<div class="c20l2-fila"><label class="c20l2-nom">'+h.n+' <small>'+h.d+' · '+h.dur+(h.dur>1?' meses':' mes')+' · empieza en el mes <output id="c20l2-o-'+h.k+'"></output></small><input type="range" min="1" max="12" step="1" id="c20l2-r-'+h.k+'" aria-label="Mes de inicio de '+h.n+'"></label><div class="c20l2-pista">'+'<i></i>'.repeat(12)+'<div class="c20l2-bar" id="c20l2-b-'+h.k+'" style="background:'+h.col+'"></div></div></div>').join('');
+  H.forEach(h=>$('#c20l2-r-'+h.k).addEventListener('input',e=>{ini[h.k]=+e.target.value;pintar();}));
+  function pintar(){
+    const rotas=[],fuera=[];
+    H.forEach(h=>{
+      const f=fin(h.k);
+      const malas=h.dep.filter(d=>ini[h.k]<=fin(d));
+      malas.forEach(d=>rotas.push({h:h.k,d}));
+      if(f>12)fuera.push(h.k);
+      $('#c20l2-r-'+h.k).value=ini[h.k];$('#c20l2-o-'+h.k).textContent=ini[h.k];
+      const b=$('#c20l2-b-'+h.k);
+      const w=Math.min(h.dur,13-ini[h.k]);
+      b.style.left='calc('+((ini[h.k]-1)/12*100)+'% + 1px)';b.style.width='calc('+(w/12*100)+'% - 2px)';
+      b.textContent=ini[h.k]+(h.dur>1?'–'+f:'');
+      b.classList.toggle('mal',malas.length>0||f>12);
+    });
+    $('#c20l2-k1').textContent=rotas.length;$('#c20l2-kr').classList.toggle('mal',rotas.length>0);$('#c20l2-kr').classList.toggle('bien',rotas.length===0);
+    $('#c20l2-k2').textContent=fuera.length;$('#c20l2-ks').classList.toggle('mal',fuera.length>0);$('#c20l2-ks').classList.toggle('bien',fuera.length===0);
+    const f4=fin('n4');$('#c20l2-k3').textContent=f4<=12?'mes '+f4:'después del año';
+    let h='';
+    if(!rotas.length&&!fuera.length)h='<span class="ok">El plan respeta todas las dependencias y cabe en el año.</span><span>Fíjate en que la batería y los servidores MCP pueden ir en paralelo con los niveles 1 y 2: no esperan nada más que la fundación, y son los que más atrasan el nivel 3 si se dejan para el final.</span>';
+    else{
+      h='<span class="warn">'+rotas.length+' dependencia'+(rotas.length===1?' rota':'s rotas')+(fuera.length?' y '+fuera.length+' hito'+(fuera.length===1?'':'s')+' fuera del año':'')+'.</span>';
+      rotas.slice(0,4).forEach(r=>{
+        const MOT={'n3|mcp':'sin servidores MCP, el equipo escribe integraciones a mano que después tira','n4|seg':'el agente tendría permisos de escritura antes de que nadie lo atacara','n3|bat':'las herramientas se publicarían sin una batería que detecte regresiones','n3|n2':'las acciones no sabrían quién las pide ni con qué permisos','n2|n1':'la memoria y los canales no tendrían respuestas confiables que personalizar','n4|n3':'el agente no tendría herramientas ni aprobaciones que usar','seg|n3':'no hay nada que revisar todavía'};
+        const m=MOT[r.h+'|'+r.d]||'empieza sin la base que necesita';
+        h+='<span>«'+nom(r.h)+'» empieza en el mes '+ini[r.h]+', pero «'+nom(r.d)+'» termina en el mes '+fin(r.d)+': '+m+'.</span>';
+      });
+      if(rotas.length>4)h+='<span>Y '+(rotas.length-4)+' más.</span>';
+      fuera.forEach(k=>h+='<span>«'+nom(k)+'» terminaría en el mes '+fin(k)+', fuera del año.</span>');
+    }
+    $('#c20l2-out').innerHTML=h;
+  }
+  $('#c20l2-base').addEventListener('click',()=>{Object.assign(ini,BASE);pintar();});
+  $('#c20l2-prisa').addEventListener('click',()=>{Object.assign(ini,PRISA);pintar();});
+  pintar();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const root=document.querySelector('[id="20-lab-1"]');
+  let niv=3,ped='deuda',modo='json',aprobado=false;
+  const PIEZAS=[['puerta a los modelos','b',0],['trazas','b',0],['guardrails','b',0],['plantilla','n1',1],['recuperador','n1',1],['validador de esquema','n1',1],['identidad','n2',2],['sesión y memoria','n2',2],['herramientas por MCP','n3',3],['política','n3',3],['aprobaciones','n3',3],['idempotencia','n3',3]];
+  const USA={deuda:{1:[0,1,2,3,4,5],2:[0,1,2,3,4,5,6,7],3:[0,1,2,3,4,5,6,7,8,9]},
+    visita:{1:[0,1,2,3,4,5],2:[0,1,2,3,4,5,6,7],3:[0,1,2,3,4,5,6,7,8,9,11]},
+    reembolso:{1:[0,1,2,3,4,5],2:[0,1,2,3,4,5,6,7],3:[0,1,2,3,4,5,6,7,8,9,10,11]}};
+  const PREG={deuda:'¿Cuánto debe Carmen para reconectar?',visita:'Mueve la visita 4471 al jueves en la tarde',reembolso:'Reembolsa el cobro duplicado del T-55190'};
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  function cuerpo(){
+    const T={
+      deuda:{1:{r:'El cargo de reconexión es US$ 5,00 y se suma a la factura vencida. Para el total, revisa la cuenta del cliente.',f:['politica-reconexion-2026']},
+             2:{r:'Carmen debe US$ 35,00: la factura F-88213 (US$ 30,00) más la reconexión (US$ 5,00).',f:['politica-reconexion-2026'],m:true},
+             3:{r:'Carmen debe US$ 35,00: la factura F-88213 (US$ 30,00) más la reconexión (US$ 5,00).',f:['politica-reconexion-2026'],m:true,a:{herramienta:'consultar_facturas',efecto:'lectura',decision:'actuar',estado:'ejecutada'}}},
+      visita:{1:{r:'Una visita se reprograma sin costo si faltan más de 24 horas. No puedo hacer cambios: hazlo en el sistema de órdenes.',f:['politica-visitas-2026']},
+              2:{r:'La orden 4471 de Carmen se puede mover sin costo (faltan más de 24 horas) y ella prefiere la tarde. No puedo hacer cambios desde aquí.',f:['politica-visitas-2026']},
+              3:{r:'Listo: la visita de la orden 4471 quedó para el jueves en la tarde. Se avisó a Carmen y al técnico.',f:['politica-visitas-2026'],a:{herramienta:'reprogramar_visita',efecto:'escritura reversible',decision:'actuar',idempotencyKey:'4471-reprogramar-jueves-tarde',estado:'ejecutada'}}},
+      reembolso:{1:{r:'Los reembolsos de más de US$ 10,00 necesitan aprobación de una supervisora. No puedo registrarlos.',f:['politica-reembolsos']},
+                 2:{r:'El T-55190 de Carmen es un cobro duplicado de US$ 30,00; necesita aprobación de una supervisora. No puedo registrarlo desde aquí.',f:['politica-reembolsos']}}
+    };
+    return T[ped][niv];
+  }
+  function peticion(){
+    const acc=modo==='sse'?'text/event-stream':'application/json';
+    let h='<b>POST</b> /api/v1/consultas\nAccept: '+acc+'\nContent-Type: application/json\n';
+    h+=niv>=2?'Authorization: Bearer … (agente 07)\n\n':'Authorization: Bearer … (token del servicio)\n\n';
+    const b=niv>=2?{pregunta:PREG[ped],ticketId:'T-55190'}:{pregunta:PREG[ped]};
+    return h+esc(JSON.stringify(b,null,1));
+  }
+  function respuesta(){
+    if(ped==='reembolso'&&niv===3){
+      let h='<b>202 Accepted</b>\nX-Trace-Id: 6c2e91\nLocation: /api/v1/operaciones/op-0042\n\n'+esc(JSON.stringify({data:{id:'op-0042',estado:'esperando-aprobacion',accion:{herramienta:'registrar_reembolso',monto:{valor:'30.00',moneda:'USD'},idempotencyKey:'T-55190-reembolso-1'}}},null,1));
+      if(aprobado)h+='\n\n<b>GET</b> /api/v1/operaciones/op-0042\n<b>200 OK</b>\n'+esc(JSON.stringify({data:{id:'op-0042',estado:'terminada',resultado:{reembolso:'R-0001',monto:{valor:'30.00',moneda:'USD'}}}},null,1));
+      return h;
+    }
+    const c=cuerpo();
+    if(modo==='sse'){
+      const pal=c.r.split(' ');
+      let h='<b>200 OK</b>\nContent-Type: text/event-stream\n\n';
+      h+=pal.slice(0,3).map(p=>'event: delta\ndata: {"texto": "'+esc(p)+' "}\n').join('\n')+'\n<i>… '+(pal.length-3)+' eventos delta más …</i>\n\n';
+      h+=c.f.map(f=>'event: fuente\ndata: {"id": "'+f+'"}\n').join('\n');
+      if(c.a)h+='\nevent: accion\ndata: '+esc(JSON.stringify({herramienta:c.a.herramienta,estado:c.a.estado}))+'\n';
+      h+='\nevent: fin\ndata: {"traceId": "6c2e91"}';
+      return h;
+    }
+    const d={respuesta:c.r,fuentes:c.f};
+    if(c.m)d.montoTotal={valor:'35.00',moneda:'USD'};
+    d.sinEvidencia=false;
+    if(c.a)d.acciones=[c.a];
+    return '<b>200 OK</b>\nX-Trace-Id: 6c2e91\n\n'+esc(JSON.stringify({data:d},null,1));
+  }
+  function lectura(){
+    const L={1:'En el nivel 1 el asistente responde con los documentos y su cita, pero no sabe quién pregunta ni por quién: por eso no puede dar el total de Carmen.',
+             2:'En el nivel 2 la petición lleva el token de la agente y el ticket. La identidad y la sesión traen a Carmen y su cuenta, y la memoria su preferencia por la tarde. Todavía no actúa.',
+             3:'En el nivel 3 el modelo propone herramientas, la política decide y el código ejecuta con su clave de idempotencia. Las piezas de los niveles 1 y 2 siguen trabajando debajo.'};
+    let h='<span>'+L[niv]+'</span>';
+    if(ped==='reembolso'&&niv===3)h+=aprobado?'<span class="ok">La operación pasó a «terminada» cuando la supervisora aprobó: el panel la consultó en la dirección de Location y recibió el reembolso R-0001.</span>':'<span class="warn">US$ 30,00 supera el límite de US$ 10,00: la API responde 202 y la operación queda esperando aprobación. Pulsa el botón de la supervisora.</span>';
+    if(modo==='sse'&&!(ped==='reembolso'&&niv===3))h+='<span>Con SSE el panel muestra el texto mientras llega; el evento fin confirma la respuesta después del guardrail de salida.</span>';
+    if(modo==='sse'&&ped==='reembolso'&&niv===3)h+='<span>Una operación que espera a una persona no se resuelve en un flujo de eventos: se responde con 202 aunque el cliente haya pedido SSE.</span>';
+    h+='<span>El contrato es el mismo en los tres niveles: la misma ruta, el mismo sobre data y el mismo traceId. Los clientes no tuvieron que cambiar al subir de nivel.</span>';
+    return h;
+  }
+  function pintar(){
+    const usa=USA[ped][niv];
+    $('#c20l1-chips').innerHTML=PIEZAS.map((p,i)=>'<span class="c20l1-chip '+p[1]+(usa.includes(i)?' on':'')+'">'+p[0]+'</span>').join('');
+    $('#c20l1-req').innerHTML=peticion();
+    $('#c20l1-res').innerHTML=respuesta();
+    $('#c20l1-apr-w').style.display=(ped==='reembolso'&&niv===3&&!aprobado)?'':'none';
+    $('#c20l1-out').innerHTML=lectura();
+  }
+  function grupo(attr,set){root.querySelectorAll('['+attr+']').forEach(b=>b.addEventListener('click',()=>{set(b.getAttribute(attr));aprobado=false;root.querySelectorAll('['+attr+']').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));pintar();}));}
+  grupo('data-n',v=>niv=+v);grupo('data-p',v=>ped=v);grupo('data-m',v=>modo=v);
+  $('#c20l1-apr').addEventListener('click',()=>{aprobado=true;pintar();});
+  pintar();
+})();
+</script>
+</body>
+</html>

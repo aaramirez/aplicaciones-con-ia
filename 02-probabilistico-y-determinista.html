@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Probabilístico y determinista · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="probabilistico-y-determinista">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 02 DE 20</span><h1>Un modelo probabilístico para necesidades deterministas</h1><p class="lede">Pregúntale lo mismo dos veces a un modelo de lenguaje y puede responder distinto. El negocio, en cambio, necesita que una factura sume igual todas las veces. Este capítulo explica de dónde sale la variabilidad y cómo se envuelve el modelo en capas de código para que la empresa pueda confiar en él.</p></header>
+<section><h2>Por qué el mismo pedido da respuestas distintas</h2><div class="prose"><p>Mateo, el desarrollador del asistente de atención, hizo la primera prueba seria un martes. Le pasó al modelo la pregunta «Carmen tiene vencida la factura de octubre, de US$ 30,00, y pide la reconexión: ¿cuánto paga hoy?» veinte veces seguidas. Obtuvo once respuestas distintas. Siete decían US$ 35,00 con distintas palabras, cuatro decían US$ 30,00, dos inventaron un recargo por mora y una respondió «depende de su plan». La jefa del equipo de reclamos lo resumió sin rodeos: «si el sistema de facturación hiciera esto, lo apagamos».</p></div><div class="analogia"><b>Imagínalo así</b><p>Pídele a diez cocineros expertos la misma receta de arroz con pollo y te darán diez platos parecidos, ricos y distintos. Eso está bien en un restaurante. Pero si les pides que pesen exactamente 250 gramos de arroz, quieres que los diez usen la balanza, no el ojo. Un modelo de lenguaje es un cocinero muy bueno que, si no le das balanza, calcula a ojo.</p></div><div class="prose"><p>Un modelo de lenguaje no busca una respuesta guardada: la <b>genera</b> palabra por palabra. Más exactamente, genera <b>tokens</b> (<i>tokens</i>), pedazos de palabra con los que el modelo trabaja. En cada paso calcula la probabilidad de cada token posible y elige uno. Si siempre eligiera el más probable, respondería casi igual cada vez; pero por omisión <b>muestrea</b> (<i>sampling</i>): elige al azar, con más chance para los más probables. La <b>temperatura</b> (<i>temperature</i>) es el parámetro que controla cuánto azar hay: con 0 casi siempre gana el más probable, y con 1 o más las opciones menos probables salen seguido. Cómo funciona el muestreo por dentro (top-p, top-k y la distribución completa) está en <a href="https://aaramirez.github.io/modelos-de-ia/temario.html" target="_blank" rel="noopener">Modelos de IA</a>.</p><p>El muestreo no es la única fuente de variación. Hay tres:</p><ol class="steps"><li><span><b>El muestreo.</b> Explicado arriba. Se controla con la temperatura y, en algunos proveedores, con una <b>semilla</b> (<i>seed</i>): un número que fija la secuencia de azar.</span></li><li><span><b>La versión del modelo.</b> Los proveedores actualizan sus modelos. Si tu código pide «el modelo más reciente» por su alias, la misma pregunta puede cambiar de respuesta de un mes a otro sin que tú cambies nada. Por eso se fija la versión exacta.</span></li><li><span><b>El contexto.</b> Un cambio pequeño en la entrada (otra palabra en la plantilla, los fragmentos de documento en otro orden, un mensaje anterior distinto) cambia la salida. Para el modelo no hay «la misma pregunta» si cambió cualquier cosa del texto que lee.</span></li></ol><p>Aun con temperatura 0 y semilla fija, la salida puede variar un poco: los servidores procesan muchos pedidos juntos en paralelo y eso altera, en el último decimal, algunos cálculos internos. La temperatura 0 reduce la variación, pero no la convierte en una garantía.</p></div><figure class="fig fig-esquema" id="02-diagrama-1"><div class="lienzo"><svg viewBox="0 0 920 400" style="min-width:720px" role="img" aria-label="El mismo pedido pasa por tres fuentes de variación: el muestreo del siguiente token (35 con 62 por ciento, 30 con 21, 40 con 9 y depende con 8), la versión del modelo y el contexto; a la derecha salen cuatro respuestas distintas: dos correctas con distinta redacción, una que olvidó la reconexión y una que no responde">
+<defs>
+<marker id="c2d1-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+</defs>
+<rect x="16" y="140" width="170" height="120" rx="12" class="caja" style="stroke-width:2"/>
+<text x="30" y="164" class="t t-xs t-b t-m">EL MISMO PEDIDO</text>
+<text x="30" y="186" class="t t-s">«Carmen tiene vencida</text>
+<text x="30" y="201" class="t t-s">la factura de octubre,</text>
+<text x="30" y="216" class="t t-s">de US$ 30,00, y pide</text>
+<text x="30" y="231" class="t t-s">la reconexión: ¿cuánto</text>
+<text x="30" y="246" class="t t-s">paga hoy?»</text>
+<rect x="240" y="16" width="380" height="190" rx="12" class="caja"/>
+<text x="254" y="40" class="t t-xs t-b t-m">1 · MUESTREO</text>
+<text x="254" y="58" class="t t-s">Probabilidad del token siguiente a «El total es US$»</text>
+<text x="320" y="89" class="t t-s t-mono" text-anchor="end">35</text>
+<rect x="330" y="77" width="248" height="18" rx="4" class="k-enl"/>
+<text x="584" y="90" class="t t-s t-b">62 %</text>
+<text x="320" y="119" class="t t-s t-mono" text-anchor="end">30</text>
+<rect x="330" y="107" width="84" height="18" rx="4" class="k-warm"/>
+<text x="420" y="120" class="t t-s t-b">21 %</text>
+<text x="320" y="149" class="t t-s t-mono" text-anchor="end">40</text>
+<rect x="330" y="137" width="36" height="18" rx="4" class="k-warm"/>
+<text x="372" y="150" class="t t-s t-b">9 %</text>
+<text x="320" y="179" class="t t-s t-mono" text-anchor="end">depende</text>
+<rect x="330" y="167" width="32" height="18" rx="4" class="fl-muted"/>
+<text x="368" y="180" class="t t-s t-b">8 %</text>
+<text x="254" y="196" class="t t-s t-m">La temperatura decide cuánto se aleja de la barra más alta.</text>
+<rect x="240" y="220" width="184" height="160" rx="12" class="caja"/>
+<text x="254" y="244" class="t t-xs t-b t-m">2 · VERSIÓN</text>
+<text x="254" y="266" class="t t-s">El alias «el más</text>
+<text x="254" y="282" class="t t-s">reciente» cambia de</text>
+<text x="254" y="298" class="t t-s">modelo sin aviso.</text>
+<text x="254" y="330" class="t t-s">Se fija la versión</text>
+<text x="254" y="346" class="t t-s">exacta.</text>
+<rect x="436" y="220" width="184" height="160" rx="12" class="caja"/>
+<text x="450" y="244" class="t t-xs t-b t-m">3 · CONTEXTO</text>
+<text x="450" y="266" class="t t-s">Otra palabra en la</text>
+<text x="450" y="282" class="t t-s">plantilla u otro orden</text>
+<text x="450" y="298" class="t t-s">de los fragmentos.</text>
+<text x="450" y="330" class="t t-s">Para el modelo ya es</text>
+<text x="450" y="346" class="t t-s">otro pedido.</text>
+<line x1="186" y1="190" x2="236" y2="110" class="ln" style="stroke-width:2" marker-end="url(#c2d1-m)"/>
+<line x1="186" y1="210" x2="236" y2="290" class="ln" style="stroke-width:2" marker-end="url(#c2d1-m)"/>
+<text x="660" y="36" class="t t-xs t-b t-m">CUATRO CORRIDAS</text>
+<rect x="660" y="50" width="244" height="70" rx="10" class="c-enl"/>
+<text x="674" y="80" class="t t-mono" style="font-size:12px">US$ 35,00.</text>
+<text x="674" y="102" class="t t-s t-b k-enl">correcta</text>
+<line x1="620" y1="200" x2="656" y2="85" class="ln ln-d" marker-end="url(#c2d1-m)"/>
+<rect x="660" y="134" width="244" height="70" rx="10" class="c-enl"/>
+<text x="674" y="164" class="t t-mono" style="font-size:12px">Son 35 dólares en total.</text>
+<text x="674" y="186" class="t t-s t-b k-enl">correcta, otras palabras</text>
+<line x1="620" y1="200" x2="656" y2="169" class="ln ln-d" marker-end="url(#c2d1-m)"/>
+<rect x="660" y="218" width="244" height="70" rx="10" class="caja"/>
+<text x="674" y="248" class="t t-mono" style="font-size:12px">US$ 30,00.</text>
+<text x="674" y="270" class="t t-s t-b k-warm">olvidó la reconexión</text>
+<line x1="620" y1="200" x2="656" y2="253" class="ln ln-d" marker-end="url(#c2d1-m)"/>
+<rect x="660" y="302" width="244" height="70" rx="10" class="caja"/>
+<text x="674" y="332" class="t t-mono" style="font-size:12px">Depende de su plan.</text>
+<text x="674" y="354" class="t t-s t-b t-m">no responde</text>
+<line x1="620" y1="200" x2="656" y2="337" class="ln ln-d" marker-end="url(#c2d1-m)"/>
+</svg></div><figcaption><b>De dónde sale la variabilidad.</b> A la izquierda, el mismo pedido. En el centro, las tres fuentes de variación: el muestreo (las barras son la probabilidad de cada token siguiente después de «El total es US$»), la versión del modelo y el contexto. A la derecha, cuatro respuestas reales del mismo pedido: dos correctas con palabras distintas, una que olvidó la reconexión y una que no responde. Ninguna fuente es un error del modelo: es su forma normal de funcionar.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El mismo pedido cinco veces</h3></div><p>Vas a mandar el mismo pedido a tu modelo local cinco veces con temperatura 1 y cinco veces con temperatura 0 y semilla fija, y contar cuántas respuestas distintas salen. Necesitas Ollama con <code>llama3.2:3b</code> (capítulo 1) y Python; el script usa solo la biblioteca estándar. Guarda este programa como <code>variabilidad.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+MODELO = "llama3.2:3b"
+PEDIDO = ("En una sola frase: una clienta tiene vencida una factura de US$ 30,00 "
+          "y pide la reconexión, que cuesta US$ 5,00. ¿Cuánto paga hoy?")
+
+def llamar(temperatura, semilla=None):
+    cuerpo = {"model": MODELO, "temperature": temperatura,
+              "messages": [{"role": "user", "content": PEDIDO}]}
+    if semilla is not None:
+        cuerpo["seed"] = semilla
+    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido) as r:
+        return json.load(r)["choices"][0]["message"]["content"].strip()
+
+for temperatura, semilla in [(1.0, None), (0.0, 42)]:
+    respuestas = [llamar(temperatura, semilla) for _ in range(5)]
+    print(f"\ntemperatura={temperatura} semilla={semilla}: "
+          f"{len(set(respuestas))} respuestas distintas de 5")
+    for texto in respuestas:
+        print(" -", texto[:120])</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python variabilidad.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 variabilidad.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota cuántas respuestas distintas salen en cada bloque.</span></li><li><span>Lee las cinco respuestas con temperatura 1: ¿todas dan US$ 35,00? ¿alguna se equivoca?</span></li><li><span>Cambia <code>PEDIDO</code> agregando al final «Responde solo con el monto.» y vuelve a correrlo.</span></li></ol><p><b>Qué observar:</b> con temperatura 1 salen varias redacciones y, a veces, montos distintos. Con temperatura 0 y semilla fija, casi siempre sale la misma respuesta las cinco veces; si sale bien, sale bien siempre, y si sale mal, también sale mal siempre. La temperatura baja quita variación, no errores. El paso 3 muestra la tercera fuente: un cambio en el texto cambia la salida. Los números exactos cambian según el modelo y la computadora; la misma API funciona con un proveedor comercial cambiando la dirección y la clave.</p></div></section>
+<section><h2>El modelo como «base de datos conversacional» frente a la base relacional</h2><div class="prose"><p>Una forma útil de pensar un LLM dentro de una aplicación es como una <b>base de datos conversacional</b>: algo a lo que le preguntas en lenguaje natural y te responde con lo que «sabe». La comparación sirve justamente porque muestra lo que el modelo no es.</p></div><div class="analogia"><b>Imagínalo así</b><p>Una base de datos relacional es un archivador con fichas numeradas: si pides la ficha 20417, te da exactamente esa, la misma hoy y mañana, o te dice que no existe. Un modelo es un bibliotecario que leyó todo el edificio: si le preguntas por un cliente, te cuenta algo plausible aunque nunca haya visto su ficha, y te lo cuenta con otras palabras cada vez.</p></div><div class="prose"><p>Una <b>base de datos relacional</b> (<i>relational database</i>) guarda los datos en tablas con columnas y tipos fijos. Se consulta con <b>SQL</b> (<i>Structured Query Language</i>, lenguaje de consulta estructurado), que dice qué se quiere y no cómo buscarlo. La búsqueda es por coincidencia exacta (igual, mayor, entre, empieza con), las escrituras son <b>transacciones ACID</b> (<i>Atomicity, Consistency, Isolation, Durability</i>: atomicidad, consistencia, aislamiento y durabilidad) y el resultado es repetible: la misma consulta sobre los mismos datos da el mismo resultado.</p><p>Un modelo guarda lo que aprendió repartido en sus <b>parámetros</b> (<i>weights</i>), millones o miles de millones de números ajustados en el entrenamiento. No hay filas ni claves: se le pregunta con texto, busca por parecido de significado y responde generando. Lo que no está en sus parámetros ni en el contexto, lo completa con lo más plausible. Esa es la <b>alucinación</b> (<i>hallucination</i>): una respuesta fluida y falsa.</p></div><figure class="fig fig-comparacion" id="02-diagrama-2"><div class="lienzo"><svg viewBox="0 0 900 448" style="min-width:700px" role="img" aria-label="Tabla comparativa entre una base de datos relacional y un modelo de lenguaje usado como base conversacional, en siete aspectos: datos, almacenamiento, consulta, búsqueda, resultado, garantías y forma de fallar; abajo, la conclusión: la verdad vive en la base y el modelo entiende y redacta">
+<rect x="200" y="14" width="335" height="46" rx="10" class="d-casa"/>
+<text x="367" y="43" class="t t-b" text-anchor="middle">Base relacional</text>
+<rect x="550" y="14" width="335" height="46" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="717" y="43" class="t t-b" text-anchor="middle">Modelo (base conversacional)</text>
+<rect x="16" y="70" width="869" height="44" rx="6" class="caja" style="stroke:none;opacity:.6"/>
+<text x="28" y="97" class="t t-b" style="font-size:12px">Datos</text>
+<text x="212" y="97" class="t" style="font-size:12px">tablas con columnas y tipos fijos</text>
+<text x="562" y="97" class="t" style="font-size:12px">parámetros, embeddings y contexto</text>
+<line x1="16" y1="114" x2="885" y2="114" class="ln" style="stroke-width:.6;opacity:.5"/>
+<text x="28" y="141" class="t t-b" style="font-size:12px">Dónde se guarda</text>
+<text x="212" y="141" class="t" style="font-size:12px">páginas en disco, índices, bitácora</text>
+<text x="562" y="141" class="t" style="font-size:12px">pesos del modelo e índices vectoriales</text>
+<line x1="16" y1="158" x2="885" y2="158" class="ln" style="stroke-width:.6;opacity:.5"/>
+<rect x="16" y="158" width="869" height="44" rx="6" class="caja" style="stroke:none;opacity:.6"/>
+<text x="28" y="185" class="t t-b" style="font-size:12px">Cómo se consulta</text>
+<text x="212" y="185" class="t" style="font-size:12px">SQL: qué quieres, no cómo buscarlo</text>
+<text x="562" y="185" class="t" style="font-size:12px">texto en lenguaje natural</text>
+<line x1="16" y1="202" x2="885" y2="202" class="ln" style="stroke-width:.6;opacity:.5"/>
+<text x="28" y="229" class="t t-b" style="font-size:12px">Cómo busca</text>
+<text x="212" y="229" class="t" style="font-size:12px">coincidencia exacta: =, BETWEEN, LIKE</text>
+<text x="562" y="229" class="t" style="font-size:12px">parecido de significado</text>
+<line x1="16" y1="246" x2="885" y2="246" class="ln" style="stroke-width:.6;opacity:.5"/>
+<rect x="16" y="246" width="869" height="44" rx="6" class="caja" style="stroke:none;opacity:.6"/>
+<text x="28" y="273" class="t t-b" style="font-size:12px">Resultado</text>
+<text x="212" y="273" class="t" style="font-size:12px">el mismo cada vez</text>
+<text x="562" y="273" class="t" style="font-size:12px">puede cambiar en cada llamada</text>
+<line x1="16" y1="290" x2="885" y2="290" class="ln" style="stroke-width:.6;opacity:.5"/>
+<text x="28" y="317" class="t t-b" style="font-size:12px">Garantías</text>
+<text x="212" y="317" class="t" style="font-size:12px">transacciones ACID</text>
+<text x="562" y="317" class="t" style="font-size:12px">estadísticas: se miden con evaluación</text>
+<line x1="16" y1="334" x2="885" y2="334" class="ln" style="stroke-width:.6;opacity:.5"/>
+<rect x="16" y="334" width="869" height="44" rx="6" class="caja" style="stroke:none;opacity:.6"/>
+<text x="28" y="361" class="t t-b" style="font-size:12px">Cómo falla</text>
+<text x="212" y="361" class="t" style="font-size:12px">error explícito o cero filas</text>
+<text x="562" y="361" class="t" style="font-size:12px">respuesta fluida y falsa (alucinación)</text>
+<line x1="16" y1="378" x2="885" y2="378" class="ln" style="stroke-width:.6;opacity:.5"/>
+<rect x="16" y="392" width="869" height="44" rx="10" class="caja" style="stroke-width:2"/>
+<text x="450" y="419" class="t" text-anchor="middle"><tspan class="t-b">No compiten, se combinan:</tspan> la verdad del negocio vive en la base; el modelo entiende, decide qué consultar y redacta.</text>
+</svg></div><figcaption><b>Base relacional frente a base conversacional.</b> Cada fila compara un aspecto: cómo se estructuran los datos, dónde se guardan, cómo se consultan, cómo se busca, qué tan repetible es el resultado, qué garantías ofrece y cómo falla. A la izquierda la base relacional; a la derecha, el modelo con su recuperación y sus herramientas. La última fila es la conclusión: no compiten, se combinan.</figcaption></figure><div class="prose"><p>La conclusión práctica es una regla de arquitectura: <b>la verdad del negocio vive en los sistemas deterministas</b> (la base de facturación, el CRM, el motor de tarifas) y el modelo se usa para lo que hace bien: entender lenguaje, resumir, clasificar, redactar y decidir qué consultar. Cuando necesita un dato exacto, lo pide a un sistema por medio de una herramienta, en lugar de recordarlo.</p></div><div class="lab" id="02-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>La misma pregunta a una base relacional y a un modelo</h3></div><p class="hint">Elige una pregunta sobre las facturas y los tickets de la empresa ficticia. Mira qué responde la base relacional con su consulta SQL, qué responde el modelo solo y qué responde el modelo cuando usa la base como herramienta. Pulsa «Preguntar otra vez al modelo» para ver que su respuesta cambia y la de la base no.</p><style>
+[id="02-lab-2"] .opciones{grid-template-columns:minmax(0,1fr)}
+[id="02-lab-2"] .c2l2-datos{font:500 .76rem/1.35 var(--f-mono)}
+[id="02-lab-2"] .c2l2-datos summary{font:600 .84rem var(--f-display);cursor:pointer;color:var(--ink)}
+[id="02-lab-2"] .c2l2-datos table{border-collapse:collapse;margin:6px 0;min-width:420px}
+[id="02-lab-2"] .c2l2-datos td,[id="02-lab-2"] .c2l2-datos th{border-bottom:1px solid var(--line);padding:3px 8px;text-align:left}
+[id="02-lab-2"] .c2l2-datos th{color:var(--muted);font-weight:600}
+[id="02-lab-2"] .c2l2-tw{overflow-x:auto}
+[id="02-lab-2"] .c2l2-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px}
+[id="02-lab-2"] .c2l2-c{border:1px solid var(--line);border-top:4px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--card);display:grid;gap:6px;align-content:start;min-width:0}
+[id="02-lab-2"] .c2l2-c h4{margin:0;font:700 .78rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+[id="02-lab-2"] .c2l2-c pre{margin:0;font:500 .74rem/1.4 var(--f-mono);white-space:pre-wrap;overflow-wrap:anywhere;background:var(--paper);padding:6px;border-radius:6px}
+[id="02-lab-2"] .c2l2-c p{margin:0;font:500 .86rem/1.4 var(--f-body)}
+[id="02-lab-2"] .c2l2-c .c2l2-v{font:700 .76rem var(--f-display)}
+[id="02-lab-2"] .c2l2-c.ok{border-top-color:var(--good)} [id="02-lab-2"] .c2l2-c.ok .c2l2-v{color:var(--good)}
+[id="02-lab-2"] .c2l2-c.mal{border-top-color:var(--warm)} [id="02-lab-2"] .c2l2-c.mal .c2l2-v{color:var(--warm)}
+[id="02-lab-2"] .c2l2-c.no{border-top-color:var(--muted)} [id="02-lab-2"] .c2l2-c.no .c2l2-v{color:var(--muted)}
+</style>
+<div class="opciones">
+  <label>Pregunta
+    <select id="c2l2-q">
+      <option value="0">¿Cuánto debe hoy la cuenta 20417?</option>
+      <option value="1">¿Cuántas facturas de octubre están vencidas?</option>
+      <option value="2">¿Cuánto pagó Carmen en total este año?</option>
+      <option value="3">Resume en una frase el ticket T-55190</option>
+      <option value="4">¿Qué clientes están molestos?</option>
+      <option value="5">¿Qué dice la política sobre la reconexión?</option>
+    </select></label>
+</div>
+<details class="c2l2-datos"><summary>Ver los datos de la base (tablas facturas y tickets)</summary>
+<div class="c2l2-tw"><table><thead><tr><th>cuenta</th><th>cliente</th><th>factura</th><th>mes</th><th>monto</th><th>estado</th></tr></thead><tbody>
+<tr><td>20417</td><td>Carmen Rojas</td><td>F-88213</td><td>oct</td><td>30,00</td><td>vencida</td></tr>
+<tr><td>20417</td><td>Carmen Rojas</td><td>F-87102</td><td>sep</td><td>30,00</td><td>pagada</td></tr>
+<tr><td>20417</td><td>Carmen Rojas</td><td>F-86011</td><td>ago</td><td>30,00</td><td>pagada</td></tr>
+<tr><td>31552</td><td>Luis Pérez</td><td>F-88214</td><td>oct</td><td>45,00</td><td>vencida</td></tr>
+<tr><td>40981</td><td>Ana Gómez</td><td>F-88215</td><td>oct</td><td>30,00</td><td>pagada</td></tr>
+</tbody></table></div>
+<div class="c2l2-tw"><table><thead><tr><th>ticket</th><th>cuenta</th><th>texto</th></tr></thead><tbody>
+<tr><td>T-55190</td><td>20417</td><td>Me cobraron dos veces septiembre. Es la segunda vez que llamo y nadie me resuelve.</td></tr>
+<tr><td>T-55204</td><td>40981</td><td>¿Puedo cambiar la fecha de la visita del jueves?</td></tr>
+</tbody></table></div>
+<p>La política de reconexión no está en la base: es un documento en las carpetas compartidas.</p>
+</details>
+<div class="btns">
+  <button type="button" class="primary" id="c2l2-otra">Preguntar otra vez al modelo</button>
+</div>
+<div class="c2l2-cols">
+  <div class="c2l2-c" id="c2l2-a"></div>
+  <div class="c2l2-c" id="c2l2-b"></div>
+  <div class="c2l2-c" id="c2l2-c"></div>
+</div>
+<div class="readout texto" id="c2l2-out" aria-live="polite"></div></div></section>
+<section><h2>Cuándo hace falta determinismo: cálculos, cumplimiento, auditoría y flujos repetibles</h2><div class="prose"><p>No todo pide determinismo. Un borrador de correo, un resumen de una llamada o tres ideas para una campaña pueden salir distintos cada vez y está bien: una persona los revisa. El problema aparece cuando la salida del modelo entra en un proceso que espera un dato exacto. Hay cuatro casos típicos:</p><ul><li><b>Cálculos.</b> Montos, saldos, prorrateos, impuestos, fechas de vencimiento. Un modelo puede sumar bien muchas veces y mal una; con dinero, una vez es demasiado. La regla: el modelo nunca hace la cuenta final.</li><li><b>Cumplimiento.</b> Lo que se le dice a un cliente sobre sus derechos, una tarifa o un contrato tiene consecuencias legales. La respuesta debe salir de un texto aprobado y poder citarlo.</li><li><b>Auditoría.</b> Si alguien pregunta en seis meses por qué el asistente dijo algo, hay que poder mostrar exactamente qué entró y qué salió. Sin determinismo, al menos hace falta un registro completo.</li><li><b>Flujos repetibles.</b> Cuando la salida es la entrada de otro programa (clasificar un ticket para enrutarlo, extraer los datos de una factura), el programa siguiente necesita siempre la misma forma: los mismos campos, los mismos nombres y las mismas unidades.</li></ul><p>Para el asistente de atención, Lucía y Mateo hicieron una tabla simple con cada salida del asistente y una columna: «¿qué pasa si sale distinto?». Los resúmenes de tickets quedaron como «no importa, lo revisa el agente». El monto a pagar y la categoría del ticket quedaron como «importa siempre». Esa columna decide cuántas capas de envoltorio lleva cada salida.</p></div></section>
+<section><h2>Las capas del envoltorio: parámetros, plantillas, esquemas, contexto verificado, herramientas y validadores</h2><div class="prose"><p>La solución no es cambiar el modelo, sino envolverlo. El patrón de este capítulo es un <b>envoltorio determinista</b> (<i>deterministic wrapper</i>) alrededor de un <b>núcleo probabilístico</b>: capas de código normal que fijan lo que entra, restringen lo que sale y comprueban el resultado.</p></div><div class="analogia"><b>Imagínalo así</b><p>Una planta embotelladora no le pide a cada operario que llene las botellas «más o menos hasta arriba». Pone una boquilla que mide el volumen, un molde que da siempre la misma forma, una etiqueta impresa y una báscula al final de la línea que separa las botellas que no pesan lo correcto. El líquido es el mismo; lo que cambia es todo lo que lo rodea.</p></div><div class="prose"><p>Las capas, de adentro hacia afuera:</p><ol class="steps"><li><span><b>Parámetros.</b> Temperatura baja (entre 0 y 0,2 para salidas que importan), un <b>máximo de tokens</b> (<i>max tokens</i>) para cortar respuestas largas, <b>secuencias de parada</b> (<i>stop sequences</i>), semilla cuando el proveedor la ofrece y la versión exacta del modelo fijada en la configuración.</span></li><li><span><b>Plantillas.</b> El mismo texto de instrucciones, en el mismo orden, con variables que llena el código. Una plantilla versionada (<code>respuesta-agente@v3</code>) evita que dos partes del programa le pidan lo mismo al modelo con palabras distintas. El capítulo 4 la construye.</span></li><li><span><b>Esquemas.</b> Se le pide al modelo un JSON que cumpla un <b>esquema JSON</b> (<i>JSON Schema</i>): qué campos, de qué tipo y con qué valores permitidos. Muchos proveedores, y Ollama, pueden forzar la salida a ese esquema. Con eso el programa siguiente siempre recibe la misma forma. El capítulo 5 está dedicado a esto.</span></li><li><span><b>Contexto verificado.</b> El modelo responde con documentos aprobados y vigentes, no con su memoria. Si la política de reconexión dice US$ 5,00, ese texto va en el contexto. Lo construyen los capítulos 4 y 8.</span></li><li><span><b>Herramientas.</b> Todo dato exacto o cálculo lo hace un sistema determinista: el modelo pide <code>calcular_total(cuenta=20417)</code> y el motor de tarifas responde 35,00. El capítulo 9 las construye.</span></li><li><span><b>Validadores.</b> Código que revisa la salida antes de usarla: que el JSON cumpla el esquema, que el monto coincida con el de la herramienta, que cada cita exista en el documento citado. Si algo falla, se reintenta o se escala.</span></li></ol></div><figure class="fig fig-capas" id="02-diagrama-3"><div class="lienzo"><svg viewBox="0 0 900 470" style="min-width:700px" role="img" aria-label="Anillos concéntricos alrededor de un núcleo que es el modelo probabilístico; de adentro hacia afuera: parámetros, plantillas, esquemas, contexto verificado, herramientas y validadores, cada uno con lo que controla; un marco punteado exterior representa el registro">
+<rect x="10" y="10" width="560" height="450" rx="22" class="caja" style="stroke-dasharray:6 5;stroke-width:1.6"/>
+<text x="28" y="34" class="t t-xs t-b t-m">REGISTRO · TRAZA DE CADA CAPA</text>
+<rect x="30" y="46" width="520" height="400" rx="18" class="d-casa" style="stroke-width:1.6"/>
+<text x="42" y="66" class="t t-s t-b">6 · Validadores</text>
+<rect x="60" y="76" width="460" height="340" rx="17" class="caja" style="stroke-width:1.6"/>
+<text x="72" y="96" class="t t-s t-b">5 · Herramientas</text>
+<rect x="90" y="106" width="400" height="280" rx="16" class="d-casa" style="stroke-width:1.6"/>
+<text x="102" y="126" class="t t-s t-b">4 · Contexto verificado</text>
+<rect x="120" y="136" width="340" height="220" rx="15" class="caja" style="stroke-width:1.6"/>
+<text x="132" y="156" class="t t-s t-b">3 · Esquemas</text>
+<rect x="150" y="166" width="280" height="160" rx="14" class="d-casa" style="stroke-width:1.6"/>
+<text x="162" y="186" class="t t-s t-b">2 · Plantillas</text>
+<rect x="180" y="196" width="220" height="100" rx="13" class="caja" style="stroke-width:1.6"/>
+<text x="192" y="216" class="t t-s t-b">1 · Parámetros</text>
+<rect x="210" y="226" width="160" height="40" rx="14" class="caja" style="stroke:var(--warm);stroke-width:2.4"/>
+<text x="290.0" y="240.0" class="t t-b k-warm" text-anchor="middle">Modelo</text>
+<text x="290.0" y="258.0" class="t t-s t-m" text-anchor="middle">núcleo probabilístico</text>
+<text x="600" y="40" class="t t-xs t-b t-m">QUÉ CONTROLA CADA CAPA</text>
+<rect x="600" y="70" width="16" height="16" rx="3" class="d-casa"/>
+<text x="626" y="83" class="t t-b" style="font-size:12px">6 · Validadores</text>
+<text x="626" y="101" class="t t-s t-m">revisan el resultado final</text>
+<rect x="600" y="128" width="16" height="16" rx="3" class="caja"/>
+<text x="626" y="141" class="t t-b" style="font-size:12px">5 · Herramientas</text>
+<text x="626" y="159" class="t t-s t-m">hacen los cálculos y traen datos exactos</text>
+<rect x="600" y="186" width="16" height="16" rx="3" class="d-casa"/>
+<text x="626" y="199" class="t t-b" style="font-size:12px">4 · Contexto verificado</text>
+<text x="626" y="217" class="t t-s t-m">pone los hechos aprobados</text>
+<rect x="600" y="244" width="16" height="16" rx="3" class="caja"/>
+<text x="626" y="257" class="t t-b" style="font-size:12px">3 · Esquemas</text>
+<text x="626" y="275" class="t t-s t-m">fijan la forma de la salida</text>
+<rect x="600" y="302" width="16" height="16" rx="3" class="d-casa"/>
+<text x="626" y="315" class="t t-b" style="font-size:12px">2 · Plantillas</text>
+<text x="626" y="333" class="t t-s t-m">fijan cómo se pide</text>
+<rect x="600" y="360" width="16" height="16" rx="3" class="caja"/>
+<text x="626" y="373" class="t t-b" style="font-size:12px">1 · Parámetros</text>
+<text x="626" y="391" class="t t-s t-m">acotan el azar</text>
+<text x="600" y="436" class="t t-s"><tspan class="t-b k-warm">Núcleo:</tspan> entiende, planea y redacta.</text>
+</svg></div><figcaption><b>Las capas del envoltorio.</b> En el centro, el modelo probabilístico. Cada anillo es una capa de código determinista que lo rodea, de adentro hacia afuera: parámetros, plantillas, esquemas, contexto verificado, herramientas y validadores. A la derecha de cada anillo, qué controla: el azar, la redacción del pedido, la forma de la salida, los hechos, los cálculos y el resultado final. El marco punteado de afuera es el registro, que guarda lo que pasa en todas las capas.</figcaption></figure><div class="prose"><p>Cada capa ataca una fuente de error distinta, y por eso no se reemplazan entre sí. La temperatura 0 no arregla un monto inventado, porque el modelo inventa el mismo monto todas las veces. El esquema garantiza la forma, pero no que el número sea correcto. El contexto verificado arregla los hechos, pero no las sumas. El laboratorio lo muestra con los mismos veinte pedidos de Mateo.</p></div><div class="lab" id="02-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>El mismo pedido 20 veces</h3></div><p class="hint">El pedido es el de Carmen: factura vencida de US$ 30,00 más la reconexión. La respuesta correcta es US$ 35,00. Cambia la temperatura, activa una por una las capas del envoltorio y pulsa «Correr 20 veces». Mira cuántas formas distintas salen, cuántas respuestas son correctas, cuántas puede leer un programa y cuántas se escalan a una persona.</p><style>
+[id="02-lab-1"] .c2l1-capas{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:6px 14px}
+[id="02-lab-1"] .c2l1-capas label{display:grid;grid-template-columns:18px 1fr;gap:6px;align-items:start;font:500 .86rem/1.35 var(--f-display);color:var(--ink);cursor:pointer}
+[id="02-lab-1"] .c2l1-capas label small{display:block;color:var(--muted);font-size:.76rem}
+[id="02-lab-1"] .c2l1-rej{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,130px),1fr));gap:6px}
+[id="02-lab-1"] .c2l1-r{border:1px solid var(--line);border-left-width:4px;border-radius:7px;padding:5px 7px;font:500 .76rem/1.3 var(--f-mono);background:var(--card);min-height:44px;overflow-wrap:anywhere}
+[id="02-lab-1"] .c2l1-r b{display:block;font:700 .66rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+[id="02-lab-1"] .c2l1-r.ok{border-left-color:var(--good)}
+[id="02-lab-1"] .c2l1-r.mal{border-left-color:var(--warm);background:var(--warm-soft)}
+[id="02-lab-1"] .c2l1-r.esc{border-left-color:var(--accent);background:var(--accent-soft)}
+[id="02-lab-1"] .c2l1-r.ile{border-left-color:var(--muted);border-style:dashed}
+[id="02-lab-1"] .c2l1-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,120px),1fr));gap:8px}
+[id="02-lab-1"] .c2l1-k{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--paper)}
+[id="02-lab-1"] .c2l1-k span{display:block;font:600 .74rem var(--f-display);color:var(--muted)}
+[id="02-lab-1"] .c2l1-k output{font:700 1.3rem var(--f-mono);color:var(--ink)}
+</style>
+<div class="ctls">
+  <label class="ctl">Temperatura <output id="c2l1-t-o"></output>
+    <input id="c2l1-t" type="range" min="0" max="1.2" step="0.1" value="0.8"></label>
+</div>
+<div class="c2l1-capas" role="group" aria-label="Capas del envoltorio">
+  <label><input type="checkbox" id="c2l1-pla"><span>Plantilla fija<small>mismas instrucciones y formato «Total: US$ …»</small></span></label>
+  <label><input type="checkbox" id="c2l1-esq"><span>Esquema JSON<small>la salida debe ser {"total": número}</small></span></label>
+  <label><input type="checkbox" id="c2l1-ctx"><span>Contexto verificado<small>la política dice: reconexión US$ 5,00</small></span></label>
+  <label><input type="checkbox" id="c2l1-her"><span>Herramienta de cálculo<small>el motor de tarifas suma; el modelo no</small></span></label>
+  <label><input type="checkbox" id="c2l1-val"><span>Validador con reintento<small>revisa forma y monto; 1 reintento y luego escala</small></span></label>
+</div>
+<div class="btns">
+  <button type="button" class="primary" id="c2l1-run">Correr 20 veces</button>
+  <button type="button" id="c2l1-todo">Activar todas las capas</button>
+  <button type="button" id="c2l1-nada">Quitar todas</button>
+</div>
+<div class="c2l1-kpis">
+  <div class="c2l1-k"><span>Formas distintas</span><output id="c2l1-k1"></output></div>
+  <div class="c2l1-k"><span>Correctas (US$ 35)</span><output id="c2l1-k2"></output></div>
+  <div class="c2l1-k"><span>Las lee un programa</span><output id="c2l1-k3"></output></div>
+  <div class="c2l1-k"><span>Escaladas</span><output id="c2l1-k4"></output></div>
+</div>
+<div class="c2l1-rej" id="c2l1-rej" aria-label="Las 20 respuestas"></div>
+<div class="legend"><span><i style="background:var(--good)"></i>correcta</span><span><i style="background:var(--warm)"></i>incorrecta</span><span><i style="background:var(--muted)"></i>no responde el monto</span><span><i style="background:var(--accent)"></i>escalada a una persona</span></div>
+<div class="readout texto" id="c2l1-out" aria-live="polite"></div></div></section>
+<section><h2>Separar planear, que hace el modelo, de ejecutar, que hace el código</h2><div class="prose"><p>La capa de herramientas lleva a una idea que ordena toda la arquitectura del curso: <b>el modelo planea y el código ejecuta</b>. El modelo es bueno para entender un pedido desordenado («hola, se me pasó la de octubre y quiero que me vuelvan a conectar hoy, cuánto es») y convertirlo en un plan estructurado: la acción es <code>reconectar</code>, la cuenta es la 20417, hay una factura vencida. El código es bueno para todo lo demás: consultar el saldo real, aplicar la tarifa vigente, sumar, verificar permisos y ejecutar.</p></div><div class="analogia"><b>Imagínalo así</b><p>En un restaurante, el mesero escucha al cliente («algo liviano, sin gluten, que no tarde») y lo convierte en una comanda clara: «ensalada 4, sin crutones, mesa 7». La cocina no interpreta deseos: cocina la comanda. Y la caja no le pregunta al mesero cuánto cuesta la ensalada: la busca en el sistema. El modelo es el mesero; la cocina y la caja son el código.</p></div><div class="prose"><p>En la práctica, el plan del modelo es un JSON con esquema, por ejemplo <code>{"accion": "reconectar", "cuenta": 20417}</code>. El código lo valida, llama al motor de tarifas y obtiene el total. Si hace falta una respuesta en lenguaje natural, se le pasa al modelo el número ya calculado y se le pide solo la redacción («dile a la clienta que el total es US$ 35,00 y por qué»). El número nunca sale de la imaginación del modelo.</p></div><figure class="fig fig-flujo" id="02-diagrama-4"><div class="lienzo"><svg viewBox="0 0 960 560" style="min-width:760px" role="img" aria-label="Diagrama de secuencia: el agente pega el mensaje de la clienta; el envoltorio arma la plantilla y llama al modelo; el modelo devuelve un plan en JSON; el validador lo revisa; el código llama al motor de tarifas, que responde 35,00; el modelo redacta con ese número; el verificador comprueba el monto y la cita y entrega la respuesta; si algo falla, reintenta o escala; el registro guarda cada paso">
+<defs>
+<marker id="c2d4-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+<marker id="c2d4-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c2d4-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+<marker id="c2d4-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker>
+</defs>
+<rect x="14" y="14" width="112" height="50" rx="10" class="caja"/>
+<text x="70" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Agente de</text>
+<text x="70" y="52" class="t t-s t-m" text-anchor="middle">atención</text>
+<line x1="70" y1="64" x2="70" y2="544" class="vida"/>
+<rect x="174" y="14" width="112" height="50" rx="10" class="d-casa"/>
+<text x="230" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Envoltorio</text>
+<text x="230" y="52" class="t t-s t-m" text-anchor="middle">código</text>
+<line x1="230" y1="64" x2="230" y2="544" class="vida"/>
+<rect x="354" y="14" width="112" height="50" rx="10" class="caja"/>
+<text x="410" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Modelo</text>
+<text x="410" y="52" class="t t-s t-m" text-anchor="middle">probabilístico</text>
+<line x1="410" y1="64" x2="410" y2="544" class="vida"/>
+<rect x="534" y="14" width="112" height="50" rx="10" class="d-casa"/>
+<text x="590" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Motor de</text>
+<text x="590" y="52" class="t t-s t-m" text-anchor="middle">tarifas</text>
+<line x1="590" y1="64" x2="590" y2="544" class="vida"/>
+<rect x="684" y="14" width="112" height="50" rx="10" class="caja"/>
+<text x="740" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Registro</text>
+<text x="740" y="52" class="t t-s t-m" text-anchor="middle">traza</text>
+<line x1="740" y1="64" x2="740" y2="544" class="vida"/>
+<line x1="70" y1="104" x2="228" y2="104" class="ln" style="stroke-width:2" marker-end="url(#c2d4-m)"/>
+<text x="78" y="96" class="t" style="font-size:12px">① mensaje de la clienta</text>
+<line x1="230" y1="144" x2="408" y2="144" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c2d4-s)"/>
+<text x="238" y="136" class="t" style="font-size:12px">② plantilla v1 + contexto, T = 0</text>
+<line x1="410" y1="184" x2="232" y2="184" class="ln s-warm" style="stroke-width:2" marker-end="url(#c2d4-w)"/>
+<text x="246" y="176" class="t t-mono" style="font-size:12px">③ {"accion":"reconectar","cuenta":20417}</text>
+<path d="M230 206 h40 v24 h-38" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c2d4-s)"/>
+<text x="278" y="224" class="t" style="font-size:12px">④ ¿cumple el esquema?</text>
+<line x1="230" y1="268" x2="588" y2="268" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c2d4-s)"/>
+<text x="340" y="260" class="t" style="font-size:12px">⑤ calcular_total(cuenta=20417)</text>
+<line x1="590" y1="302" x2="232" y2="302" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c2d4-s)"/>
+<text x="530" y="294" class="t" style="font-size:12px">⑥ 35,00</text>
+<line x1="230" y1="342" x2="408" y2="342" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c2d4-s)"/>
+<text x="238" y="334" class="t" style="font-size:12px">redacta con 35,00</text>
+<line x1="410" y1="376" x2="232" y2="376" class="ln s-warm" style="stroke-width:2" marker-end="url(#c2d4-w)"/>
+<text x="246" y="368" class="t" style="font-size:12px">⑦ «El total es US$ 35,00…»</text>
+<path d="M230 398 h40 v24 h-38" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c2d4-s)"/>
+<text x="278" y="416" class="t" style="font-size:12px">⑧ ¿dice 35,00? ¿existe la cita?</text>
+<line x1="230" y1="462" x2="72" y2="462" class="ln s-enl" style="stroke-width:2" marker-end="url(#c2d4-g)"/>
+<text x="78" y="454" class="t" style="font-size:12px">respuesta verificada</text>
+<path d="M222 412 C 140 380, 140 180, 222 150" class="ln ln-d s-warm" style="stroke-width:1.6" marker-end="url(#c2d4-w)"/>
+<text x="80" y="290" class="t t-s k-warm">reintenta</text>
+<text x="80" y="304" class="t t-s k-warm">o escala</text>
+<line x1="230" y1="158" x2="738" y2="158" class="ln ln-d" style="stroke-width:1" marker-end="url(#c2d4-m)"/>
+<line x1="230" y1="282" x2="738" y2="282" class="ln ln-d" style="stroke-width:1" marker-end="url(#c2d4-m)"/>
+<line x1="230" y1="476" x2="738" y2="476" class="ln ln-d" style="stroke-width:1" marker-end="url(#c2d4-m)"/>
+<text x="630" y="500" class="t t-s t-m">cada paso queda en la traza:</text>
+<text x="630" y="516" class="t t-s t-m">modelo, versión, parámetros,</text>
+<text x="630" y="532" class="t t-s t-m">plantilla, contexto y salida</text>
+<path d="M830 84v112" class="ln s-warm" style="stroke-width:3"/>
+<text x="842" y="132" class="t t-xs t-b k-warm">PLANEAR</text>
+<text x="842" y="147" class="t t-s t-m">el modelo</text>
+<text x="842" y="161" class="t t-s t-m">propone</text>
+<path d="M830 206v106" class="ln" style="stroke:var(--d-casa);stroke-width:3"/>
+<text x="842" y="251" class="t t-xs t-b k-casa">EJECUTAR</text>
+<text x="842" y="266" class="t t-s t-m">el código</text>
+<text x="842" y="280" class="t t-s t-m">calcula</text>
+<path d="M830 330v140" class="ln s-enl" style="stroke-width:3"/>
+<text x="842" y="392" class="t t-xs t-b k-enl">VERIFICAR</text>
+<text x="842" y="407" class="t t-s t-m">antes de</text>
+<text x="842" y="421" class="t t-s t-m">responder</text>
+</svg></div><figcaption><b>Planear, ejecutar y verificar.</b> Los participantes están arriba y el tiempo corre hacia abajo. ① El agente pega el mensaje de la clienta; ② el envoltorio arma la plantilla con el contexto y llama al modelo; ③ el modelo devuelve un plan en JSON; ④ el validador revisa el plan contra el esquema; ⑤ el código llama al motor de tarifas; ⑥ el motor responde 35,00; ⑦ el modelo redacta la respuesta con ese número; ⑧ el verificador comprueba que el texto diga 35,00 y que la cita exista, y entrega la respuesta. La flecha que vuelve es el reintento cuando algo falla. Abajo, el registro guarda cada paso.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El modelo planea, el código calcula</h3></div><p>Vas a pedirle al modelo solo el plan, con un esquema JSON obligatorio, y a calcular el monto en Python con una tabla de tarifas. Usa la API propia de Ollama, que acepta el esquema en el campo <code>format</code> (la versión compatible con OpenAI lo hace con <code>response_format</code>, como verás en el capítulo 5). Guarda este programa como <code>planear.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
+
+URL = "http://localhost:11434/api/chat"
+TARIFAS = {"factura": 30.00, "reconexion": 5.00}  # la fuente de verdad
+ESQUEMA = {
+    "type": "object",
+    "properties": {
+        "accion": {"type": "string",
+                   "enum": ["reconectar", "consultar_saldo", "otra"]},
+        "facturas_vencidas": {"type": "integer"},
+    },
+    "required": ["accion", "facturas_vencidas"],
+}
+MENSAJE = ("Hola, se me pasó la factura de octubre y quiero "
+           "que me reconecten hoy. ¿Cuánto es?")
+
+cuerpo = {
+    "model": "llama3.2:3b", "stream": False, "format": ESQUEMA,
+    "options": {"temperature": 0},
+    "messages": [
+        {"role": "system",
+         "content": "Clasifica el pedido de la clienta. Devuelve solo el JSON pedido."},
+        {"role": "user", "content": MENSAJE},
+    ],
+}
+pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                headers={"Content-Type": "application/json"})
+with urllib.request.urlopen(pedido) as r:
+    plan = json.loads(json.load(r)["message"]["content"])
+
+print("Plan del modelo:", plan)
+if plan.get("accion") != "reconectar" or plan.get("facturas_vencidas", 0) &lt; 1:
+    print("El plan no pasa la validación: se escala a una persona.")
+else:
+    total = plan["facturas_vencidas"] * TARIFAS["factura"] + TARIFAS["reconexion"]
+    print("Total calculado por el código: US$", f"{total:.2f}".replace(".", ","))</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python planear.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>ollama run llama3.2:3b "Se me pasó la factura de octubre (US$ 30,00) y quiero que me reconecten hoy. ¿Cuánto es en total?"</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 planear.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>ollama run llama3.2:3b "Se me pasó la factura de octubre (US$ 30,00) y quiero que me reconecten hoy. ¿Cuánto es en total?"</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta <code>planear.py</code> y anota el plan que devuelve el modelo y el total que calcula el código.</span></li><li><span>Ejecuta la línea de <code>ollama run</code> dos o tres veces: ahí el modelo tiene que inventar el costo de la reconexión.</span></li><li><span>Cambia <code>MENSAJE</code> por «¿Me pueden mandar la factura por correo?» y vuelve a correr el programa.</span></li></ol><p><b>Qué observar:</b> el plan siempre trae los dos campos con los tipos pedidos, porque el esquema obliga a esa forma, y el total sale de la tabla <code>TARIFAS</code>: US$ 35,00 cada vez. Cuando el modelo responde solo, sin herramienta, tiene que adivinar el costo de la reconexión y el monto puede cambiar entre corridas. En el paso 3 el plan no es «reconectar» y el código escala en vez de inventar un cálculo. Un modelo pequeño puede equivocarse al contar las facturas: por eso el validador revisa el plan antes de usarlo.</p></div></section>
+<section><h2>Verificar, reintentar o escalar a una persona</h2><div class="prose"><p>Un validador que encuentra un error tiene tres salidas, y elegir bien entre ellas es parte del diseño:</p><ul><li><b>Reparar.</b> Si el error es de forma (falta una coma en el JSON, un campo viene como texto en vez de número), a veces se arregla con código sin volver a llamar al modelo.</li><li><b>Reintentar.</b> Se vuelve a llamar al modelo, idealmente con el error en el mensaje: «tu respuesta no cumple el esquema: falta el campo <code>facturas_vencidas</code>». Conviene un tope (uno o dos reintentos), porque cada reintento cuesta tiempo y dinero, y si el modelo falló tres veces en lo mismo, la cuarta probablemente también.</li><li><b>Escalar.</b> La respuesta pasa a una persona con todo lo que se intentó. Es la salida correcta cuando el error es de contenido y no de forma: el monto no coincide, la cita no existe o el pedido no encaja en ningún plan conocido.</li></ul></div><div class="analogia"><b>Imagínalo así</b><p>Un cajero automático que no puede leer tu tarjeta te pide que la vuelvas a meter, una o dos veces. Si sigue sin leerla, no inventa tu saldo: se la queda y te dice que vayas a la ventanilla. Reintentar un poco y después escalar es más seguro que adivinar.</p></div><div class="prose"><p>Para el asistente, Mateo escribió la regla en una línea de configuración: dos reintentos para errores de esquema, ninguno para errores de monto (esos se escalan directo) y un aviso en el panel del agente cuando el asistente no está seguro. La tasa de escalamiento se volvió un número del tablero: si sube, algo cambió en el modelo, en la plantilla o en los datos. El capítulo 17 lo convierte en una métrica.</p></div></section>
+<section><h2>Registrar todo para poder reproducir una respuesta</h2><div class="prose"><p>Si una respuesta no se puede repetir con exactitud, al menos tiene que poder reconstruirse. Para cada llamada al modelo el registro guarda:</p><ul><li>el <b>identificador del pedido</b> y quién lo hizo;</li><li>el <b>modelo y su versión exacta</b>, la temperatura, la semilla y el máximo de tokens;</li><li>la <b>plantilla con su versión</b> y los valores de sus variables;</li><li>el <b>contexto</b> que entró: qué fragmentos de qué documentos, en qué orden;</li><li>las <b>herramientas</b> llamadas, con sus entradas y salidas;</li><li>la <b>salida</b> del modelo, el resultado de cada validador, los reintentos y si se escaló;</li><li>los <b>tokens</b>, el costo y el tiempo de cada paso.</li></ul><p>Con eso, cuando la jefa de reclamos pregunta por qué el asistente le dijo algo raro a un agente el jueves pasado, Mateo puede abrir el registro, ver exactamente qué entró y volver a correr la misma llamada para estudiarla. A esta forma de registrar se la llama <b>traza</b> (<i>trace</i>), y cada paso dentro de ella es un <b>tramo</b> (<i>span</i>). El registro contiene datos de clientes, así que tiene sus propios permisos, plazos de retención y enmascarado. El capítulo 17 construye las trazas con detalle.</p></div><div class="ml"><b>En la práctica</b><p><b>El envoltorio del asistente, versión 0.1.</b> Antes de mostrarle nada a un agente, el equipo dejó fijado esto: modelo con versión exacta en la configuración, temperatura 0, plantilla <code>respuesta-agente@v1</code>, salida con esquema (<code>respuesta</code>, <code>fuentes</code>, <code>monto</code> y <code>confianza</code>), el monto siempre calculado por el sistema de facturación y nunca por el modelo, dos reintentos por errores de forma, escalamiento por errores de contenido y una traza por cada pedido. Repitieron la prueba de los veinte pedidos: veinte respuestas con la misma forma, veinte con US$ 35,00. Las palabras de la explicación todavía cambiaban un poco, y eso estaba bien: era la parte que lee una persona.</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>Envoltorio determinista alrededor de un núcleo probabilístico. El modelo entiende, planea y redacta; el código fija lo que entra, restringe la forma de lo que sale, hace los cálculos, verifica el resultado y registra todo. Cada capa ataca un error distinto: la temperatura, el azar; el esquema, la forma; el contexto, los hechos; las herramientas, los cálculos; los validadores, lo que se escapó.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>Nombra las tres fuentes de variación de un modelo de lenguaje.</summary><p>El muestreo (controlado por la temperatura y, a veces, una semilla), los cambios de versión del modelo y los cambios en el contexto (plantilla, orden de los fragmentos, historia de la conversación).</p></details><details><summary>Con temperatura 0, el modelo responde US$ 30,00 todas las veces a la pregunta de Carmen. ¿Qué capa del envoltorio falta?</summary><p>La temperatura quitó la variación, pero el error es de hechos o de cálculo: faltan el contexto verificado (la tarifa de reconexión) o, mejor, la herramienta que calcula el total.</p></details><details><summary>¿Por qué se fija la versión exacta del modelo en la configuración?</summary><p>Porque un alias como «el más reciente» puede cambiar de modelo sin aviso, y la misma pregunta empezaría a responderse distinto sin que el equipo cambie nada.</p></details><details><summary>En «el modelo planea, el código ejecuta», ¿qué produce cada parte en el caso de la reconexión?</summary><p>El modelo produce un plan estructurado (acción reconectar, cuenta, facturas vencidas); el código lo valida, consulta las tarifas, calcula el total y, si hace falta, le pasa el número al modelo solo para redactar.</p></details><details><summary>Un validador encuentra que el monto del texto no coincide con el de la herramienta. ¿Reintenta o escala?</summary><p>Escala: es un error de contenido, no de forma. Reintentar sirve para errores de esquema; con montos, adivinar otra vez no es seguro.</p></details><details><summary>Nombra cuatro cosas que debe guardar el registro para reconstruir una respuesta.</summary><p>Cualquiera de estas: modelo y versión, parámetros (temperatura, semilla, máximo de tokens), plantilla y versión con sus variables, contexto que entró, herramientas con entradas y salidas, salida, resultado de los validadores, reintentos, tokens, costo y tiempos.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué son top-p y top-k y en qué se diferencian de la temperatura?<small>Pista: busca «nucleus sampling».</small></li><li>¿Por qué los cálculos con números de punto flotante en paralelo pueden dar resultados levemente distintos según el orden de las sumas?<small>Pista: busca «floating point non-associativity».</small></li><li>¿Qué es la decodificación restringida por gramática y cómo logra que un modelo solo produzca JSON válido?<small>Pista: busca «constrained decoding grammar».</small></li><li>¿Qué niveles de aislamiento define SQL para las transacciones y qué problema evita cada uno?</li><li>¿Qué es la autoconsistencia (<i>self-consistency</i>) y por qué votar entre varias respuestas puede mejorar la exactitud de un modelo?</li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://ollama.com/blog/structured-outputs" target="_blank" rel="noopener">Salidas estructuradas en Ollama <small>artículo oficial, en inglés</small></a><a class="vid" href="https://json-schema.org/learn/getting-started-step-by-step" target="_blank" rel="noopener">JSON Schema: primeros pasos <small>guía oficial, en inglés</small></a><a class="vid" href="https://aaramirez.github.io/modelos-de-ia/temario.html" target="_blank" rel="noopener">Modelos de IA: cómo genera un modelo por dentro <small>curso del sitio</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  // v: ok | mal | no
+  const Q=[
+    {sql:["SELECT SUM(monto) FROM facturas\nWHERE cuenta = 20417\n  AND estado = 'vencida';","→ 30,00"],sv:'ok',sn:'Exacto y repetible.',
+     m:[["Probablemente unos US$ 45,00, según su plan.",'mal'],["No tengo acceso a su cuenta, pero suele rondar los US$ 30.",'mal'],["Debe US$ 60,00 por dos meses.",'mal']],
+     h:["consultar_saldo(cuenta=20417)\n→ {\"vencido\": 30.00, \"facturas\": [\"F-88213\"]}","Debe US$ 30,00, de la factura F-88213 de octubre."],hv:'ok',
+     e:'El dato exacto vive en la base. El modelo solo no tiene la ficha y completa con lo plausible; con la herramienta, el número sale de la base y el modelo solo lo redacta.'},
+    {sql:["SELECT COUNT(*) FROM facturas\nWHERE mes = 'oct'\n  AND estado = 'vencida';","→ 2"],sv:'ok',sn:'Exacto y repetible.',
+     m:[["Alrededor del 8 % de las facturas suele vencer cada mes.",'mal'],["No puedo saberlo sin acceso a los datos.",'no'],["Unas 1.200 facturas.",'mal']],
+     h:["contar_facturas(mes='oct', estado='vencida')\n→ 2","Hay 2 facturas de octubre vencidas: F-88213 y F-88214."],hv:'ok',
+     e:'Contar, sumar y filtrar es el trabajo de SQL. Un modelo no debería contar filas que no ve; con una herramienta, la base cuenta y el modelo explica.'},
+    {sql:["SELECT SUM(monto) FROM facturas\nWHERE cuenta = 20417\n  AND estado = 'pagada';","→ 60,00"],sv:'ok',sn:'Exacto y repetible.',
+     m:[["Con la tabla en el contexto: pagó US$ 90,00 (agosto, septiembre y octubre).",'mal'],["Con la tabla en el contexto: pagó US$ 60,00.",'ok'],["Con la tabla en el contexto: pagó tres facturas de US$ 30,00.",'mal']],
+     h:["total_pagado(cuenta=20417, año=2026)\n→ 60.00","Pagó US$ 60,00 en 2026 (agosto y septiembre); octubre sigue vencida."],hv:'ok',
+     e:'Aunque le pegues la tabla, el modelo a veces filtra mal o suma la factura vencida. Tener los datos en el contexto no lo convierte en una calculadora: el cálculo va en una herramienta.'},
+    {sql:["SELECT texto FROM tickets\nWHERE ticket = 'T-55190';","→ «Me cobraron dos veces septiembre. Es la segunda vez que llamo y nadie me resuelve.»"],sv:'no',sn:'Devuelve el texto exacto, pero no sabe resumir.',
+     m:[["Carmen reclama un cobro duplicado de septiembre y está molesta porque ya llamó antes sin solución.",'ok'],["Cobro duplicado en septiembre; cliente reincidente y frustrada.",'ok'],["La clienta pide un reembolso de septiembre.",'ok']],
+     h:["leer_ticket('T-55190') → texto","Cobro duplicado de septiembre; segunda llamada sin solución."],hv:'ok',
+     e:'Resumir es lenguaje: aquí el modelo es mejor que SQL. Las palabras cambian en cada corrida y está bien, porque lo lee una persona. Con la herramienta, el modelo resume el texto real del ticket y no uno imaginado.'},
+    {sql:["SELECT ticket FROM tickets\nWHERE texto LIKE '%molest%';","→ 0 filas"],sv:'mal',sn:'La búsqueda exacta no encuentra «molesto» porque nadie escribió esa palabra.',
+     m:[["Con los tickets en el contexto: Carmen Rojas (T-55190) parece molesta: repite que nadie le resuelve.",'ok'],["Con los tickets en el contexto: ninguno parece molesto.",'mal'],["Con los tickets en el contexto: Carmen Rojas, por el cobro duplicado.",'ok']],
+     h:["leer_tickets(abiertos=true) → 2 textos","Carmen Rojas (T-55190): segunda llamada sin solución. Conviene priorizarla."],hv:'ok',
+     e:'Detectar un tono es búsqueda por significado, no por coincidencia exacta. El modelo acierta casi siempre, pero no siempre: si la decisión importa (por ejemplo, priorizar), conviene medir cuánto acierta con un conjunto de prueba.'},
+    {sql:["SELECT * FROM politicas\nWHERE tema = 'reconexion';","→ ERROR: la tabla politicas no existe"],sv:'no',sn:'La política es un documento, no una fila.',
+     m:[["La reconexión cuesta US$ 10,00 y tarda 48 horas.",'mal'],["Normalmente se cobra un cargo de reconexión de entre 5 y 15 dólares.",'mal'],["Depende de la empresa; consulte su contrato.",'no']],
+     h:["buscar_documentos('reconexión') → Política de reconexión 2026, §1","El cargo por reconexión es de US$ 5,00 y se suma a la factura vencida (Política de reconexión, 2026, §1)."],hv:'ok',
+     e:'Ni SQL ni el modelo solo sirven: el primero no tiene el documento y el segundo inventa una tarifa con seguridad. La salida es recuperar el documento y responder citándolo: el nivel 1 de la escalera.'}
+  ];
+  let intento=0;
+  function col(id,titulo,cls,pre,texto,ver){
+    const el=$('#'+id);el.className='c2l2-c '+cls;
+    el.innerHTML='<h4>'+titulo+'</h4>'+(pre?'<pre>'+pre.replace(/</g,'&lt;')+'</pre>':'')+'<p>'+texto+'</p><span class="c2l2-v">'+ver+'</span>';
+  }
+  const VER={ok:'✔ Correcto',mal:'✘ Incorrecto',no:'— No lo resuelve'};
+  function pintar(){
+    const q=Q[+$('#c2l2-q').value];
+    const m=q.m[intento%q.m.length];
+    col('c2l2-a','Base relacional (SQL)',q.sv,q.sql[0],q.sql[1],VER[q.sv]+' · '+q.sn);
+    col('c2l2-b','Modelo solo · intento '+(intento+1),m[1],'',m[0],VER[m[1]]+(m[1]==='ok'?' esta vez':''));
+    col('c2l2-c','Modelo con la base como herramienta',q.hv,q.h[0],q.h[1],VER[q.hv]);
+    $('#c2l2-out').innerHTML='<span>'+q.e+'</span><span>'+(intento===0?'Pulsa «Preguntar otra vez al modelo»: la base responderá lo mismo y el modelo solo, no necesariamente.':'Van '+(intento+1)+' intentos: la base respondió lo mismo todas las veces; el modelo solo cambió de respuesta.')+'</span>';
+  }
+  $('#c2l2-q').addEventListener('change',()=>{intento=0;pintar();});
+  $('#c2l2-otra').addEventListener('click',()=>{intento++;pintar();});
+  pintar();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  let semilla=7,base=7;
+  function rnd(){semilla=(semilla+0x6D2B79F5)|0;let t=Math.imul(semilla^(semilla>>>15),1|semilla);t=(t+Math.imul(t^(t>>>7),61|t))^t;return ((t^(t>>>14))>>>0)/4294967296;}
+  // Resultados posibles: valor numérico o null (no responde)
+  const LIBRE={35:['US$ 35,00.','Debe pagar 35 dólares.','El total es $35.00 (30 + 5).','Son US$ 35 en total.','Pagaría 35,00 dólares hoy.'],
+    30:['US$ 30,00.','Debe pagar los 30 dólares de la factura.','El total es $30.00.'],
+    40:['US$ 40,00 (30 + 10 de reconexión).','Debe pagar 40 dólares.'],
+    30.6:['US$ 30,60 con el recargo por mora.','Son 30,60 dólares.'],
+    null:['Depende de su plan; consulte con atención.','Le recomiendo revisar su factura.']};
+  const fmt=v=>v.toFixed(2).replace('.',',');
+  function sortear(ctx,her){
+    if(her){return rnd()<0.04?null:35;} // a veces no llama a la herramienta
+    const r=rnd();
+    if(ctx){return r<0.84?35:r<0.94?30:r<0.97?30.6:null;}
+    return r<0.36?35:r<0.6?30:r<0.74?40:r<0.84?30.6:null;
+  }
+  function texto(v,pla,esq,k){
+    if(esq)return '{"total": '+(v===null?'null':v.toFixed(2))+'}';
+    if(pla)return v===null?'Total: no disponible':'Total: US$ '+fmt(v);
+    const l=LIBRE[v===null?'null':v];return l[k%l.length];
+  }
+  function legible(s,pla,esq){
+    if(esq){try{const o=JSON.parse(s);return typeof o.total==='number';}catch(e){return false;}}
+    if(pla)return /^Total: US\$ \d+,\d\d$/.test(s);
+    return false; // texto libre: un programa no sabe dónde está el monto
+  }
+  function correr(){
+    const T=+$('#c2l1-t').value,pla=$('#c2l1-pla').checked,esq=$('#c2l1-esq').checked,ctx=$('#c2l1-ctx').checked,her=$('#c2l1-her').checked,val=$('#c2l1-val').checked;
+    semilla=base;
+    $('#c2l1-t-o').textContent=T.toFixed(1).replace('.',',');
+    // Con temperatura baja casi todas las corridas repiten la primera
+    const repite=Math.max(0,1-T/0.7)*0.95;
+    let primero=null,primerK=0;
+    const filas=[];
+    for(let i=0;i<20;i++){
+      let v,k;
+      if(i>0&&rnd()<repite){v=primero;k=primerK;}else if(i===0&&T<=0.3){v=her||ctx?35:30;k=0;}else{v=sortear(ctx,her);k=Math.floor(rnd()*5);}
+      if(i===0){primero=v;primerK=k;}
+      let s=texto(v,pla,esq,k),estado='',nota='';
+      if(val){
+        const okForma=esq||pla?legible(s,pla,esq):true;
+        const okMonto=v===35;
+        if(!okForma||!okMonto){
+          // reintento: nueva muestra
+          const v2=sortear(ctx,her),k2=Math.floor(rnd()*5),s2=texto(v2,pla,esq,k2);
+          if(v2===35&&(esq||pla?legible(s2,pla,esq):true)){v=v2;s=s2;nota='reintento';}
+          else{estado='esc';nota='escalada';}
+        }
+      }
+      if(!estado)estado=v===35?'ok':(v===null?'ile':'mal');
+      filas.push({s,estado,nota,leg:legible(s,pla,esq)&&estado!=='esc'});
+    }
+    const distintas=new Set(filas.filter(f=>f.estado!=='esc').map(f=>f.s)).size;
+    const ok=filas.filter(f=>f.estado==='ok').length,mal=filas.filter(f=>f.estado==='mal').length;
+    const leg=filas.filter(f=>f.leg).length,esc=filas.filter(f=>f.estado==='esc').length;
+    $('#c2l1-k1').textContent=distintas;$('#c2l1-k2').textContent=ok+' de 20';$('#c2l1-k3').textContent=leg+' de 20';$('#c2l1-k4').textContent=esc;
+    $('#c2l1-rej').innerHTML=filas.map((f,i)=>'<div class="c2l1-r '+f.estado+'"><b>#'+(i+1)+(f.nota?' · '+f.nota:'')+'</b>'+f.s.replace(/</g,'&lt;')+'</div>').join('');
+    let h='';
+    if(!her&&!ctx&&mal>0)h+='<span class="warn">Sin contexto ni herramienta, el modelo no conoce la tarifa de reconexión: la inventa ('+mal+' respuestas con montos equivocados).</span>';
+    if(T<=0.2&&!her&&!ctx)h+='<span>Con temperatura baja las respuestas se repiten, pero repetir no es acertar: si la primera sale mal, salen mal casi todas.</span>';
+    if(!pla&&!esq)h+='<span>Sin plantilla ni esquema, cada respuesta trae el monto escrito a su manera: un programa no puede leerlo con seguridad.</span>';
+    if(esq)h+='<span class="ok">Con el esquema, todas las respuestas tienen la misma forma y un programa las lee sin adivinar.</span>';
+    if(ctx&&!her)h+='<span>El contexto verificado corrige los hechos, pero el modelo todavía puede sumar mal o pasar por alto la reconexión.</span>';
+    if(her)h+='<span class="ok">Con la herramienta, el total lo calcula el motor de tarifas: el modelo solo decide llamarla.</span>';
+    if(val&&esc)h+='<span>El validador detuvo '+esc+(esc===1?' respuesta que no pasó':' respuestas que no pasaron')+' ni con un reintento: llegan a una persona en lugar de llegar al cliente.</span>';
+    if(val&&!esc&&ok===20)h+='<span class="ok">Ninguna respuesta incorrecta salió del envoltorio.</span>';
+    if(!val&&mal)h+='<span>Sin validador, las '+mal+' respuestas incorrectas habrían llegado al agente tal cual.</span>';
+    $('#c2l1-out').innerHTML=h||'<span>Activa capas y vuelve a correr.</span>';
+  }
+  $('#c2l1-run').addEventListener('click',()=>{base=Math.floor(Math.random()*1e6)+1;correr();});
+  $('#c2l1-t').addEventListener('input',correr);
+  document.querySelectorAll('[id="02-lab-1"] input[type=checkbox]').forEach(c=>c.addEventListener('change',correr));
+  $('#c2l1-todo').addEventListener('click',()=>{document.querySelectorAll('[id="02-lab-1"] input[type=checkbox]').forEach(c=>c.checked=true);$('#c2l1-t').value=0;correr();});
+  $('#c2l1-nada').addEventListener('click',()=>{document.querySelectorAll('[id="02-lab-1"] input[type=checkbox]').forEach(c=>c.checked=false);$('#c2l1-t').value=0.8;correr();});
+  correr();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Llamar a un modelo · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="llamar-a-un-modelo">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 03 DE 20</span><h1>Llamar a un modelo por API</h1><p class="lede">La primera llamada a un modelo de lenguaje cabe en diez líneas. La que aguanta 6.000 consultas al mes, con presupuesto, límites y errores, es otra cosa. Este capítulo arma la versión 0.1 del asistente de atención: mensajes, parámetros, *streaming*, entradas multimodales, tokens, costo y reintentos.</p></header>
+<section><h2>Proveedores, modelos y claves: lo mínimo para la primera llamada</h2><div class="prose"><p>Lucía le dio a Mateo una tarea de una línea: «que el panel del asistente le pregunte algo al modelo y muestre la respuesta». Mateo la tuvo lista antes del almuerzo. Después vinieron las preguntas de verdad: ¿qué pasa si el proveedor no responde?, ¿cuánto vamos a gastar al mes?, ¿por qué el agente mira la pantalla en blanco seis segundos?, ¿dónde guardamos la clave? Este capítulo responde esas preguntas. El resultado es la <b>versión 0.1</b> del asistente: la primera llamada real, dentro de un módulo que la controla.</p></div><div class="analogia"><b>Imagínalo así</b><p>Una empresa no le paga a cada proveedor con efectivo que saca de un cajón. Tiene una cuenta, un presupuesto por área, un registro de cada pago y un plan B si el banco no responde. Llamar a un modelo es contratar un servicio externo que cobra por uso: conviene tratarlo con las mismas reglas que cualquier otro proveedor.</p></div><div class="prose"><p>Un <b>modelo de lenguaje grande</b> (<i>large language model</i>, LLM) se usa casi siempre por una <b>API</b> (<i>Application Programming Interface</i>, interfaz de programación): tu programa manda un pedido por <b>HTTP</b> (<i>Hypertext Transfer Protocol</i>, el protocolo de la web) y recibe una respuesta en <b>JSON</b> (<i>JavaScript Object Notation</i>, un formato de texto para datos). Para la primera llamada necesitas tres cosas:</p><ul><li><b>Un proveedor y una dirección.</b> Los proveedores comerciales (OpenAI, Anthropic, Google, Mistral y otros) publican su API en la nube. Los <b>modelos abiertos</b> (<i>open-weight models</i>), como Llama o Qwen, se descargan y se sirven en tu propia máquina con programas como Ollama o vLLM. En el curso usamos Ollama en <code>http://localhost:11434</code>, con su ruta compatible con la de OpenAI: el mismo código sirve para un proveedor comercial cambiando la dirección y la clave.</li><li><b>Un identificador de modelo con versión.</b> Como viste en el capítulo 2, se fija la versión exacta (<code>llama3.2:3b</code>, o el nombre con fecha que publica el proveedor) en la configuración, nunca un alias que cambia solo.</li><li><b>Una clave de API</b> (<i>API key</i>): una contraseña larga que identifica a quién cobrarle. Vive en una variable de entorno o en un <b>gestor de secretos</b> (<i>secret manager</i>), nunca en el código, nunca en el repositorio y nunca en el navegador. Si la clave llega al JavaScript del panel, cualquiera que abra las herramientas de desarrollador puede gastar a tu nombre. Ollama local no pide clave.</li></ul><p>En el capítulo 1 apareció la <b>puerta a los modelos</b> (<i>model gateway</i>): el único módulo del servicio que habla con los proveedores. En la v0.1 la puerta es una función de unas cincuenta líneas: arma el pedido, pone la clave, mide el tiempo, cuenta los tokens, calcula el costo, reintenta lo que se puede reintentar y escribe la traza. El resto del asistente nunca llama al modelo directamente.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>La primera llamada, a mano</h3></div><p>Vas a mandar un pedido a la API compatible con OpenAI de tu Ollama y a leer la respuesta completa, no solo el texto. Necesitas Ollama con <code>llama3.2:3b</code> (capítulo 1). Guarda este pedido como <code>pedido.json</code>, en UTF-8:</p><div class="code-copia"><pre><code>{
+  "model": "llama3.2:3b",
+  "temperature": 0,
+  "max_tokens": 120,
+  "messages": [
+    {"role": "system", "content": "Eres el asistente de atención de una empresa de servicios. Responde en español, en dos frases como máximo."},
+    {"role": "user", "content": "¿Qué significa que una factura esté vencida?"}
+  ]
+}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>curl.exe -s http://localhost:11434/v1/chat/completions -H "Content-Type: application/json" --data-binary "@pedido.json"</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>curl -s http://localhost:11434/v1/chat/completions -H "Content-Type: application/json" --data-binary @pedido.json</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el comando y busca en la respuesta tres partes: <code>choices[0].message.content</code>, <code>choices[0].finish_reason</code> y <code>usage</code>.</span></li><li><span>Cambia <code>max_tokens</code> a <code>10</code>, guarda y vuelve a ejecutar. Mira cómo termina el texto y qué dice <code>finish_reason</code>.</span></li><li><span>Vuelve a <code>120</code>, agrega la línea <code>"stop": ["."],</code> después de <code>"max_tokens"</code> y ejecuta otra vez.</span></li></ol><p><b>Qué observar:</b> la respuesta trae mucho más que el texto: el modelo que respondió, por qué terminó (<code>stop</code> si terminó solo, <code>length</code> si lo cortó el máximo de tokens) y el uso, con los tokens de entrada (<code>prompt_tokens</code>) y de salida (<code>completion_tokens</code>). Esos dos números son los que cobra un proveedor. Con <code>max_tokens</code> en 10 la frase queda cortada; con la secuencia de parada, el texto termina en el primer punto. En PowerShell se escribe <code>curl.exe</code> porque <code>curl</code> a secas es otro comando.</p></div></section>
+<section><h2>Mensajes y roles: sistema, usuario y asistente</h2><div class="prose"><p>El pedido no es un texto suelto: es una lista de <b>mensajes</b> (<i>messages</i>), cada uno con un <b>rol</b> (<i>role</i>) y un contenido.</p></div><div class="analogia"><b>Imagínalo así</b><p>Piensa en el libreto de una obra de teatro. Antes de las escenas hay una página con las indicaciones del director: quién es cada personaje, cómo habla, qué nunca dice. Después vienen los diálogos, en orden. Un actor que entra a mitad de la función necesita leer las indicaciones y todo lo que se dijo antes, porque no estuvo en el ensayo.</p></div><div class="prose"><ul><li><b>Sistema</b> (<i>system</i>): las indicaciones del director. Quién es el asistente, qué tarea hace, qué no debe hacer y en qué formato responde. Lo escribe el equipo, no el usuario, y va primero.</li><li><b>Usuario</b> (<i>user</i>): lo que pide la persona, aquí el agente de atención.</li><li><b>Asistente</b> (<i>assistant</i>): lo que respondió el modelo en turnos anteriores.</li></ul><p>Lo más importante de esta sección: <b>la API no tiene memoria</b>. Cada llamada es independiente; el proveedor no recuerda la anterior. Si el agente hace una segunda pregunta («¿y si paga mañana?»), tu código tiene que volver a mandar el mensaje de sistema, la primera pregunta, la primera respuesta y la nueva pregunta. Por eso las conversaciones largas cuestan cada vez más: cada turno paga de nuevo todo lo anterior. Qué se guarda y qué se resume es el tema del capítulo 7.</p></div><figure class="fig fig-esquema" id="03-diagrama-1"><div class="lienzo"><svg viewBox="0 0 960 470" style="min-width:760px" role="img" aria-label="Anatomía de una llamada a la API: a la izquierda el pedido con el modelo, los parámetros y la lista de mensajes con los roles sistema, usuario y asistente; a la derecha la respuesta con el texto, la razón de término y el uso en tokens de entrada y salida, unidos por líneas que muestran qué parte del pedido provoca cada parte de la respuesta">
+<defs>
+<marker id="c3d1-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-tra"/></marker>
+<marker id="c3d1-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker>
+</defs>
+<text x="20" y="28" class="t t-xs t-b k-casa">PEDIDO · POST /v1/chat/completions</text>
+<rect x="20" y="40" width="420" height="410" rx="10" class="caja"/>
+<g class="t t-mono" style="font-size:12px">
+<text x="36" y="70">{</text>
+<text x="48" y="92">"model": "llama3.2:3b",</text>
+<text x="48" y="114">"temperature": 0,</text>
+<text x="48" y="136">"max_tokens": 120,</text>
+<text x="48" y="158">"stop": ["."],</text>
+<text x="48" y="180">"stream": false,</text>
+<text x="48" y="202">"messages": [</text>
+<text x="66" y="228"><tspan class="k-casa" style="font-weight:700">system</tspan>: "Eres el asistente de…"</text>
+<text x="66" y="254"><tspan class="k-enl" style="font-weight:700">user</tspan>: "¿Qué es una factura vencida?"</text>
+<text x="66" y="280"><tspan class="k-warm" style="font-weight:700">assistant</tspan>: "Es una factura que…"</text>
+<text x="66" y="306"><tspan class="k-enl" style="font-weight:700">user</tspan>: "¿Y si paga mañana?"</text>
+<text x="48" y="330">]</text>
+<text x="36" y="352">}</text>
+</g>
+<line x1="58" y1="214" x2="58" y2="234" style="stroke:var(--d-casa);stroke-width:4"/>
+<line x1="58" y1="240" x2="58" y2="260" class="s-enl" style="stroke-width:4"/>
+<line x1="58" y1="266" x2="58" y2="286" class="s-warm" style="stroke-width:4"/>
+<line x1="58" y1="292" x2="58" y2="312" class="s-enl" style="stroke-width:4"/>
+<g class="t t-s t-m">
+<text x="270" y="92">versión fija</text>
+<text x="270" y="114">sin azar</text>
+<text x="270" y="136">tope de la salida</text>
+<text x="270" y="158">corta en el primer punto</text>
+<text x="270" y="180">todo junto o por partes</text>
+</g>
+<text x="36" y="384" class="t t-s k-warm">La API no recuerda nada entre llamadas:</text>
+<text x="36" y="400" class="t t-s t-m">cada pedido reenvía el sistema y toda la historia,</text>
+<text x="36" y="416" class="t t-s t-m">y cada turno paga otra vez lo anterior.</text>
+<text x="36" y="438" class="t t-s t-m">sistema = el equipo · usuario = el agente · asistente = el modelo</text>
+<text x="520" y="28" class="t t-xs t-b k-warm">RESPUESTA DEL PROVEEDOR</text>
+<rect x="520" y="40" width="420" height="410" rx="10" class="caja"/>
+<g class="t t-mono" style="font-size:12px">
+<text x="536" y="70">{</text>
+<text x="548" y="92">"model": "llama3.2:3b",</text>
+<text x="548" y="114">"choices": [{</text>
+<text x="566" y="136">"message": {</text>
+<text x="584" y="158">"role": "assistant",</text>
+<text x="584" y="180" class="k-warm">"content": "Si paga mañana…"</text>
+<text x="566" y="202">},</text>
+<text x="566" y="224" class="k-tra" style="font-weight:700">"finish_reason": "stop"</text>
+<text x="548" y="246">}],</text>
+<text x="548" y="268">"usage": {</text>
+<text x="566" y="290" class="k-enl" style="font-weight:700">"prompt_tokens": 64,</text>
+<text x="566" y="312" class="k-warm" style="font-weight:700">"completion_tokens": 41</text>
+<text x="548" y="334">}</text>
+<text x="536" y="356">}</text>
+</g>
+<path d="M846 176 h20 v132 h-20" class="ln s-warm" style="fill:none;stroke-width:1.6"/>
+<text x="872" y="238" class="t t-s k-warm">texto</text>
+<text x="872" y="252" class="t t-s k-warm">escrito =</text>
+<text x="872" y="266" class="t t-s k-warm">salida</text>
+<text x="536" y="390" class="t t-s t-m"><tspan class="k-tra" style="font-weight:700">stop</tspan>: terminó solo · <tspan class="k-tra" style="font-weight:700">length</tspan>: lo cortó max_tokens</text>
+<text x="536" y="412" class="t t-s t-m">prompt_tokens (entrada) y completion_tokens (salida)</text>
+<text x="536" y="428" class="t t-s t-m">son los dos números que cobra un proveedor</text>
+<path d="M396 132 C 470 132, 480 220, 560 220" class="ln s-tra" style="fill:none;stroke-width:2" marker-end="url(#c3d1-t)"/>
+<path d="M396 262 C 470 262, 480 286, 560 286" class="ln s-enl" style="fill:none;stroke-width:2" marker-end="url(#c3d1-e)"/>
+<rect x="444" y="166" width="72" height="36" rx="6" class="caja"/>
+<text x="480" y="181" class="t t-s k-tra" text-anchor="middle">tope →</text>
+<text x="480" y="196" class="t t-s k-tra" text-anchor="middle">length</text>
+<rect x="444" y="300" width="72" height="36" rx="6" class="caja"/>
+<text x="480" y="315" class="t t-s k-enl" text-anchor="middle">lo leído =</text>
+<text x="480" y="330" class="t t-s k-enl" text-anchor="middle">entrada</text>
+</svg></div><figcaption><b>Anatomía de una llamada.</b> A la izquierda, el pedido que manda la puerta a los modelos: el modelo con su versión, los parámetros y la lista de mensajes con sus tres roles. A la derecha, la respuesta del proveedor: el texto en <code>choices</code>, la razón de término y el uso en tokens. Las líneas de color unen cada parte del pedido con lo que provoca en la respuesta: el máximo de tokens con <code>finish_reason: length</code>, los mensajes con los tokens de entrada y el texto generado con los de salida.</figcaption></figure></section>
+<section><h2>Parámetros: temperatura, máximo de tokens y secuencias de parada</h2><div class="prose"><p>Además de los mensajes, el pedido lleva <b>parámetros</b> que cambian cómo genera el modelo. Son pocos y conviene conocerlos bien:</p><ul><li><b>Temperatura</b> (<i>temperature</i>): cuánto azar hay al elegir cada token. Para el asistente, 0: queremos la respuesta más probable, no creatividad. Para generar tres ideas de asunto para un correo, 0,7 a 1.</li><li><b>Máximo de tokens</b> (<i>max tokens</i>): el tope de la salida. No hace que el modelo resuma: lo corta donde llegue. Sirve como freno de costo y de latencia, y como alarma: si <code>finish_reason</code> dice <code>length</code> muy seguido, el tope está corto o el pedido invita a respuestas largas.</li><li><b>Secuencias de parada</b> (<i>stop sequences</i>): textos que, si aparecen, terminan la generación. Útiles cuando la salida tiene un final reconocible, como una línea en blanco o una etiqueta de cierre.</li><li><b>Semilla</b> (<i>seed</i>): fija el azar cuando el proveedor la acepta (capítulo 2).</li></ul><p>Hay más (<i>top_p</i>, penalizaciones por repetición), pero la regla práctica es tocar pocos: temperatura, máximo de tokens y, si hace falta, una parada. Cada parámetro que cambias es una variable más que explicar cuando una respuesta salga rara.</p></div></section>
+<section><h2><i>Streaming</i>: la respuesta que llega por partes</h2><div class="prose"><p>Un modelo genera de a un token por vez. Si la API espera a tener toda la respuesta para mandarla, el agente mira la pantalla vacía mientras el modelo escribe. Con <b>streaming</b> (transmisión por partes) el proveedor manda cada pedazo apenas lo genera.</p></div><div class="analogia"><b>Imagínalo así</b><p>En una pizzería puedes esperar en la mesa hasta que llegue la pizza entera, o puedes sentarte en la barra y ver al pizzero estirar la masa, poner la salsa y meterla al horno. La pizza tarda lo mismo. Pero en la barra, a los diez segundos ya sabes que te están atendiendo, y si ves que le pone cebolla y no la pediste, lo dices a tiempo.</p></div><div class="prose"><p>Técnicamente, la API compatible con OpenAI usa <b>SSE</b> (<i>Server-Sent Events</i>, eventos enviados por el servidor): la conexión HTTP queda abierta y el servidor escribe líneas que empiezan con <code>data:</code> seguidas de un JSON con el pedazo nuevo (<code>choices[0].delta.content</code>). La última línea es <code>data: [DONE]</code>. La API propia de Ollama hace lo mismo con una línea de JSON por pedazo.</p><p>Dos números miden la experiencia:</p><ul><li><b>Tiempo hasta el primer token</b> (<i>time to first token</i>, TTFT): lo que tarda en aparecer la primera palabra. Depende de la cola del proveedor, del largo del contexto que tiene que leer y de si el modelo ya estaba cargado.</li><li><b>Tiempo total</b>: el TTFT más el tiempo de generar todos los tokens de salida, que depende de la velocidad del modelo en tokens por segundo.</li></ul><p>El <i>streaming</i> no hace al modelo más rápido: baja el TTFT percibido de «todo» a «el primer pedazo». A cambio, el código se complica: no puedes validar un JSON hasta que llegó completo, y si a mitad de camino el validador detecta un problema, el agente ya leyó parte del texto. Por eso el asistente usa <i>streaming</i> para la explicación que lee el agente y espera la respuesta completa para los datos que lee un programa (el capítulo 5 vuelve sobre esto).</p></div><figure class="fig fig-flujo" id="03-diagrama-2"><div class="lienzo"><svg viewBox="0 0 960 580" style="min-width:760px" role="img" aria-label="Diagrama de secuencia con y sin streaming: sin streaming el panel pide, la puerta llama al modelo, el modelo genera en silencio y la respuesta entera llega al final; con streaming el mismo pedido lleva stream true, los pedazos llegan como eventos data y el panel los muestra apenas llegan, hasta data DONE. A la derecha, barras con el tiempo hasta la primera palabra en cada caso">
+<defs>
+<marker id="c3d2-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+<marker id="c3d2-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c3d2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+<marker id="c3d2-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-fis"/></marker>
+</defs>
+<rect x="30" y="14" width="130" height="50" rx="10" class="caja"/>
+<text x="95" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Panel del agente</text>
+<text x="95" y="52" class="t t-s t-m" text-anchor="middle">pantalla de tickets</text>
+<line x1="95" y1="64" x2="95" y2="566" class="vida"/>
+<rect x="265" y="14" width="130" height="50" rx="10" class="d-casa"/>
+<text x="330" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Puerta a los modelos</text>
+<text x="330" y="52" class="t t-s t-m" text-anchor="middle">código del asistente</text>
+<line x1="330" y1="64" x2="330" y2="566" class="vida"/>
+<rect x="500" y="14" width="130" height="50" rx="10" class="caja"/>
+<text x="565" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Modelo</text>
+<text x="565" y="52" class="t t-s t-m" text-anchor="middle">proveedor u Ollama</text>
+<line x1="565" y1="64" x2="565" y2="566" class="vida"/>
+<text x="20" y="92" class="t t-xs t-b t-m">SIN STREAMING</text>
+<line x1="95" y1="114" x2="328" y2="114" class="ln" style="stroke-width:2" marker-end="url(#c3d2-m)"/>
+<text x="104" y="106" class="t" style="font-size:12px">① POST /v1/consultas</text>
+<line x1="330" y1="142" x2="563" y2="142" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c3d2-s)"/>
+<text x="340" y="134" class="t t-mono" style="font-size:12px">② "stream": false</text>
+<rect x="559" y="150" width="12" height="118" rx="3" class="c-tra"/>
+<text x="448" y="196" class="t t-s k-tra" text-anchor="middle">lee el contexto y</text>
+<text x="448" y="211" class="t t-s k-tra" text-anchor="middle">genera 300 tokens</text>
+<text x="448" y="226" class="t t-s k-tra" text-anchor="middle">en silencio</text>
+<line x1="565" y1="282" x2="97" y2="282" class="ln s-warm" style="stroke-width:2" marker-end="url(#c3d2-w)"/>
+<text x="104" y="274" class="t" style="font-size:12px">③ la respuesta entera, de una vez</text>
+<line x1="20" y1="308" x2="660" y2="308" class="ln ln-d"/>
+<text x="20" y="334" class="t t-xs t-b t-m">CON STREAMING</text>
+<line x1="95" y1="356" x2="563" y2="356" class="ln" style="stroke-width:2" marker-end="url(#c3d2-m)"/>
+<text x="104" y="348" class="t" style="font-size:12px">④ el mismo pedido, con <tspan class="t-mono">"stream": true</tspan></text>
+<rect x="559" y="364" width="12" height="150" rx="3" class="c-fis"/>
+<text x="104" y="384" class="t" style="font-size:12px">⑤ cada pedazo, apenas se genera:</text>
+<line x1="565" y1="398" x2="97" y2="398" class="ln s-fis" style="stroke-width:1.6" marker-end="url(#c3d2-f)"/>
+<text x="330" y="414" class="t t-mono k-fis" style="font-size:11px" text-anchor="middle">data: {"delta": {"content": "Si"}}</text>
+<line x1="565" y1="424" x2="97" y2="424" class="ln s-fis" style="stroke-width:1.6" marker-end="url(#c3d2-f)"/>
+<text x="330" y="440" class="t t-mono k-fis" style="font-size:11px" text-anchor="middle">data: {"delta": {"content": " paga"}}</text>
+<line x1="565" y1="450" x2="97" y2="450" class="ln s-fis" style="stroke-width:1.6" marker-end="url(#c3d2-f)"/>
+<text x="330" y="466" class="t t-mono k-fis" style="font-size:11px" text-anchor="middle">… cientos de eventos más …</text>
+<line x1="565" y1="476" x2="97" y2="476" class="ln s-fis" style="stroke-width:1.6" marker-end="url(#c3d2-f)"/>
+<line x1="565" y1="526" x2="97" y2="526" class="ln" style="stroke-width:2" marker-end="url(#c3d2-m)"/>
+<text x="104" y="518" class="t" style="font-size:12px">⑥ <tspan class="t-mono">data: [DONE]</tspan>, se cierra la conexión</text>
+<text x="104" y="552" class="t t-s t-m">el panel muestra cada pedazo al llegar: el agente lee mientras el modelo escribe</text>
+<text x="700" y="92" class="t t-xs t-b t-m">LO QUE VE EL AGENTE</text>
+<line x1="720" y1="114" x2="720" y2="276" class="ln ln-d" style="stroke-width:3"/>
+<text x="734" y="180" class="t t-s t-b">pantalla vacía</text>
+<text x="734" y="196" class="t t-s t-m">0,7 s de espera inicial</text>
+<text x="734" y="211" class="t t-s t-m">+ 6,0 s generando</text>
+<line x1="720" y1="278" x2="720" y2="296" class="ln s-warm" style="stroke-width:5"/>
+<text x="734" y="291" class="t t-s k-warm t-b">todo aparece a los 6,7 s</text>
+<line x1="720" y1="356" x2="720" y2="396" class="ln ln-d" style="stroke-width:3"/>
+<text x="734" y="380" class="t t-s t-b">0,7 s de espera</text>
+<line x1="720" y1="398" x2="720" y2="526" class="ln s-fis" style="stroke-width:5"/>
+<text x="734" y="440" class="t t-s k-fis t-b">el agente ya lee</text>
+<text x="734" y="456" class="t t-s t-m">primera palabra a los 0,7 s</text>
+<text x="734" y="472" class="t t-s t-m">termina a los 6,7 s,</text>
+<text x="734" y="488" class="t t-s t-m">casi igual que arriba</text>
+</svg></div><figcaption><b>Con y sin <i>streaming</i>.</b> Los participantes están arriba y el tiempo corre hacia abajo. Arriba, sin <i>streaming</i>: ① el panel pide, ② la puerta llama al modelo, que lee el contexto y genera en silencio, y ③ la respuesta entera llega de una vez. Abajo, con <i>streaming</i>: ④ el mismo pedido con <code>stream: true</code>, ⑤ los pedazos llegan como eventos <code>data:</code> y el panel los muestra apenas llegan, y ⑥ <code>data: [DONE]</code> cierra la conexión. A la derecha, la barra de cada caso marca el tiempo hasta la primera palabra: el total es casi el mismo, la espera percibida no.</figcaption></figure><div class="lab" id="03-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>La misma respuesta con y sin <i>streaming</i></h3></div><p class="hint">Ajusta el tiempo que tarda el modelo en empezar, su velocidad en tokens por segundo y el largo de la respuesta, y pulsa «Enviar». Los dos paneles reciben la misma respuesta: mira cuándo aparece la primera palabra en cada uno y cuánto tardan en terminar.</p><style>
+[id="03-lab-2"] .c3l2-pan{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:10px}
+[id="03-lab-2"] .c3l2-p{border:1px solid var(--line);border-top:4px solid var(--c-tra);border-radius:10px;background:var(--card);padding:8px 10px;display:grid;gap:6px;align-content:start;min-width:0}
+[id="03-lab-2"] .c3l2-p.st{border-top-color:var(--c-fis)}
+[id="03-lab-2"] .c3l2-p h4{margin:0;font:700 .76rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:6px}
+[id="03-lab-2"] .c3l2-p h4 output{font:700 .82rem var(--f-mono);color:var(--ink);letter-spacing:0;text-transform:none}
+[id="03-lab-2"] .c3l2-txt{min-height:150px;font:500 .84rem/1.45 var(--f-body);color:var(--ink);background:var(--paper);border-radius:6px;padding:8px;overflow-wrap:anywhere}
+[id="03-lab-2"] .c3l2-esp{color:var(--muted);font-style:italic}
+[id="03-lab-2"] .c3l2-tl{display:grid;gap:6px}
+[id="03-lab-2"] .c3l2-fila{display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;font:600 .78rem var(--f-display);color:var(--ink)}
+[id="03-lab-2"] .c3l2-pista{display:flex;height:20px;border-radius:5px;overflow:hidden;background:var(--grid)}
+[id="03-lab-2"] .c3l2-pista i{display:block;height:100%}
+[id="03-lab-2"] .c3l2-w{background:repeating-linear-gradient(45deg,var(--grid),var(--grid) 4px,var(--line) 4px,var(--line) 8px)}
+[id="03-lab-2"] .c3l2-g{background:var(--c-tra-s);border-left:2px solid var(--c-tra)}
+[id="03-lab-2"] .c3l2-s{background:var(--c-fis-s);border-left:2px solid var(--c-fis)}
+@media (max-width:420px){[id="03-lab-2"] .c3l2-fila{grid-template-columns:1fr}}
+</style>
+<div class="ctls">
+  <label class="ctl">Espera antes del primer token <output id="c3l2-ttft-o"></output>
+    <input id="c3l2-ttft" type="range" min="0.2" max="4" step="0.1" value="1"></label>
+  <label class="ctl">Velocidad del modelo <output id="c3l2-vel-o"></output>
+    <input id="c3l2-vel" type="range" min="15" max="150" step="5" value="30"></label>
+  <label class="ctl">Largo de la respuesta <output id="c3l2-lar-o"></output>
+    <input id="c3l2-lar" type="range" min="40" max="320" step="20" value="160"></label>
+</div>
+<div class="btns">
+  <button type="button" class="primary" id="c3l2-env">Enviar</button>
+</div>
+<div class="c3l2-pan">
+  <div class="c3l2-p"><h4><span>Sin <i>streaming</i></span> <output id="c3l2-t1">0,0 s</output></h4><div class="c3l2-txt" id="c3l2-a"></div></div>
+  <div class="c3l2-p st"><h4><span>Con <i>streaming</i></span> <output id="c3l2-t2">0,0 s</output></h4><div class="c3l2-txt" id="c3l2-b"></div></div>
+</div>
+<div class="c3l2-tl" id="c3l2-tl" aria-hidden="true"></div>
+<div class="legend"><span><i style="background:var(--line)"></i>esperando, pantalla vacía</span><span><i style="background:var(--c-tra)"></i>generando sin mostrar</span><span><i style="background:var(--c-fis)"></i>el agente ya lee</span></div>
+<div class="readout texto" id="c3l2-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Medir el tiempo hasta la primera palabra</h3></div><p>Vas a pedir la misma respuesta con y sin <i>streaming</i> y medir el tiempo hasta el primer token y el tiempo total. El script usa solo la biblioteca estándar de Python. Guárdalo como <code>streaming.py</code>:</p><div class="code-copia"><pre><code>import json, time, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+MODELO = "llama3.2:3b"
+MENSAJES = [
+    {"role": "system", "content": "Eres el asistente de atención. Responde en español."},
+    {"role": "user", "content": "Explica en un párrafo qué pasa cuando un cliente "
+                                "paga una factura vencida y pide la reconexión."},
+]
+
+def correr(stream):
+    cuerpo = {"model": MODELO, "messages": MENSAJES, "temperature": 0,
+              "max_tokens": 200, "stream": stream}
+    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    inicio, primero, partes = time.perf_counter(), None, 0
+    with urllib.request.urlopen(pedido) as r:
+        if not stream:
+            texto = json.load(r)["choices"][0]["message"]["content"]
+            primero = time.perf_counter() - inicio
+            print(texto)
+        else:
+            for linea in r:
+                linea = linea.decode("utf-8").strip()
+                if not linea.startswith("data: "):
+                    continue
+                dato = linea[len("data: "):]
+                if dato == "[DONE]":
+                    break
+                trozo = json.loads(dato)["choices"][0]["delta"].get("content") or ""
+                if trozo and primero is None:
+                    primero = time.perf_counter() - inicio
+                partes += 1
+                print(trozo, end="", flush=True)
+    total = time.perf_counter() - inicio
+    print(f"\n--&gt; stream={stream}: primera palabra {primero:.2f} s, "
+          f"total {total:.2f} s, pedazos {partes}\n")
+
+correr(False)
+correr(True)</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python streaming.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 streaming.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el script dos veces seguidas y usa los números de la segunda: la primera vez incluye el tiempo de cargar el modelo en memoria.</span></li><li><span>Compara la «primera palabra» de los dos casos y luego el «total».</span></li><li><span>Cambia <code>max_tokens</code> a 50 y vuelve a ejecutar.</span></li></ol><p><b>Qué observar:</b> sin <i>streaming</i>, la primera palabra llega junto con la última: los dos tiempos son iguales. Con <i>streaming</i>, la primera palabra llega en una fracción de segundo y el total es casi el mismo. Con menos tokens de salida el total baja mucho y el tiempo hasta la primera palabra casi no cambia: el TTFT depende sobre todo de la entrada; el total, de la salida. Los segundos exactos dependen de tu computadora.</p></div></section>
+<section><h2>Entradas multimodales: imágenes, PDF y audio</h2><div class="prose"><p>Un modelo <b>multimodal</b> (<i>multimodal</i>) acepta en la entrada algo más que texto. Para el asistente, eso abre casos concretos: un agente pega la foto que mandó la clienta de la etiqueta del equipo, un comprobante de pago escaneado o la grabación de una llamada.</p><p>En la API compatible con OpenAI, el contenido de un mensaje deja de ser un texto y pasa a ser una lista de partes:</p><div class="code-copia"><pre><code>{"role": "user", "content": [
+  {"type": "text", "text": "¿Qué número de serie tiene el equipo de la foto?"},
+  {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,/9j/4AAQ..."}}
+]}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>La imagen viaja como <b>base64</b> (texto que codifica bytes) o, en algunos proveedores, como una dirección web. Ollama acepta imágenes en base64 con modelos de visión como <code>llama3.2-vision</code> o <code>qwen2.5vl</code>, más pesados que el modelo de texto del curso.</p><ul><li><b>Imágenes.</b> Se cobran en tokens, según su tamaño en píxeles: una foto grande puede costar más que todo el texto del pedido. La puerta las reduce a la resolución que la tarea necesita antes de mandarlas.</li><li><b>PDF.</b> Algunos proveedores aceptan el archivo directamente y lo leen como texto más imágenes de cada página. Si no, el código extrae el texto (o lo pasa por un <b>reconocimiento óptico de caracteres</b>, <i>optical character recognition</i>, OCR) y manda el texto. Un PDF de cuarenta páginas son decenas de miles de tokens: casi nunca se manda entero (capítulo 8).</li><li><b>Audio.</b> Dos caminos: transcribir primero con un modelo de <b>voz a texto</b> (<i>speech-to-text</i>), como Whisper, y mandar el texto, o usar un modelo que acepte audio directamente. El primero es más barato y deja un texto que se puede auditar; el segundo capta el tono. La voz en tiempo real está en el capítulo 6.</li></ul><p>La regla del capítulo 2 vale igual aquí: lo que el modelo lee en una imagen es una interpretación. El número de serie que «ve» en la foto se verifica contra el inventario antes de usarlo.</p></div></section>
+<section><h2>Tokens, costo y latencia: cómo se cobra y cómo se mide</h2><div class="prose"><p>El modelo no cuenta palabras ni letras: cuenta <b>tokens</b> (<i>tokens</i>), pedazos de palabra que salen de un <b>tokenizador</b> (<i>tokenizer</i>) propio de cada modelo. En inglés, un token son unas cuatro letras en promedio; en español, algo menos, porque las palabras son más largas y los tokenizadores se entrenaron con más inglés. «Reconexión» puede ser uno, dos o tres tokens según el modelo. El número exacto lo da el campo <code>usage</code> de la respuesta, o el contador de tokens que publica el proveedor.</p></div><div class="analogia"><b>Imagínalo así</b><p>Una llamada de larga distancia de antes se cobraba por minuto, y el minuto de hablar costaba distinto que el de escuchar. Con los modelos pasa algo parecido: se cobra por token, y el token que el modelo escribe cuesta varias veces más que el que lee.</p></div><div class="prose"><p>Los proveedores comerciales cobran por <b>millón de tokens</b>, con dos precios: entrada (lo que el modelo lee: sistema, contexto, historia y pregunta) y salida (lo que escribe). La salida suele costar entre tres y cinco veces más que la entrada. Muchos ofrecen además un precio menor para la entrada que se repite igual entre llamadas, el <b>caché de prompts</b> (<i>prompt caching</i>), y otro para trabajos en lote que pueden esperar horas. Los precios cambian seguido: se leen en la página del proveedor el día que se decide, no se memorizan.</p><p>Una cuenta de ejemplo con precios inventados. Cada consulta del asistente lee unos 1.500 tokens (instrucciones, cuatro fragmentos del manual y la pregunta) y escribe unos 300. Con un modelo mediano a US$ 1,00 el millón de entrada y US$ 4,00 el de salida:</p><ul><li>entrada: 1.500 × 1,00 ÷ 1.000.000 = US$ 0,0015;</li><li>salida: 300 × 4,00 ÷ 1.000.000 = US$ 0,0012;</li><li>por consulta: US$ 0,0027. Con 6.000 consultas al mes del piloto, US$ 16,20; con los 90 agentes y unas 40.000, unos US$ 108.</li></ul><p>Con un modelo grande a US$ 5,00 y US$ 25,00, la misma consulta cuesta US$ 0,015: cinco veces más. La pregunta de diseño no es «¿cuánto cuesta una llamada?», sino «¿qué modelo es el más pequeño que cumple la meta de calidad?». El capítulo 14 la responde con un enrutador. Un modelo local no cobra por token, pero tiene otro costo: el equipo que lo corre, su energía y quien lo mantiene.</p><p>La <b>latencia</b> (<i>latency</i>) se mide igual de concreto: TTFT más tokens de salida divididos por la velocidad. Un modelo que genera 50 tokens por segundo tarda 6 segundos en escribir 300 tokens. Por eso la salida corta es doble ahorro: menos dinero y menos espera. La puerta registra, para cada llamada, los tokens de entrada y salida, el costo calculado y los dos tiempos.</p></div><div class="lab" id="03-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>El contador de tokens y costo</h3></div><p class="hint">Escribe o edita el pedido, elige un modelo de ejemplo y ajusta cuántos tokens escribe la respuesta y cuántas consultas hay al mes. Mira cuántos tokens estima el contador, cuánto cuesta una llamada, mil llamadas y el mes, y cuánto tarda en llegar la respuesta. Los precios son inventados y redondos para que la cuenta se vea.</p><style>
+[id="03-lab-1"] textarea{width:100%;box-sizing:border-box;min-height:120px;font:500 .8rem/1.45 var(--f-mono);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px;resize:vertical}
+[id="03-lab-1"] .c3l1-chk{display:flex;gap:8px;align-items:flex-start;font:500 .86rem/1.35 var(--f-display);color:var(--ink);cursor:pointer}
+[id="03-lab-1"] .c3l1-chk small{display:block;color:var(--muted);font-size:.76rem}
+[id="03-lab-1"] .c3l1-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,130px),1fr));gap:8px}
+[id="03-lab-1"] .c3l1-k{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--paper);min-width:0}
+[id="03-lab-1"] .c3l1-k span{display:block;font:600 .74rem var(--f-display);color:var(--muted)}
+[id="03-lab-1"] .c3l1-k output{font:700 1.15rem var(--f-mono);color:var(--ink);overflow-wrap:anywhere}
+[id="03-lab-1"] .c3l1-barras{display:grid;gap:6px}
+[id="03-lab-1"] .c3l1-fila{display:grid;grid-template-columns:minmax(90px,150px) 1fr;gap:8px;align-items:center;font:500 .8rem var(--f-display);color:var(--ink)}
+[id="03-lab-1"] .c3l1-pista{background:var(--grid);border-radius:6px;height:22px;position:relative;overflow:hidden}
+[id="03-lab-1"] .c3l1-bar{height:100%;background:var(--c-tra-s);border-right:3px solid var(--c-tra);transition:width .25s}
+[id="03-lab-1"] .c3l1-fila.sel .c3l1-bar{background:var(--c-fis-s);border-right-color:var(--c-fis)}
+[id="03-lab-1"] .c3l1-fila.sel{font-weight:700}
+[id="03-lab-1"] .c3l1-val{position:absolute;right:6px;top:0;line-height:22px;font:600 .74rem var(--f-mono);color:var(--ink)}
+[id="03-lab-1"] .c3l1-nota{font:500 .76rem var(--f-display);color:var(--muted);margin:0}
+</style>
+<label for="c3l1-txt" class="c3l1-nota">El pedido que lee el modelo (sistema, contexto y pregunta):</label>
+<textarea id="c3l1-txt" aria-label="Texto del pedido">Eres el asistente de atención de una empresa de servicios. Responde en español, con tono amable y en no más de tres frases. Si no sabes algo, dilo y no inventes. Cita siempre la política que usas.
+
+Pregunta del agente: La clienta Carmen Rojas tiene vencida la factura de octubre por US$ 30,00 y pide que la reconecten hoy. ¿Cuánto tiene que pagar y qué le digo?</textarea>
+<label class="c3l1-chk"><input type="checkbox" id="c3l1-ctx" checked><span>Agregar 4 fragmentos del manual<small>unos 1.200 tokens de contexto, como hará el asistente en el capítulo 8</small></span></label>
+<div class="btns" role="group" aria-label="Modelo de ejemplo" id="c3l1-mods"></div>
+<div class="ctls">
+  <label class="ctl">Tokens de salida <output id="c3l1-sal-o"></output>
+    <input id="c3l1-sal" type="range" min="50" max="1500" step="50" value="300"></label>
+  <label class="ctl">Consultas al mes <output id="c3l1-mes-o"></output>
+    <input id="c3l1-mes" type="range" min="1000" max="60000" step="1000" value="6000"></label>
+</div>
+<div class="c3l1-kpis">
+  <div class="c3l1-k"><span>Tokens de entrada (estimado)</span><output id="c3l1-k1"></output></div>
+  <div class="c3l1-k"><span>Costo por llamada</span><output id="c3l1-k2"></output></div>
+  <div class="c3l1-k"><span>Mil llamadas</span><output id="c3l1-k3"></output></div>
+  <div class="c3l1-k"><span>Al mes</span><output id="c3l1-k4"></output></div>
+  <div class="c3l1-k"><span>Primera palabra</span><output id="c3l1-k5"></output></div>
+  <div class="c3l1-k"><span>Respuesta completa</span><output id="c3l1-k6"></output></div>
+</div>
+<p class="c3l1-nota">Costo al mes del mismo pedido con cada modelo de ejemplo:</p>
+<div class="c3l1-barras" id="c3l1-barras" aria-hidden="true"></div>
+<div class="readout texto" id="c3l1-out" aria-live="polite"></div></div></section>
+<section><h2>Errores, límites de tasa y reintentos</h2><div class="prose"><p>Una API externa falla, y no siempre por culpa tuya. Lo que distingue a la v0.1 de la demostración del viernes es qué hace cuando algo sale mal.</p></div><div class="analogia"><b>Imagínalo así</b><p>Cuando llamas a un número y suena ocupado, vuelves a marcar en un rato, no cada medio segundo. Si la operadora te dice «el número que usted marcó no existe», no vuelves a marcar nunca: revisas el número. Y si después de tres intentos sigue ocupado, mandas un mensaje y sigues con tu día.</p></div><div class="prose"><p>Los errores se agrupan por lo que conviene hacer con ellos, y el <b>código de estado HTTP</b> (<i>HTTP status code</i>) dice a qué grupo pertenecen:</p><ul><li><b>Errores tuyos (no se reintentan).</b> <code>400</code> pedido mal formado (un campo que no existe, un contexto más largo que el que acepta el modelo), <code>401</code> y <code>403</code> clave inválida o sin permiso, <code>404</code> modelo inexistente. Reintentar da el mismo error y gasta tiempo: se registra, se avisa y se corrige el código o la configuración.</li><li><b>Límite de tasa</b> (<i>rate limit</i>), código <code>429</code>. El proveedor limita cuántos pedidos o tokens por minuto acepta de tu cuenta. Suele mandar una cabecera <code>Retry-After</code> con los segundos que hay que esperar. Se espera eso y se reintenta.</li><li><b>Errores transitorios</b> del proveedor: <code>500</code>, <code>502</code>, <code>503</code>, <code>504</code> (algunos usan <code>529</code> para «sobrecargado») y los <b>tiempos de espera agotados</b> (<i>timeouts</i>) o conexiones cortadas. Se reintentan con cuidado.</li></ul><p>«Con cuidado» tiene una receta conocida: <b>espera exponencial con variación aleatoria</b> (<i>exponential backoff with jitter</i>). El primer reintento espera medio segundo, el segundo uno, el tercero dos, y a cada espera se le suma o resta un poco de azar para que mil clientes que fallaron a la vez no vuelvan todos en el mismo instante. Siempre con un <b>tope de intentos</b> (dos o tres) y un <b>tiempo de espera</b> (<i>timeout</i>) por llamada, para que un proveedor lento no deje colgado al agente.</p><p>Cuando los reintentos se agotan quedan dos salidas. Un <b>modelo de respaldo</b> (<i>fallback</i>): otro modelo u otro proveedor, configurado de antemano y evaluado con la misma batería. O degradar con honestidad: el panel dice «el asistente no está disponible, intenta en un momento» y el agente sigue con sus pantallas de siempre. Lo que nunca se hace es inventar una respuesta para no mostrar el error.</p></div><figure class="fig fig-flujo" id="03-diagrama-3"><div class="lienzo"><svg viewBox="0 0 960 600" style="min-width:760px" role="img" aria-label="Flujo de manejo de errores de la puerta a los modelos: la llamada sale con tiempo de espera de 20 segundos; si vuelve bien se registran tokens y costo; los errores 400, 401, 403 y 404 no se reintentan; el 429 espera lo que dice Retry-After; los 5xx y los tiempos agotados esperan 0,5, 1 y 2 segundos con azar; si quedan intentos se vuelve a llamar y si no, se pasa al modelo de respaldo o el panel avisa que el asistente no está disponible; todo termina en la traza">
+<defs>
+<marker id="c3d3-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+<marker id="c3d3-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c3d3-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+<marker id="c3d3-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker>
+</defs>
+<rect x="330" y="16" width="300" height="48" rx="10" class="d-casa"/>
+<text x="480" y="37" class="t t-b" text-anchor="middle">Llamada al modelo</text>
+<text x="480" y="54" class="t t-s t-m" text-anchor="middle">intento n de 3 · tiempo de espera 20 s</text>
+<line x1="480" y1="64" x2="480" y2="94" class="ln" style="stroke-width:2" marker-end="url(#c3d3-m)"/>
+<rect x="380" y="96" width="200" height="40" rx="20" class="caja"/>
+<text x="480" y="121" class="t t-b" text-anchor="middle">¿Cómo volvió?</text>
+<path d="M480 136 V160 H120 V190" class="ln" style="fill:none;stroke-width:2" marker-end="url(#c3d3-m)"/>
+<path d="M480 160 H360 V190" class="ln" style="fill:none;stroke-width:2" marker-end="url(#c3d3-m)"/>
+<path d="M480 160 H600 V190" class="ln" style="fill:none;stroke-width:2" marker-end="url(#c3d3-m)"/>
+<path d="M480 160 H840 V190" class="ln" style="fill:none;stroke-width:2" marker-end="url(#c3d3-m)"/>
+<rect x="20" y="192" width="200" height="96" rx="10" class="c-enl"/>
+<text x="120" y="214" class="t t-b k-enl" text-anchor="middle">2xx · bien</text>
+<text x="120" y="236" class="t t-s" text-anchor="middle">registra tokens de entrada</text>
+<text x="120" y="252" class="t t-s" text-anchor="middle">y salida, costo y tiempos</text>
+<text x="120" y="274" class="t t-s t-m" text-anchor="middle">y entrega la respuesta</text>
+<rect x="260" y="192" width="200" height="96" rx="10" class="caja"/>
+<text x="360" y="214" class="t t-b k-warm" text-anchor="middle">400 · 401 · 403 · 404</text>
+<text x="360" y="236" class="t t-s" text-anchor="middle">error del pedido o de la clave:</text>
+<text x="360" y="252" class="t t-s t-b" text-anchor="middle">no se reintenta</text>
+<text x="360" y="274" class="t t-s t-m" text-anchor="middle">se avisa y se corrige</text>
+<rect x="500" y="192" width="200" height="96" rx="10" class="caja"/>
+<text x="600" y="214" class="t t-b k-tra" text-anchor="middle">429 · límite de tasa</text>
+<text x="600" y="236" class="t t-s" text-anchor="middle">espera los segundos que</text>
+<text x="600" y="252" class="t t-s" text-anchor="middle">dice <tspan class="t-mono">Retry-After</tspan></text>
+<text x="600" y="274" class="t t-s t-m" text-anchor="middle">y reintenta</text>
+<rect x="740" y="192" width="200" height="96" rx="10" class="caja"/>
+<text x="840" y="214" class="t t-b k-tra" text-anchor="middle">5xx · tiempo agotado</text>
+<text x="840" y="236" class="t t-s" text-anchor="middle">espera 0,5 · 1 · 2 s</text>
+<text x="840" y="252" class="t t-s" text-anchor="middle">más o menos un poco de azar</text>
+<text x="840" y="274" class="t t-s t-m" text-anchor="middle">y reintenta</text>
+<path d="M600 288 V316 H720 V340" class="ln s-tra" style="fill:none;stroke-width:2"/>
+<path d="M840 288 V316 H720" class="ln s-tra" style="fill:none;stroke-width:2"/>
+<line x1="720" y1="316" x2="720" y2="338" class="ln s-tra" style="stroke-width:2" marker-end="url(#c3d3-m)"/>
+<rect x="610" y="340" width="220" height="44" rx="22" class="caja"/>
+<text x="720" y="367" class="t t-b" text-anchor="middle">¿Quedan intentos?</text>
+<path d="M830 362 H950 V40 H634" class="ln ln-d s-tra" style="fill:none;stroke-width:2" marker-end="url(#c3d3-m)"/>
+<text x="900" y="356" class="t t-s t-b k-tra">sí</text>
+<text x="770" y="34" class="t t-s k-tra">vuelve a llamar</text>
+<line x1="720" y1="384" x2="720" y2="412" class="ln" style="stroke-width:2"/>
+<text x="730" y="404" class="t t-s t-b k-warm">no</text>
+<path d="M720 412 H600 V432" class="ln" style="fill:none;stroke-width:2" marker-end="url(#c3d3-m)"/>
+<path d="M720 412 H840 V432" class="ln" style="fill:none;stroke-width:2" marker-end="url(#c3d3-m)"/>
+<rect x="500" y="434" width="200" height="60" rx="10" class="d-casa"/>
+<text x="600" y="458" class="t t-b" text-anchor="middle">Modelo de respaldo</text>
+<text x="600" y="478" class="t t-s t-m" text-anchor="middle">configurado y ya evaluado</text>
+<rect x="740" y="434" width="200" height="60" rx="10" class="caja"/>
+<text x="840" y="458" class="t t-b k-warm" text-anchor="middle">«No disponible»</text>
+<text x="840" y="478" class="t t-s t-m" text-anchor="middle">nunca una respuesta inventada</text>
+<text x="60" y="330" class="t t-s t-m">Ningún reintento arregla un nombre de modelo mal escrito,</text>
+<text x="60" y="346" class="t t-s t-m">una clave vencida o un contexto demasiado largo.</text>
+<text x="60" y="370" class="t t-s t-m">Esperar cada vez más, con azar, evita que mil clientes</text>
+<text x="60" y="386" class="t t-s t-m">que fallaron juntos vuelvan todos en el mismo segundo.</text>
+<line x1="40" y1="288" x2="40" y2="538" class="ln ln-d" marker-end="url(#c3d3-m)"/>
+<line x1="440" y1="288" x2="440" y2="538" class="ln ln-d" marker-end="url(#c3d3-m)"/>
+<line x1="600" y1="494" x2="600" y2="538" class="ln ln-d" marker-end="url(#c3d3-m)"/>
+<line x1="840" y1="494" x2="840" y2="538" class="ln ln-d" marker-end="url(#c3d3-m)"/>
+<rect x="20" y="540" width="920" height="44" rx="10" class="caja" style="stroke-dasharray:5 4"/>
+<text x="480" y="560" class="t t-b" text-anchor="middle">Traza</text>
+<text x="480" y="576" class="t t-s t-m" text-anchor="middle">modelo y versión · intento · código de estado · tokens · costo · tiempo hasta el primer token · tiempo total</text>
+</svg></div><figcaption><b>Qué hace la puerta cuando una llamada falla.</b> Se lee de arriba hacia abajo. La llamada sale con un tiempo de espera de 20 segundos. Si vuelve bien, se registran los tokens y el costo. Si vuelve con error, el código decide la rama: los errores del pedido (400, 401, 403, 404) no se reintentan y se avisa; el 429 espera lo que dice <code>Retry-After</code>; los 5xx y los tiempos agotados esperan 0,5, 1 y 2 segundos con azar. Si se agotan los intentos, la llamada pasa al modelo de respaldo o el panel avisa que el asistente no está disponible. Todas las ramas terminan en la traza.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>La puerta a los modelos de la v0.1</h3></div><p>Vas a escribir una puerta mínima con tiempo de espera, reintentos con espera exponencial, clasificación de errores, conteo de tokens y costo estimado, y a provocarle dos fallas seguras. Guarda este programa como <code>puerta.py</code>:</p><div class="code-copia"><pre><code>import json, random, time, urllib.error, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+MODELO = "llama3.2:3b"
+PRECIO = {"entrada": 1.00, "salida": 4.00}   # US$ por millón, de ejemplo
+REINTENTABLES = {408, 429, 500, 502, 503, 504, 529}
+
+def llamar(mensajes, modelo=MODELO, max_tokens=200, intentos=3, espera=20):
+    cuerpo = json.dumps({"model": modelo, "messages": mensajes, "temperature": 0,
+                         "max_tokens": max_tokens}).encode("utf-8")
+    for intento in range(1, intentos + 1):
+        inicio = time.perf_counter()
+        pausa = min(8, 0.5 * 2 ** (intento - 1)) * random.uniform(0.5, 1.5)
+        try:
+            pedido = urllib.request.Request(URL, data=cuerpo,
+                                            headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(pedido, timeout=espera) as r:
+                datos = json.load(r)
+            uso = datos.get("usage", {})
+            ent, sal = uso.get("prompt_tokens", 0), uso.get("completion_tokens", 0)
+            costo = (ent * PRECIO["entrada"] + sal * PRECIO["salida"]) / 1_000_000
+            print(f"[traza] modelo={modelo} intento={intento} tokens={ent}+{sal} "
+                  f"costo=US$ {costo:.6f} tiempo={time.perf_counter() - inicio:.2f} s")
+            return datos["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as e:
+            if e.code not in REINTENTABLES:
+                print(f"[error] HTTP {e.code}, no se reintenta: {e.read().decode('utf-8')[:150]}")
+                return None
+            pausa = float(e.headers.get("Retry-After") or pausa)
+            motivo = f"HTTP {e.code}"
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            motivo = f"conexión: {getattr(e, 'reason', e)}"
+        if intento &lt; intentos:
+            print(f"[reintento {intento}] {motivo}; espero {pausa:.1f} s")
+            time.sleep(pausa)
+    print("[sin respuesta] se muestra al agente: «El asistente no está disponible».")
+    return None
+
+print(llamar([
+    {"role": "system", "content": "Eres el asistente de atención. Responde en una frase."},
+    {"role": "user", "content": "¿Qué es un cargo por reconexión?"},
+]))</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python puerta.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 puerta.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y lee la línea <code>[traza]</code>: tokens de entrada y salida, costo estimado y tiempo.</span></li><li><span>Cambia <code>MODELO</code> por <code>"modelo-que-no-existe"</code> y vuelve a ejecutar.</span></li><li><span>Vuelve a <code>llama3.2:3b</code> y cambia en <code>URL</code> el puerto <code>11434</code> por <code>11435</code>, donde no hay nada escuchando. Ejecuta otra vez.</span></li></ol><p><b>Qué observar:</b> la llamada buena deja una traza con los números que paga un proveedor. El modelo inexistente da un error 404 que la puerta no reintenta: reintentar no arregla un nombre mal escrito. Con el puerto equivocado la conexión falla, la puerta reintenta dos veces con esperas que crecen y al final avisa en lugar de inventar una respuesta. El costo es de ejemplo: Ollama local no cobra.</p></div><div class="caso"><b>Un caso real</b><p><b>El bucle de reintentos que bloqueó a todos.</b> Un equipo puso en producción un resumidor de llamadas que reintentaba cualquier error, sin tope y sin espera. Una noche, un cambio en la plantilla hizo que todos los pedidos superaran el contexto máximo del modelo: error 400, el mismo cada vez. El servicio reintentó miles de veces por minuto hasta la mañana. Esos pedidos fallidos no resumieron nada, pero agotaron el límite de tasa de la cuenta, que compartían otras aplicaciones de la empresa: el bot de la web también dejó de responder. Nadie se enteró hasta que llegaron los reclamos, porque no había alarma. La corrección fue la de esta sección: no reintentar errores del pedido, tope de intentos, espera exponencial, una clave por aplicación y una alarma de errores y de gasto en la puerta.</p></div><div class="ml"><b>En la práctica</b><p><b>La puerta de la v0.1.</b> La configuración del asistente quedó en un archivo que revisa todo el equipo: modelo con versión exacta y un modelo de respaldo ya evaluado, temperatura 0, máximo de 400 tokens de salida, tiempo de espera de 20 segundos, dos reintentos solo para 429, 5xx y tiempos agotados, y un tope de gasto diario que, si se supera, avisa a Lucía y pasa a «no disponible». El panel usa <i>streaming</i> para la explicación y espera completo el JSON. En la primera semana con los diez agentes, la traza mostró un TTFT medio de 0,7 segundos y un costo de unos centavos de dólar por cada cien consultas. Con esos dos números, la conversación con la directora de operaciones sobre llevarlo a los 90 agentes empezó con datos y no con una impresión.</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>El modelo como un servicio externo más, con presupuesto, límites y manejo de errores. Todas las llamadas pasan por una sola puerta que guarda la clave, fija el modelo y los parámetros, mide tokens, costo y tiempos, reintenta solo lo que se puede reintentar y, cuando no hay respuesta, lo dice en lugar de inventar.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>¿Por qué la clave de API no puede estar en el JavaScript del panel?</summary><p>Porque cualquiera que abra las herramientas de desarrollador del navegador la ve y puede gastar a nombre de la empresa. La clave vive en el servidor, en una variable de entorno o un gestor de secretos, y solo la usa la puerta a los modelos.</p></details><details><summary>El agente hace su tercera pregunta en la misma conversación. ¿Qué manda tu código al proveedor?</summary><p>El mensaje de sistema, las dos preguntas y las dos respuestas anteriores y la pregunta nueva: la API no recuerda nada entre llamadas, y por eso cada turno cuesta más que el anterior.</p></details><details><summary>La traza muestra muchas respuestas con <code>finish_reason: length</code>. ¿Qué significa y qué revisas?</summary><p>Que el máximo de tokens cortó la respuesta antes de que terminara. Se revisa si el tope es demasiado bajo o si las instrucciones invitan a respuestas largas que conviene acortar.</p></details><details><summary>¿Qué mejora el <i>streaming</i> y qué no?</summary><p>Baja el tiempo hasta la primera palabra que ve el agente; no baja el tiempo total ni el costo. Además complica validar un JSON, que solo se puede revisar completo.</p></details><details><summary>Una consulta lee 2.000 tokens y escribe 500 con precios de ejemplo de US$ 1,00 y US$ 4,00 por millón. ¿Cuánto cuesta?</summary><p>2.000 × 1 ÷ 1.000.000 = US$ 0,002 de entrada más 500 × 4 ÷ 1.000.000 = US$ 0,002 de salida: US$ 0,004 por consulta.</p></details><details><summary>¿Qué errores reintenta la puerta y cuáles no?</summary><p>Reintenta el 429 (esperando lo que diga <code>Retry-After</code>), los 5xx y los tiempos agotados, con espera exponencial y un tope. No reintenta 400, 401, 403 ni 404, porque son errores del pedido o de la configuración y se repetirían igual.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué es la codificación por pares de bytes (<i>byte pair encoding</i>) y por qué hace que el español gaste más tokens que el inglés?<small>Pista: busca «BPE tokenizer» y prueba un contador de tokens público.</small></li><li>¿En qué se diferencian SSE y WebSocket, y por qué las APIs de modelos prefieren SSE para el <i>streaming</i>?</li><li>¿Qué es un cortacircuitos (<i>circuit breaker</i>) y en qué se diferencia de un simple tope de reintentos?<small>Pista: busca «circuit breaker pattern».</small></li><li>¿Cómo funciona el algoritmo del cubo de fichas (<i>token bucket</i>) con que muchos servicios aplican sus límites de tasa?</li><li>¿Por qué el caché de prompts exige que la parte repetida esté al principio del pedido y no al final?</li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://docs.ollama.com/api/openai-compatibility" target="_blank" rel="noopener">Compatibilidad de Ollama con la API de OpenAI <small>documentación oficial, en inglés</small></a><a class="vid" href="https://docs.ollama.com/api" target="_blank" rel="noopener">Documentación de la API de Ollama <small>referencia, en inglés</small></a><a class="vid" href="https://developer.mozilla.org/es/docs/Web/API/Server-sent_events" target="_blank" rel="noopener">Server-Sent Events en MDN <small>referencia, en español</small></a><a class="vid" href="https://aaramirez.github.io/modelos-de-ia/temario.html" target="_blank" rel="noopener">Modelos de IA: qué es un token por dentro <small>curso del sitio</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const BASE='Carmen tiene vencida la factura F-88213 de octubre por US$ 30,00. Para reconectar el servicio hoy debe pagar esa factura más el cargo de reconexión de US$ 5,00 que fija la política vigente desde 2026, es decir, US$ 35,00 en total. Puedes decirle que, una vez registrado el pago, la reconexión se hace en el mismo día y no necesita una visita técnica. Si prefiere pagar en otro momento, el cargo es el mismo, pero el servicio sigue suspendido hasta que el pago se registre. Recuérdale que puede pagar en la web, en la aplicación o en los puntos de pago autorizados, y que el comprobante le llega por correo. Si pregunta por el cobro duplicado de septiembre, ese reclamo sigue abierto en el ticket T-55190 y lo atiende el equipo de facturación.';
+  const PAL=BASE.split(' ');
+  const s1=x=>x.toFixed(1).replace('.',',')+' s';
+  let timer=null;
+  function params(){const t=+$('#c3l2-ttft').value,v=+$('#c3l2-vel').value,n=+$('#c3l2-lar').value;return {t,v,n,gen:n/v,tot:t+n/v};}
+  function texto(n){const palabras=Math.max(1,Math.round(n/1.35));let out=[];for(let i=0;i<palabras;i++)out.push(PAL[i%PAL.length]);return out;}
+  function pintarTL(p){
+    const max=p.tot*1.02,pct=x=>(x/max*100).toFixed(2)+'%';
+    $('#c3l2-tl').innerHTML=
+      '<div class="c3l2-fila"><span>Sin <i>streaming</i></span><div class="c3l2-pista"><i class="c3l2-w" style="width:'+pct(p.t)+'"></i><i class="c3l2-g" style="width:'+pct(p.gen)+'"></i></div></div>'+
+      '<div class="c3l2-fila"><span>Con <i>streaming</i></span><div class="c3l2-pista"><i class="c3l2-w" style="width:'+pct(p.t)+'"></i><i class="c3l2-s" style="width:'+pct(p.gen)+'"></i></div></div>';
+  }
+  function leer(){
+    const p=params();
+    $('#c3l2-ttft-o').textContent=s1(p.t);$('#c3l2-vel-o').textContent=p.v+' tokens/s';$('#c3l2-lar-o').textContent=p.n+' tokens';
+    pintarTL(p);
+    const pct=Math.round(p.t/p.tot*100);
+    let h='<span class="big">Primera palabra: '+s1(p.tot)+' sin <i>streaming</i> y '+s1(p.t)+' con <i>streaming</i>. Total: '+s1(p.tot)+' en los dos casos.</span>';
+    h+='<span>Con <i>streaming</i>, el agente empieza a leer después del '+pct+' % de la espera total; sin él, mira la pantalla vacía hasta el final.</span>';
+    if(p.gen>6)h+='<span class="warn">Generar '+p.n+' tokens a '+p.v+' por segundo tarda '+s1(p.gen)+': el <i>streaming</i> ayuda, pero acortar la respuesta ayuda más.</span>';
+    if(p.t>2)h+='<span>Una espera inicial larga suele venir de un contexto largo, de una cola en el proveedor o de un modelo que se estaba cargando: el <i>streaming</i> no la reduce.</span>';
+    $('#c3l2-out').innerHTML=h;
+    return p;
+  }
+  function enviar(){
+    if(timer)cancelAnimationFrame(timer);
+    const p=leer(),pal=texto(p.n),a=$('#c3l2-a'),b=$('#c3l2-b');
+    a.innerHTML='<span class="c3l2-esp">esperando la respuesta…</span>';b.innerHTML='<span class="c3l2-esp">esperando el primer token…</span>';
+    const t0=performance.now();
+    function paso(){
+      const t=(performance.now()-t0)/1000;
+      $('#c3l2-t1').textContent=s1(Math.min(t,p.tot));$('#c3l2-t2').textContent=s1(Math.min(t,p.tot));
+      if(t>=p.t){const k=Math.min(pal.length,Math.floor((t-p.t)/p.gen*pal.length));if(k>0)b.textContent=pal.slice(0,k).join(' ');}
+      if(t>=p.tot){a.textContent=pal.join(' ');b.textContent=pal.join(' ');timer=null;return;}
+      timer=requestAnimationFrame(paso);
+    }
+    timer=requestAnimationFrame(paso);
+  }
+  ['#c3l2-ttft','#c3l2-vel','#c3l2-lar'].forEach(s=>$(s).addEventListener('input',leer));
+  $('#c3l2-env').addEventListener('click',enviar);
+  leer();
+  $('#c3l2-a').innerHTML='<span class="c3l2-esp">Pulsa «Enviar».</span>';$('#c3l2-b').innerHTML='<span class="c3l2-esp">Pulsa «Enviar».</span>';
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  // Precios y velocidades inventados (US$ por millón de tokens, tokens por segundo)
+  const M=[
+    {id:'loc',n:'Local pequeño',pin:0,pout:0,ttft:0.6,lee:400,vel:22},
+    {id:'peq',n:'Pequeño en la nube',pin:0.15,pout:0.60,ttft:0.35,lee:4000,vel:140},
+    {id:'med',n:'Mediano',pin:1.00,pout:4.00,ttft:0.5,lee:3000,vel:80},
+    {id:'gra',n:'Grande',pin:5.00,pout:25.00,ttft:0.9,lee:2000,vel:45}];
+  let sel='med';
+  const caja=$('#c3l1-mods');
+  M.forEach(m=>{const b=document.createElement('button');b.type='button';b.textContent=m.n;b.dataset.m=m.id;b.setAttribute('aria-pressed',m.id===sel);b.addEventListener('click',()=>{sel=m.id;caja.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.m===sel));calc();});caja.appendChild(b);});
+  const usd=v=>{if(v===0)return 'US$ 0';const d=v<0.01?5:v<1?4:2;return 'US$ '+v.toFixed(d).replace('.',',');};
+  const mil=n=>String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  const seg=s=>s.toFixed(1).replace('.',',')+' s';
+  function costo(m,ent,sal){return (ent*m.pin+sal*m.pout)/1e6;}
+  function calc(){
+    const txt=$('#c3l1-txt').value;
+    const ctx=$('#c3l1-ctx').checked;
+    const ent=Math.max(1,Math.ceil(txt.length/3.6))+(ctx?1200:0)+8;
+    const sal=+$('#c3l1-sal').value,mes=+$('#c3l1-mes').value;
+    $('#c3l1-sal-o').textContent=mil(sal);$('#c3l1-mes-o').textContent=mil(mes);
+    const m=M.find(x=>x.id===sel);
+    const c=costo(m,ent,sal);
+    const ttft=m.ttft+ent/m.lee,total=ttft+sal/m.vel;
+    $('#c3l1-k1').textContent=mil(ent);$('#c3l1-k2').textContent=usd(c);$('#c3l1-k3').textContent=usd(c*1000);$('#c3l1-k4').textContent=usd(c*mes);
+    $('#c3l1-k5').textContent=seg(ttft);$('#c3l1-k6').textContent=seg(total);
+    const costos=M.map(x=>costo(x,ent,sal)*mes),max=Math.max(...costos)||1;
+    $('#c3l1-barras').innerHTML=M.map((x,i)=>'<div class="c3l1-fila'+(x.id===sel?' sel':'')+'"><span>'+x.n+'</span><div class="c3l1-pista"><div class="c3l1-bar" style="width:'+(costos[i]/max*100).toFixed(1)+'%"></div><span class="c3l1-val">'+(x.pin===0?'sin costo por token':usd(costos[i]))+'</span></div></div>').join('');
+    const pe=ent*m.pin/1e6,ps=sal*m.pout/1e6;
+    let h='';
+    if(m.pin===0){h+='<span>El modelo local no cobra por token: el costo está en el equipo que lo corre, su energía y quien lo mantiene. A cambio es el más lento: '+seg(total)+' para '+mil(sal)+' tokens de salida.</span>';}
+    else{
+      h+='<span class="big">'+mil(ent)+' tokens de entrada cuestan '+usd(pe)+' y '+mil(sal)+' de salida, '+usd(ps)+'.</span>';
+      if(ps>pe)h+='<span>La salida pesa más que la entrada aunque sean menos tokens: cada token escrito cuesta '+(m.pout/m.pin)+' veces uno leído.</span>';
+      else h+='<span>Aquí manda la entrada: el contexto largo se paga en cada llamada. Recortarlo o usar el caché de prompts baja el costo.</span>';
+      const g=costo(M[3],ent,sal),p=costo(M[1],ent,sal);
+      if(sel!=='peq')h+='<span>El mismo pedido con el modelo pequeño costaría '+usd(p*mes)+' al mes. La pregunta de diseño: ¿es el más pequeño que cumple la meta de calidad?</span>';
+      if(sel==='gra')h+='<span class="warn">Con el modelo grande, '+mil(mes)+' consultas cuestan '+usd(g*mes)+' al mes.</span>';
+    }
+    if(ctx)h+='<span>Los 1.200 tokens del manual también suben el tiempo hasta la primera palabra: el modelo tiene que leerlos antes de escribir.</span>';
+    if(total>8)h+='<span class="warn">Más de 8 segundos de respuesta completa: conviene acortar la salida o usar <i>streaming</i>.</span>';
+    $('#c3l1-out').innerHTML=h;
+  }
+  ['#c3l1-txt','#c3l1-sal','#c3l1-mes'].forEach(s=>$(s).addEventListener('input',calc));
+  $('#c3l1-ctx').addEventListener('change',calc);
+  calc();
+})();
+</script>
+</body>
+</html>

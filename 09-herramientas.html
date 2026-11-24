@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Herramientas · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="herramientas">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 09 DE 20</span><h1>Herramientas: el modelo que pide ejecutar funciones</h1><p class="lede">Hasta aquí el asistente lee, recuerda y cita. Para dar el monto real de una factura o mover una visita necesita algo más: pedirle al código que ejecute una función. Este capítulo arma ese ciclo, el contrato de cada herramienta, el registro que las gobierna y la forma de convertir cada parte de la aplicación en una acción que un modelo puede usar.</p></header>
+<section><div class="prose"><p>El asistente de atención llegó a la versión 0.6 con buenas notas. Arma el contexto con los datos de la cuenta, recuerda lo que importa de cada caso y responde con los manuales citando la fuente. La jefa del equipo de reclamos tenía, sin embargo, una queja que se repetía: «me dice qué dice la política, pero el agente igual tiene que abrir facturación para ver cuánto debe Carmen». El asistente sabía las reglas, pero no tenía los datos del momento.</p><p>Lucía propuso el siguiente peldaño, el nivel 3: que el asistente pueda <b>pedir</b> datos y acciones a los sistemas de la empresa. Mateo empezó la versión 0.7 con tres herramientas de lectura y una de escritura, y con una regla que no se negocia: el modelo propone, el código decide y ejecuta.</p></div></section>
+<section><h2>El ciclo: el modelo propone una llamada, el código la ejecuta y devuelve el resultado</h2><div class="analogia"><b>Imagínalo así</b><p>Un médico no corre los análisis de sangre. Llena una orden de laboratorio con un formato fijo («hemograma, paciente 20417, en ayunas»), el laboratorio la procesa con sus máquinas y le devuelve un informe. El médico lee el informe y decide qué decirle al paciente. Si la orden está mal llenada, el laboratorio la devuelve con una nota, y el médico la corrige. Nunca toca la máquina.</p></div><div class="prose"><p>La <b>llamada a herramientas</b> (<i>tool calling</i>, también <i>function calling</i>) funciona igual. En cada pedido al modelo, además de los mensajes, tu código manda la lista de <b>herramientas</b> (<i>tools</i>) disponibles: funciones con un nombre, una descripción y un esquema de lo que reciben. El modelo puede responder de dos maneras: con texto para la persona, o con una o más <b>llamadas a herramientas</b> (<i>tool calls</i>), que son pedidos estructurados del tipo «ejecuta <code>consultar_factura</code> con <code>{"numero": "F-88213"}</code>». En la API compatible con OpenAI, la segunda forma llega en el campo <code>tool_calls</code> del mensaje y el <b>motivo de parada</b> (<i>finish reason</i>) es <code>tool_calls</code>.</p><p>El modelo no ejecuta nada. Es tu código el que:</p><ol class="steps"><li><span>Lee cada llamada, comprueba que la herramienta existe y que los argumentos cumplen el esquema.</span></li><li><span>Revisa si esa persona, con ese rol, puede hacer eso (los permisos y las aprobaciones están en el capítulo 11).</span></li><li><span>Ejecuta la función real: una consulta a facturación, un cálculo en el motor de tarifas.</span></li><li><span>Agrega el resultado a la conversación como un mensaje con el rol <code>tool</code> y el identificador de la llamada (<code>tool_call_id</code>), para que el modelo sepa qué resultado responde a qué pedido.</span></li><li><span>Vuelve a llamar al modelo con todo lo anterior.</span></li></ol><p>El ciclo se repite hasta que el modelo responde con texto o hasta que el código corta: un <b>tope de vueltas</b> evita que un modelo confundido pida herramientas para siempre. Cada vuelta es una llamada completa al modelo, con todos los mensajes anteriores y todas las definiciones de herramientas, así que cada vuelta suma tokens, costo y latencia.</p><p>Este capítulo trata la herramienta como pieza de un <b>producto</b>: su contrato, su registro y su lugar en la arquitectura. El bucle del agente por dentro (los motivos de parada, el <i>streaming</i> de eventos, cómo redirigir un bucle en marcha) es el tema de <a href="https://aaramirez.github.io/arneses/02-el-bucle.html" target="_blank" rel="noopener">El bucle del agente</a>, en Cómo construir un arnés.</p></div><figure class="fig fig-flujo" id="09-diagrama-1"><div class="lienzo"><svg viewBox="0 0 960 590" style="min-width:760px" role="img" aria-label="Diagrama de secuencia de una llamada a herramienta: el agente pregunta; el asistente manda mensajes y herramientas al modelo; el modelo pide calcular_total_reconexion con la cuenta 20417; el código valida y ejecuta en el motor de tarifas, que devuelve 35,00; el resultado vuelve al modelo como mensaje tool; el modelo redacta y el agente recibe la respuesta. Son dos vueltas al modelo">
+<defs>
+<marker id="c9d1-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+<marker id="c9d1-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c9d1-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+<marker id="c9d1-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-red"/></marker>
+</defs>
+<rect x="14" y="14" width="120" height="50" rx="10" class="caja"/>
+<text x="74" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Agente de</text>
+<text x="74" y="52" class="t t-s t-m" text-anchor="middle">atención</text>
+<line x1="74" y1="64" x2="74" y2="574" class="vida"/>
+<rect x="190" y="14" width="120" height="50" rx="10" class="d-casa"/>
+<text x="250" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Asistente</text>
+<text x="250" y="52" class="t t-s t-m" text-anchor="middle">código + registro</text>
+<line x1="250" y1="64" x2="250" y2="574" class="vida"/>
+<rect x="420" y="14" width="120" height="50" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="480" y="35" class="t t-b k-warm" text-anchor="middle" style="font-size:12px">Modelo</text>
+<text x="480" y="52" class="t t-s t-m" text-anchor="middle">propone</text>
+<line x1="480" y1="64" x2="480" y2="574" class="vida"/>
+<rect x="640" y="14" width="120" height="50" rx="10" class="d-casa"/>
+<text x="700" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Motor de</text>
+<text x="700" y="52" class="t t-s t-m" text-anchor="middle">tarifas</text>
+<line x1="700" y1="64" x2="700" y2="574" class="vida"/>
+<line x1="74" y1="102" x2="248" y2="102" class="ln" style="stroke-width:2" marker-end="url(#c9d1-m)"/>
+<text x="82" y="94" class="t" style="font-size:12px">① ¿cuánto paga Carmen?</text>
+<line x1="250" y1="146" x2="478" y2="146" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c9d1-s)"/>
+<text x="258" y="138" class="t" style="font-size:12px">② mensajes + herramientas</text>
+<text x="272" y="162" class="t t-s t-m">solo las que permite el rol</text>
+<line x1="480" y1="196" x2="252" y2="196" class="ln s-red" style="stroke-width:2" marker-end="url(#c9d1-r)"/>
+<text x="262" y="188" class="t" style="font-size:12px">③ <tspan class="t-mono" style="font-size:11px">tool_calls: calcular_total_reconexion</tspan></text>
+<text x="300" y="212" class="t t-mono t-m" style="font-size:11px">{"cuenta": 20417}</text>
+<path d="M250 226 h40 v24 h-38" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c9d1-s)"/>
+<text x="298" y="244" class="t" style="font-size:12px">④ ¿existe? ¿cumple el esquema? ¿tiene permiso?</text>
+<line x1="250" y1="290" x2="698" y2="290" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c9d1-s)"/>
+<text x="512" y="282" class="t" style="font-size:12px">⑤ ejecuta la función</text>
+<line x1="700" y1="326" x2="252" y2="326" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c9d1-s)"/>
+<text x="560" y="318" class="t" style="font-size:12px">⑥ <tspan class="t-mono" style="font-size:11px">{"total": 35.00}</tspan></text>
+<line x1="250" y1="372" x2="478" y2="372" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c9d1-s)"/>
+<text x="258" y="364" class="t" style="font-size:12px">⑦ mensaje role="tool"</text>
+<text x="290" y="388" class="t t-s t-m">con el tool_call_id</text>
+<line x1="480" y1="430" x2="252" y2="430" class="ln s-warm" style="stroke-width:2" marker-end="url(#c9d1-w)"/>
+<text x="262" y="422" class="t" style="font-size:12px">⑧ «Hoy paga US$ 35,00…»</text>
+<line x1="250" y1="476" x2="76" y2="476" class="ln s-enl" style="stroke-width:2" marker-end="url(#c9d1-m)"/>
+<text x="84" y="468" class="t" style="font-size:12px">⑨ respuesta con el</text>
+<text x="84" y="492" class="t t-s t-m">monto del sistema</text>
+<text x="300" y="530" class="t t-s t-m">Cada vuelta manda de nuevo todos los mensajes y todas las definiciones:</text>
+<text x="300" y="546" class="t t-s t-m">más vueltas, más tokens, más costo y más latencia.</text>
+<path d="M800 124v90" class="ln s-warm" style="stroke-width:3"/>
+<text x="812" y="160" class="t t-xs t-b k-warm">VUELTA 1</text>
+<text x="812" y="176" class="t t-s t-m">termina en una</text>
+<text x="812" y="190" class="t t-s t-m">llamada a herramienta</text>
+<path d="M800 226v112" class="ln" style="stroke:var(--d-casa);stroke-width:3"/>
+<text x="812" y="270" class="t t-xs t-b k-casa">EL CÓDIGO</text>
+<text x="812" y="286" class="t t-s t-m">valida, revisa</text>
+<text x="812" y="300" class="t t-s t-m">permisos y ejecuta</text>
+<path d="M800 352v96" class="ln s-warm" style="stroke-width:3"/>
+<text x="812" y="392" class="t t-xs t-b k-warm">VUELTA 2</text>
+<text x="812" y="408" class="t t-s t-m">termina en texto</text>
+<text x="812" y="422" class="t t-s t-m">para la persona</text>
+</svg></div><figcaption><b>Una pregunta, dos vueltas al modelo.</b> Los participantes están arriba y el tiempo corre hacia abajo. ① El agente pregunta cuánto paga Carmen para reconectar; ② el asistente manda al modelo los mensajes y la lista de herramientas; ③ el modelo no responde: pide <code>calcular_total_reconexion(cuenta=20417)</code>; ④ el código valida la llamada y ⑤ la ejecuta en el motor de tarifas, que ⑥ devuelve 35,00; ⑦ el resultado vuelve al modelo como un mensaje <code>tool</code>; ⑧ el modelo redacta la respuesta y ⑨ el agente la recibe con el monto del sistema. A la derecha, las dos vueltas: la primera termina en una llamada a herramienta y la segunda, en texto.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El ciclo completo con dos herramientas</h3></div><p>Vas a darle a tu modelo local dos herramientas (consultar una factura y calcular el total para reconectar) y a ver cómo las pide, cómo las ejecuta el código y cómo responde con el resultado. Necesitas Ollama con <code>llama3.2:3b</code> (capítulo 1), que acepta herramientas por su API compatible con OpenAI. Guarda este programa como <code>herramientas.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+MODELO = "llama3.2:3b"
+MENSAJE = ("La clienta de la cuenta 20417 tiene vencida la factura F-88213 "
+           "y pide la reconexión. ¿Cuánto paga hoy?")
+
+# Los sistemas de verdad (aquí, datos de ejemplo en memoria)
+FACTURAS = {"F-88213": {"cuenta": 20417, "mes": "octubre",
+                        "monto": 30.00, "estado": "vencida"}}
+RECONEXION = 5.00
+
+def consultar_factura(numero):
+    f = FACTURAS.get(numero)
+    if f is None:
+        return {"error": "factura_no_existe",
+                "detalle": f"No hay ninguna factura {numero}. Pide el número correcto."}
+    return {"numero": numero, **f}
+
+def calcular_total_reconexion(cuenta):
+    vencidas = [f["monto"] for f in FACTURAS.values()
+                if f["cuenta"] == cuenta and f["estado"] == "vencida"]
+    return {"cuenta": cuenta, "facturas_vencidas": len(vencidas),
+            "total": sum(vencidas) + RECONEXION}
+
+FUNCIONES = {"consultar_factura": consultar_factura,
+             "calcular_total_reconexion": calcular_total_reconexion}
+
+HERRAMIENTAS = [
+    {"type": "function", "function": {
+        "name": "consultar_factura",
+        "description": ("Devuelve el mes, el monto, la cuenta y el estado de una factura. "
+                        "Úsala cuando la persona menciona un número de factura (F-#####)."),
+        "parameters": {"type": "object",
+                       "properties": {"numero": {"type": "string",
+                                                 "description": "Número de factura, por ejemplo F-88213"}},
+                       "required": ["numero"]}}},
+    {"type": "function", "function": {
+        "name": "calcular_total_reconexion",
+        "description": ("Calcula cuánto paga una cuenta para reconectar: facturas vencidas "
+                        "más el cargo de reconexión. Úsala siempre que pregunten un monto a pagar."),
+        "parameters": {"type": "object",
+                       "properties": {"cuenta": {"type": "integer",
+                                                 "description": "Número de cuenta del cliente"}},
+                       "required": ["cuenta"]}}},
+]
+
+def llamar(mensajes):
+    cuerpo = {"model": MODELO, "temperature": 0,
+              "messages": mensajes, "tools": HERRAMIENTAS}
+    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido) as r:
+        return json.load(r)["choices"][0]["message"]
+
+def ejecutar(nombre, args):
+    funcion = FUNCIONES.get(nombre)
+    if funcion is None:
+        return {"error": "herramienta_desconocida", "detalle": nombre}
+    try:
+        return funcion(**args)
+    except TypeError as e:  # argumentos que no calzan con la función
+        return {"error": "argumentos_invalidos", "detalle": str(e)}
+
+mensajes = [
+    {"role": "system", "content": ("Eres el asistente de los agentes de atención. "
+                                   "Usa las herramientas para todo dato o monto; nunca inventes cifras. "
+                                   "Responde en español, en una o dos frases.")},
+    {"role": "user", "content": MENSAJE},
+]
+
+for vuelta in range(1, 5):  # tope de vueltas: nunca un ciclo infinito
+    respuesta = llamar(mensajes)
+    llamadas = respuesta.get("tool_calls") or []
+    if not llamadas:
+        print("\nRespuesta final:", respuesta.get("content"))
+        break
+    mensajes.append(respuesta)
+    for llamada in llamadas:
+        nombre = llamada["function"]["name"]
+        args = llamada["function"]["arguments"]
+        if isinstance(args, str):
+            args = json.loads(args or "{}")
+        print(f"[vuelta {vuelta}] el modelo pide {nombre}({args})")
+        resultado = ejecutar(nombre, args)
+        print(f"           el código devuelve {resultado}")
+        mensajes.append({"role": "tool", "tool_call_id": llamada.get("id", ""),
+                         "content": json.dumps(resultado, ensure_ascii=False)})
+else:
+    print("Se alcanzó el tope de vueltas: se escala a una persona.")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python herramientas.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 herramientas.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota qué herramientas pide el modelo, con qué argumentos y en cuántas vueltas.</span></li><li><span>Compara el monto de la respuesta final con el que devolvió <code>calcular_total_reconexion</code>.</span></li><li><span>Borra la línea <code>"tools": HERRAMIENTAS</code> del cuerpo, vuelve a correrlo y mira qué responde el modelo sin herramientas.</span></li></ol><p><b>Qué observar:</b> el modelo no calcula: pide una o las dos herramientas, el código las ejecuta y el total (US$ 35,00) sale de la función. Los argumentos llegan como JSON que el código decodifica y valida. Sin herramientas, el modelo responde de inmediato y tiene que adivinar el cargo de reconexión. Un modelo pequeño a veces pide una herramienta que no hacía falta, o la misma dos veces; por eso el código tiene un tope de vueltas. El mismo programa sirve con un proveedor comercial cambiando la dirección, el modelo y la clave.</p></div><div class="lab" id="09-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>El ciclo de una llamada a herramienta, paso a paso</h3></div><p class="hint">Elige un caso y avanza con «Siguiente paso». Arriba se enciende quién actúa en cada momento; abajo crece la lista de mensajes que viaja al modelo en cada vuelta. Mira cuándo el modelo pide una herramienta, qué devuelve el código, qué pasa con un error y por qué la escritura se detiene antes de ejecutar.</p><style>
+[id="09-lab-1"] .c9l1-act{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+[id="09-lab-1"] .c9l1-a{border:1px solid var(--line);border-radius:10px;padding:7px 6px;text-align:center;font:600 .8rem/1.25 var(--f-display);color:var(--muted);background:var(--card);transition:background .2s,border-color .2s}
+[id="09-lab-1"] .c9l1-a small{display:block;font-weight:500;font-size:.7rem}
+[id="09-lab-1"] .c9l1-a.on{color:var(--ink);border-width:2px}
+[id="09-lab-1"] .c9l1-a.on[data-k="agente"]{border-color:var(--ink)}
+[id="09-lab-1"] .c9l1-a.on[data-k="codigo"]{border-color:var(--d-casa);background:var(--d-casa-s)}
+[id="09-lab-1"] .c9l1-a.on[data-k="modelo"]{border-color:var(--warm);background:var(--warm-soft)}
+[id="09-lab-1"] .c9l1-a.on[data-k="sistema"]{border-color:var(--d-sis);background:var(--d-sis-s)}
+[id="09-lab-1"] .c9l1-fl{font:600 .86rem/1.35 var(--f-display);color:var(--ink);text-align:center;min-height:1.4em}
+[id="09-lab-1"] .c9l1-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,120px),1fr));gap:8px}
+[id="09-lab-1"] .c9l1-k{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--paper)}
+[id="09-lab-1"] .c9l1-k span{display:block;font:600 .72rem var(--f-display);color:var(--muted)}
+[id="09-lab-1"] .c9l1-k output{font:700 1.15rem var(--f-mono);color:var(--ink)}
+[id="09-lab-1"] .c9l1-msgs{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+[id="09-lab-1"] .c9l1-m{border:1px solid var(--line);border-left-width:4px;border-radius:7px;padding:5px 8px;background:var(--card);font:500 .76rem/1.35 var(--f-mono);overflow-wrap:anywhere}
+[id="09-lab-1"] .c9l1-m b{font:700 .66rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;margin-right:6px}
+[id="09-lab-1"] .c9l1-m.system{border-left-color:var(--muted)}
+[id="09-lab-1"] .c9l1-m.user{border-left-color:var(--ink)}
+[id="09-lab-1"] .c9l1-m.assistant{border-left-color:var(--warm)}
+[id="09-lab-1"] .c9l1-m.tool{border-left-color:var(--d-casa)}
+[id="09-lab-1"] .c9l1-m.nuevo{box-shadow:0 0 0 2px var(--accent-soft)}
+[id="09-lab-1"] button:disabled{opacity:.45;cursor:default}
+[id="09-lab-1"] .c9l1-vacio{color:var(--muted);font:500 .8rem var(--f-display)}
+@media (max-width:520px){[id="09-lab-1"] .c9l1-a{font-size:.7rem;padding:6px 3px}[id="09-lab-1"] .c9l1-a small{font-size:.62rem}}
+@media (prefers-reduced-motion: reduce){[id="09-lab-1"] .c9l1-a{transition:none}}
+</style>
+<div class="btns" role="group" aria-label="Caso">
+  <button type="button" data-c="total" aria-pressed="true">Total para reconectar</button>
+  <button type="button" data-c="error" aria-pressed="false">Factura que no existe</button>
+  <button type="button" data-c="paralelo" aria-pressed="false">Dos consultas a la vez</button>
+  <button type="button" data-c="escritura" aria-pressed="false">Reprogramar la visita 4471</button>
+</div>
+<div class="c9l1-act" aria-hidden="true">
+  <div class="c9l1-a" data-k="agente">Agente<small>la persona</small></div>
+  <div class="c9l1-a" data-k="codigo">Asistente<small>código y registro</small></div>
+  <div class="c9l1-a" data-k="modelo">Modelo<small>propone</small></div>
+  <div class="c9l1-a" data-k="sistema">Sistemas<small>facturación, tickets, órdenes</small></div>
+</div>
+<div class="c9l1-fl" id="c9l1-fl"></div>
+<div class="btns">
+  <button type="button" id="c9l1-ant">Anterior</button>
+  <button type="button" class="primary" id="c9l1-sig">Siguiente paso</button>
+  <button type="button" id="c9l1-rei">Reiniciar</button>
+</div>
+<div class="c9l1-kpis">
+  <div class="c9l1-k"><span>Paso</span><output id="c9l1-k1"></output></div>
+  <div class="c9l1-k"><span>Vueltas al modelo</span><output id="c9l1-k2"></output></div>
+  <div class="c9l1-k"><span>Herramientas ejecutadas</span><output id="c9l1-k3"></output></div>
+  <div class="c9l1-k"><span>Tokens enviados (aprox.)</span><output id="c9l1-k4"></output></div>
+</div>
+<ol class="c9l1-msgs" id="c9l1-msgs" aria-label="Mensajes que viajan al modelo"></ol>
+<div class="readout texto" id="c9l1-out" aria-live="polite"></div></div></section>
+<section><h2>Definir una herramienta: nombre, descripción y esquema de entrada</h2><div class="prose"><p>Para el modelo, una herramienta es solo texto: lo que dicen su nombre, su descripción y su esquema. No ve el código. Si la descripción es vaga, elegirá mal; si el esquema es flojo, mandará argumentos que el código no entiende.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un formulario de ventanilla bien hecho dice arriba para qué sirve («Solicitud de cambio de domicilio»), aclara cuándo no usarlo («para cambio de titular, use el formulario B») y pone al lado de cada casilla qué va ahí y en qué formato («fecha: DD/MM/AAAA»). Un formulario que solo dice «Datos» recibe cualquier cosa.</p></div><div class="prose"><p>Una definición tiene tres partes:</p><ul><li><b>Nombre.</b> Un verbo y un objeto del negocio, en minúsculas y sin espacios: <code>consultar_factura</code>, <code>reprogramar_visita</code>. Que se entienda solo. Evita nombres genéricos (<code>procesar</code>, <code>accion1</code>) y nombres casi iguales entre sí.</li><li><b>Descripción.</b> Qué hace, cuándo usarla, cuándo no usarla y qué devuelve. Es, en la práctica, una parte del prompt, y se escribe con el mismo cuidado que las plantillas del capítulo 4.</li><li><b>Esquema de entrada</b> (<i>input schema</i>). Un <b>esquema JSON</b> (<i>JSON Schema</i>), como en el capítulo 5: cada parámetro con su tipo, su descripción, sus valores permitidos (<code>enum</code>), su formato (<code>pattern</code>, <code>minimum</code>) y cuáles son obligatorios. <code>additionalProperties: false</code> rechaza campos inventados.</li></ul><p>Así quedó la definición de la herramienta de escritura de la versión 0.7:</p><div class="code-copia"><pre><code>{
+  "name": "reprogramar_visita",
+  "description": "Cambia el día y la franja de la visita técnica de una orden de trabajo abierta. Úsala solo cuando la persona pide mover una visita ya agendada; para agendar una visita nueva no sirve. Devuelve la orden con su nueva fecha, o un error que explica por qué no se pudo.",
+  "parameters": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "orden": {"type": "integer", "description": "Número de la orden de trabajo, por ejemplo 4471"},
+      "fecha": {"type": "string", "format": "date", "description": "Día nuevo, en formato AAAA-MM-DD"},
+      "franja": {"type": "string", "enum": ["manana", "tarde"]}
+    },
+    "required": ["orden", "fecha", "franja"]
+  }
+}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Fíjate en tres decisiones. La fecha va en formato canónico y no como «el jueves», porque el modelo puede traducir «el jueves» a una fecha (sabe la de hoy si se la pones en el contexto) y el código no debería tener que interpretar lenguaje. La franja es una enumeración, no texto libre. Y la descripción dice qué devuelve cuando falla, lo que le enseña al modelo qué hacer con un error.</p></div></section>
+<section><h2>El registro de herramientas: metadatos, riesgo, permisos y dueño</h2><div class="prose"><p>La definición es lo que ve el modelo. El código necesita saber mucho más de cada herramienta, y lo guarda en un <b>registro de herramientas</b> (<i>tool registry</i>): un catálogo versionado, con una ficha por herramienta, que es la fuente de verdad para armar la lista que se manda al modelo y para decidir qué se ejecuta.</p></div><div class="analogia"><b>Imagínalo así</b><p>En un hospital, el carro de medicamentos tiene una etiqueta visible en cada cajón (nombre y dosis) y una hoja de control que la enfermera no le lee al paciente: quién puede administrarlo, si requiere doble firma, qué farmacia lo repone y cuándo vence. La etiqueta es la descripción; la hoja de control es el registro.</p></div><figure class="fig fig-esquema" id="09-diagrama-3"><div class="lienzo"><svg viewBox="0 0 920 460" style="min-width:740px" role="img" aria-label="Ficha de la herramienta reprogramar_visita en el registro. A la izquierda lo que ve el modelo: nombre, descripción y esquema de entrada. A la derecha lo que lee solo el código: versión, efecto, riesgo, roles, aprobación, idempotencia, límites y dueño. Abajo, las tres decisiones del código: si entra en la lista, si se ejecuta sola y qué queda en la traza">
+<defs>
+<marker id="c9d3-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-red"/></marker>
+</defs>
+<rect x="16" y="16" width="888" height="276" rx="14" class="caja" style="stroke-dasharray:6 5"/>
+<text x="32" y="40" class="t t-xs t-b t-m">FICHA EN EL REGISTRO · reprogramar_visita · versión 2</text>
+<rect x="32" y="56" width="400" height="220" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="48" y="80" class="t t-xs t-b k-warm">LO QUE VE EL MODELO</text>
+<text x="48" y="106" class="t t-s t-b">nombre</text>
+<text x="130" y="106" class="t t-mono" style="font-size:12px">reprogramar_visita</text>
+<text x="48" y="132" class="t t-s t-b">descripción</text>
+<text x="130" y="132" class="t t-s">Cambia el día y la franja de la visita</text>
+<text x="130" y="148" class="t t-s">de una orden abierta. Úsala solo para</text>
+<text x="130" y="164" class="t t-s">mover una visita ya agendada…</text>
+<text x="48" y="192" class="t t-s t-b">esquema</text>
+<text x="130" y="192" class="t t-mono" style="font-size:11px">orden: integer</text>
+<text x="130" y="210" class="t t-mono" style="font-size:11px">fecha: string, AAAA-MM-DD</text>
+<text x="130" y="228" class="t t-mono" style="font-size:11px">franja: "manana" | "tarde"</text>
+<text x="130" y="246" class="t t-mono" style="font-size:11px">required: las tres</text>
+<text x="48" y="266" class="t t-s t-m">viaja en cada llamada al modelo</text>
+<rect x="452" y="56" width="436" height="220" rx="10" class="d-casa"/>
+<text x="468" y="80" class="t t-xs t-b k-casa">LO QUE LEE SOLO EL CÓDIGO</text>
+<text x="468" y="108" class="t t-s t-b">efecto</text><text x="560" y="108" class="t t-s">escritura reversible</text>
+<text x="468" y="132" class="t t-s t-b">riesgo</text><text x="560" y="132" class="t t-s">medio</text>
+<text x="468" y="156" class="t t-s t-b">roles</text><text x="560" y="156" class="t t-s">agentes de atención, supervisora</text>
+<text x="468" y="180" class="t t-s t-b">aprobación</text><text x="560" y="180" class="t t-s">sí (capítulo 11)</text>
+<text x="468" y="204" class="t t-s t-b">idempotente</text><text x="560" y="204" class="t t-s">sí: clave = orden + fecha</text>
+<text x="468" y="228" class="t t-s t-b">límites</text><text x="560" y="228" class="t t-s">5 s · 20 llamadas por minuto</text>
+<text x="468" y="252" class="t t-s t-b">dueño</text><text x="560" y="252" class="t t-s">equipo de órdenes de trabajo</text>
+<rect x="32" y="336" width="270" height="104" rx="10" class="c-red"/>
+<text x="48" y="360" class="t t-xs t-b k-red">1 · ¿ENTRA EN LA LISTA?</text>
+<text x="48" y="384" class="t t-s">Solo si el rol de quien pregunta</text>
+<text x="48" y="400" class="t t-s">está en «roles». Lo que el modelo</text>
+<text x="48" y="416" class="t t-s">no conoce, no lo puede pedir.</text>
+<rect x="325" y="336" width="270" height="104" rx="10" class="c-red"/>
+<text x="341" y="360" class="t t-xs t-b k-red">2 · ¿SE EJECUTA SOLA?</text>
+<text x="341" y="384" class="t t-s">Efecto, riesgo y aprobación deciden:</text>
+<text x="341" y="400" class="t t-s">ejecutar, esperar a una persona</text>
+<text x="341" y="416" class="t t-s">o negarse.</text>
+<rect x="618" y="336" width="270" height="104" rx="10" class="c-red"/>
+<text x="634" y="360" class="t t-xs t-b k-red">3 · ¿QUÉ QUEDA EN LA TRAZA?</text>
+<text x="634" y="384" class="t t-s">Versión, argumentos, resultado,</text>
+<text x="634" y="400" class="t t-s">tiempo y en nombre de quién.</text>
+<text x="634" y="416" class="t t-s">El dueño recibe las alertas.</text>
+<line x1="167" y1="292" x2="167" y2="334" class="ln s-red" style="stroke-width:2" marker-end="url(#c9d3-r)"/>
+<line x1="460" y1="292" x2="460" y2="334" class="ln s-red" style="stroke-width:2" marker-end="url(#c9d3-r)"/>
+<line x1="753" y1="292" x2="753" y2="334" class="ln s-red" style="stroke-width:2" marker-end="url(#c9d3-r)"/>
+</svg></div><figcaption><b>La ficha de una herramienta en el registro.</b> A la izquierda, lo que viaja al modelo: nombre, descripción y esquema de entrada. Arriba, el nombre y la versión de la ficha. A la derecha, lo que solo lee el código: tipo de efecto, nivel de riesgo, roles que pueden usarla, si pide aprobación, si es idempotente, límites de tiempo y de uso, y el equipo dueño. Abajo, las tres decisiones que toma el código con esa ficha: si la herramienta entra en la lista de esta persona, si la llamada se ejecuta sola o espera a alguien, y qué queda en la traza.</figcaption></figure><div class="prose"><p>Los campos típicos de la ficha:</p><div class="tbl"><table><thead><tr><th>Campo</th><th>Para qué sirve</th><th>Ejemplo en <code>reprogramar_visita</code></th></tr></thead><tbody><tr><td>Versión</td><td>Cambiar la herramienta sin romper a quien la usa</td><td><code>2</code> (la 1 no tenía franja)</td></tr><tr><td>Efecto</td><td>Lectura, escritura reversible o irreversible</td><td>escritura reversible</td></tr><tr><td>Riesgo</td><td>Cuánto daño hace un error</td><td>medio</td></tr><tr><td>Roles</td><td>Quién puede pedirla, en nombre de quién actúa</td><td>agentes de atención, supervisora</td></tr><tr><td>Aprobación</td><td>Si se ejecuta sola o espera a una persona</td><td>sí, por ahora (capítulo 11)</td></tr><tr><td>Idempotente</td><td>Si repetirla con los mismos datos da el mismo efecto</td><td>sí, con clave por orden y fecha</td></tr><tr><td>Límites</td><td>Tiempo máximo, tamaño de la respuesta, llamadas por minuto</td><td>5 s, 20 por minuto</td></tr><tr><td>Dueño</td><td>Quién responde si falla</td><td>equipo de órdenes de trabajo</td></tr></tbody></table></div><p>Con el registro, la lista de herramientas deja de ser fija. Un técnico y un agente de reclamos ven listas distintas, porque cada uno solo recibe las herramientas que su rol permite. Lo que el modelo no conoce, no lo puede pedir, y eso es más seguro que confiar en que «no lo pedirá». Cómo se ejecutan y validan las herramientas dentro de un agente, con su registro de capacidades, está en <a href="https://aaramirez.github.io/arneses/03-herramientas.html" target="_blank" rel="noopener">El runtime de herramientas</a>.</p></div></section>
+<section><h2>Cada slice de VSA como herramienta</h2><div class="prose"><p>¿De dónde salen las herramientas? La respuesta mala es escribir funciones nuevas «para la IA» junto a la aplicación de siempre, con su propia lógica de negocio. A los tres meses hay dos formas de reprogramar una visita, y cada una valida distinto.</p><p>La respuesta buena aprovecha cómo está construida la aplicación. En una <b>arquitectura de cortes verticales</b> (<i>Vertical Slice Architecture</i>, VSA), cada funcionalidad es un <b>slice</b> (corte) que tiene todo lo suyo: el pedido, la validación, la lógica, el acceso a datos y la respuesta. «Reprogramar visita» es un slice; «consultar factura», otro. La arquitectura a fondo está en <a href="https://aaramirez.github.io/backend/temario.html" target="_blank" rel="noopener">Backend y APIs</a>.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un banco tiene una sola bóveda y un solo sistema de cuentas, pero dos formas de retirar dinero: la ventanilla y el cajero automático. Las reglas son las mismas (saldo, límite diario, identificación); lo único distinto es por dónde entra el pedido. Nadie construye una segunda bóveda para el cajero.</p></div><div class="prose"><p>Un slice bien hecho ya tiene lo que pide una herramienta: un pedido con esquema, una validación y un resultado estructurado. Solo le falta una segunda puerta. La primera es el endpoint REST que usa la pantalla de órdenes; la segunda es un <b>adaptador de herramienta</b> que traduce el esquema del pedido a la definición que ve el modelo y llama al mismo manejador:</p><div class="code-copia"><pre><code># slices/reprogramar_visita.py  (esbozo)
+class Pedido(BaseModel):            # el mismo esquema para las dos puertas
+    orden: int
+    fecha: date
+    franja: Literal["manana", "tarde"]
+
+def manejar(pedido: Pedido, usuario: Usuario) -&gt; Resultado:
+    ...                             # reglas de negocio, una sola vez
+
+# Puerta 1: la pantalla de órdenes
+@app.post("/v1/ordenes/{orden}/reprogramacion")
+def endpoint(orden: int, cuerpo: Pedido, usuario = Depends(usuario_actual)):
+    return manejar(cuerpo, usuario)
+
+# Puerta 2: el asistente
+registro.agregar(herramienta_desde(Pedido, nombre="reprogramar_visita",
+                                   descripcion=DESCRIPCION, manejar=manejar,
+                                   efecto="escritura", riesgo="medio"))</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>El adaptador hace tres cosas más: pasa la identidad de la persona que pidió (el asistente actúa <b>en nombre de</b> ella, nunca con permisos propios más amplios), convierte las excepciones en errores con explicación y registra la llamada en la traza. En el capítulo 10, la misma puerta se publica por MCP para que otras aplicaciones la usen.</p></div><figure class="fig fig-arquitectura" id="09-diagrama-2"><div class="lienzo"><svg viewBox="0 0 960 480" style="min-width:760px" role="img" aria-label="Arquitectura: tres slices de la aplicación (consultar factura, estado de ticket, reprogramar visita), cada uno con validación, lógica y datos. A la izquierda la pantalla de tickets entra por endpoints REST; a la derecha el asistente entra por adaptadores de herramienta que pasan por el registro de permisos y riesgo. Abajo, los sistemas de facturación, tickets y órdenes">
+<defs>
+<marker id="c9d2-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+<marker id="c9d2-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-red"/></marker>
+</defs>
+<text x="20" y="30" class="t t-xs t-b t-m">PUERTA 1 · LA PANTALLA</text>
+<text x="400" y="30" class="t t-xs t-b k-casa">LOS SLICES · REGLAS UNA SOLA VEZ</text>
+<text x="660" y="30" class="t t-xs t-b k-red">PUERTA 2 · EL ASISTENTE</text>
+<rect x="20" y="160" width="140" height="86" rx="10" class="caja"/>
+<text x="90" y="196" class="t t-b" text-anchor="middle" style="font-size:12px">Pantalla de</text>
+<text x="90" y="212" class="t t-b" text-anchor="middle" style="font-size:12px">tickets</text>
+<text x="90" y="232" class="t t-s t-m" text-anchor="middle">la persona</text>
+<rect x="810" y="46" width="140" height="62" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="880" y="72" class="t t-b k-warm" text-anchor="middle" style="font-size:12px">Asistente</text>
+<text x="880" y="90" class="t t-s t-m" text-anchor="middle">modelo + ciclo</text>
+<rect x="810" y="130" width="140" height="216" rx="10" class="c-red"/>
+<text x="880" y="156" class="t t-b k-red" text-anchor="middle" style="font-size:12px">Registro</text>
+<text x="822" y="182" class="t t-s">· ¿rol permitido?</text>
+<text x="822" y="202" class="t t-s">· ¿esquema válido?</text>
+<text x="822" y="222" class="t t-s">· riesgo y aprobación</text>
+<text x="822" y="242" class="t t-s">· en nombre de quién</text>
+<text x="822" y="262" class="t t-s">· traza de la llamada</text>
+<line x1="880" y1="108" x2="880" y2="128" class="ln s-red" style="stroke-width:2" marker-end="url(#c9d2-r)"/>
+<g>
+<rect x="190" y="102" width="150" height="56" rx="8" class="caja"/>
+<text x="265" y="126" class="t t-mono" text-anchor="middle" style="font-size:11px">GET /v1/facturas/</text>
+<text x="265" y="142" class="t t-mono" text-anchor="middle" style="font-size:11px">{numero}</text>
+<rect x="372" y="96" width="250" height="68" rx="10" class="d-casa"/>
+<text x="497" y="120" class="t t-b t-mono" text-anchor="middle" style="font-size:12px">consultar_factura</text>
+<text x="497" y="146" class="t t-s t-m" text-anchor="middle">valida · decide · lee Facturación</text>
+<rect x="654" y="102" width="130" height="56" rx="8" class="c-red"/>
+<text x="719" y="126" class="t t-s t-b k-red" text-anchor="middle">adaptador</text>
+<text x="719" y="142" class="t t-s t-m" text-anchor="middle">de herramienta</text>
+<line x1="340" y1="130" x2="370" y2="130" class="ln" style="stroke-width:2" marker-end="url(#c9d2-m)"/>
+<line x1="654" y1="130" x2="624" y2="130" class="ln s-red" style="stroke-width:2" marker-end="url(#c9d2-r)"/>
+<line x1="810" y1="170" x2="786" y2="140" class="ln s-red" style="stroke-width:1.6" marker-end="url(#c9d2-r)"/>
+</g>
+<g>
+<rect x="190" y="194" width="150" height="56" rx="8" class="caja"/>
+<text x="265" y="218" class="t t-mono" text-anchor="middle" style="font-size:11px">GET /v1/tickets/</text>
+<text x="265" y="234" class="t t-mono" text-anchor="middle" style="font-size:11px">{numero}</text>
+<rect x="372" y="188" width="250" height="68" rx="10" class="d-casa"/>
+<text x="497" y="212" class="t t-b t-mono" text-anchor="middle" style="font-size:12px">estado_ticket</text>
+<text x="497" y="238" class="t t-s t-m" text-anchor="middle">valida · decide · lee Tickets</text>
+<rect x="654" y="194" width="130" height="56" rx="8" class="c-red"/>
+<text x="719" y="218" class="t t-s t-b k-red" text-anchor="middle">adaptador</text>
+<text x="719" y="234" class="t t-s t-m" text-anchor="middle">de herramienta</text>
+<line x1="340" y1="222" x2="370" y2="222" class="ln" style="stroke-width:2" marker-end="url(#c9d2-m)"/>
+<line x1="654" y1="222" x2="624" y2="222" class="ln s-red" style="stroke-width:2" marker-end="url(#c9d2-r)"/>
+<line x1="810" y1="222" x2="786" y2="222" class="ln s-red" style="stroke-width:1.6" marker-end="url(#c9d2-r)"/>
+</g>
+<g>
+<rect x="190" y="286" width="150" height="56" rx="8" class="caja"/>
+<text x="265" y="310" class="t t-mono" text-anchor="middle" style="font-size:11px">POST /v1/ordenes/</text>
+<text x="265" y="326" class="t t-mono" text-anchor="middle" style="font-size:11px">{n}/reprogramacion</text>
+<rect x="372" y="280" width="250" height="68" rx="10" class="d-casa"/>
+<text x="497" y="304" class="t t-b t-mono" text-anchor="middle" style="font-size:12px">reprogramar_visita</text>
+<text x="497" y="330" class="t t-s t-m" text-anchor="middle">valida · decide · escribe en Órdenes</text>
+<rect x="654" y="286" width="130" height="56" rx="8" class="c-red"/>
+<text x="719" y="310" class="t t-s t-b k-red" text-anchor="middle">adaptador</text>
+<text x="719" y="326" class="t t-s t-m" text-anchor="middle">de herramienta</text>
+<line x1="340" y1="314" x2="370" y2="314" class="ln" style="stroke-width:2" marker-end="url(#c9d2-m)"/>
+<line x1="654" y1="314" x2="624" y2="314" class="ln s-red" style="stroke-width:2" marker-end="url(#c9d2-r)"/>
+<line x1="810" y1="290" x2="786" y2="306" class="ln s-red" style="stroke-width:1.6" marker-end="url(#c9d2-r)"/>
+</g>
+<line x1="160" y1="190" x2="188" y2="140" class="ln" style="stroke-width:1.6" marker-end="url(#c9d2-m)"/>
+<line x1="160" y1="210" x2="188" y2="222" class="ln" style="stroke-width:1.6" marker-end="url(#c9d2-m)"/>
+<line x1="160" y1="232" x2="188" y2="304" class="ln" style="stroke-width:1.6" marker-end="url(#c9d2-m)"/>
+<rect x="20" y="378" width="930" height="88" rx="12" class="d-sis"/>
+<text x="34" y="398" class="t t-xs t-b k-sis">SISTEMAS DE VERDAD</text>
+<text x="34" y="420" class="t t-s t-m">cada slice habla</text>
+<text x="34" y="436" class="t t-s t-m">con su sistema</text>
+<rect x="250" y="410" width="160" height="40" rx="8" class="caja"/>
+<text x="330" y="435" class="t t-b" text-anchor="middle" style="font-size:12px">Facturación</text>
+<rect x="420" y="410" width="160" height="40" rx="8" class="caja"/>
+<text x="500" y="435" class="t t-b" text-anchor="middle" style="font-size:12px">Tickets</text>
+<rect x="590" y="410" width="160" height="40" rx="8" class="caja"/>
+<text x="670" y="435" class="t t-b" text-anchor="middle" style="font-size:12px">Órdenes de trabajo</text>
+</svg></div><figcaption><b>Un slice, dos puertas.</b> En el centro, tres slices de la aplicación, cada uno con su validación, su lógica y sus datos. A la izquierda, la pantalla de tickets entra por los endpoints REST. A la derecha, el asistente entra por los adaptadores de herramienta, que pasan por el registro (permisos y riesgo) antes de llegar al mismo manejador. Abajo, los sistemas de verdad: facturación, tickets y órdenes. Las dos puertas comparten las reglas de negocio, así que no hay una forma «de la IA» y otra «de la pantalla».</figcaption></figure></section>
+<section><h2>Diseñar la aplicación para agentes (<i>agent-ready</i>)</h2><div class="prose"><p>Una aplicación <b>lista para agentes</b> (<i>agent-ready</i>) es la que ofrece acciones que un modelo puede usar bien. No es otra aplicación: es la misma, diseñada pensando en un usuario nuevo que lee descripciones en vez de mirar botones.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un edificio accesible no es un edificio aparte para personas en silla de ruedas: es el mismo edificio con rampas, ascensores con botones a la altura correcta y letreros claros. Al principio parece un costo extra; después todos usan la rampa con el carrito de compras.</p></div><div class="prose"><p>Lo que hace una aplicación <i>agent-ready</i>:</p><ul><li><b>Acciones del negocio, no tablas.</b> <code>reprogramar_visita</code> en vez de <code>actualizar_registro(tabla, id, campos)</code>. Una acción del negocio trae sus reglas adentro; una actualización genérica deja las reglas en manos del modelo.</li><li><b>Buscar antes de actuar.</b> Herramientas de búsqueda (<code>buscar_cliente</code> por nombre) que devuelven <b>identificadores canónicos</b> (la cuenta 20417), y herramientas de acción que solo aceptan esos identificadores. Así el modelo no actúa sobre «la señora Rojas» sin saber cuál.</li><li><b>Salidas cortas y estructuradas.</b> Lo que el modelo necesita para seguir, no la ficha completa con 80 campos. Cada token de resultado vuelve a viajar en las vueltas siguientes.</li><li><b>Errores que explican.</b> «La orden 4471 ya está cerrada; no se puede reprogramar» le permite al modelo responder bien; «Error 500» no.</li><li><b>Simulación.</b> Un parámetro <code>simular: true</code> que devuelve lo que pasaría sin hacerlo. El capítulo 11 lo usa para las aprobaciones.</li><li><b>Límites y paginación.</b> Ninguna herramienta devuelve diez mil filas; devuelve las primeras veinte y un cursor.</li></ul><p>El antipatrón más común es la herramienta comodín: <code>ejecutar_sql(consulta)</code> o <code>llamar_api(url, metodo, cuerpo)</code>. Parecen flexibles, pero le pasan al modelo todo el poder y toda la responsabilidad, y convierten cualquier texto malicioso que lea en una orden con acceso a la base. El capítulo 10 vuelve sobre esto con el acceso a bases de datos.</p></div></section>
+<section><h2>Herramientas de lectura y de escritura</h2><div class="prose"><p>No todas las herramientas pesan lo mismo. Una <b>herramienta de lectura</b> (<i>read tool</i>) consulta y no cambia nada: si se equivoca, el daño es una respuesta mala o un dato que alguien no debía ver. Una <b>herramienta de escritura</b> (<i>write tool</i>) cambia el estado de un sistema: si se equivoca, hay que deshacer algo, y a veces no se puede.</p><p>La versión 0.7 las separó en tres grupos, con reglas distintas:</p><div class="tbl"><table><thead><tr><th>Grupo</th><th>Herramientas</th><th>Regla</th></tr></thead><tbody><tr><td>Lectura</td><td><code>consultar_factura</code>, <code>estado_ticket</code>, <code>calcular_total_reconexion</code>, <code>buscar_en_manuales</code></td><td>Se ejecutan solas, filtradas por los permisos de quien pregunta</td></tr><tr><td>Escritura reversible</td><td><code>reprogramar_visita</code></td><td>Pasa por el motor de políticas; por ahora, con aprobación</td></tr><tr><td>Escritura irreversible</td><td><code>registrar_reembolso</code></td><td>Nunca sola: siempre una persona, con el monto que da el sistema</td></tr></tbody></table></div><p><code>calcular_total_reconexion</code> es de lectura aunque «calcula»: no cambia nada, y es justamente la herramienta que cumple la regla del capítulo 2 de que el modelo nunca hace la cuenta final.</p></div><div class="ml"><b>En la práctica</b><p><b>Primero leer, después escribir.</b> Durante las dos primeras semanas de la versión 0.7, el asistente tuvo solo las herramientas de lectura. Mateo midió dos cosas en las trazas: cuántas veces el modelo pedía la herramienta correcta para la pregunta y cuántas pedía una que no hacía falta. Con esos números, y con la jefa de reclamos revisando una muestra, se habilitó <code>reprogramar_visita</code> detrás de una aprobación. La escritura llegó con evidencia de que el modelo elegía bien, no con la esperanza de que lo hiciera.</p></div></section>
+<section><h2>Errores como datos y llamadas en paralelo</h2><div class="prose"><p>Cuando una herramienta falla, la tentación es lanzar una excepción y cortar todo. En un ciclo con modelo conviene lo contrario: devolver el <b>error como dato</b> (<i>error as data</i>), un resultado normal que dice qué falló y por qué, para que el modelo pueda corregirse o explicarle el problema a la persona.</p><p>Hay tres clases de error, y cada una se trata distinto:</p><ul><li><b>Error de entrada.</b> El modelo mandó <code>F-8821</code> en vez de <code>F-88213</code>. Se devuelve <code>{"error": "factura_no_existe", "detalle": "..."}</code> y el modelo pide el número correcto o prueba otra vez.</li><li><b>Error de negocio.</b> La orden ya está cerrada, el monto supera lo permitido. Se devuelve la regla en palabras, para que el modelo la explique.</li><li><b>Error del sistema.</b> Facturación no responde. Eso no lo arregla el modelo: el código reintenta con espera creciente y, si sigue fallando, devuelve «el sistema de facturación no está disponible» y el asistente lo dice sin inventar un monto.</li></ul><p>Un modelo también puede pedir <b>varias herramientas en el mismo turno</b> (<i>parallel tool calls</i>): para responder «¿cuánto debe Carmen y en qué va su reclamo?» pide <code>calcular_total_reconexion</code> y <code>estado_ticket</code> a la vez. El código puede ejecutar en paralelo las de lectura, porque no dependen una de otra, y devolver todos los resultados antes de la siguiente vuelta. Las de escritura conviene ejecutarlas una por una y en el orden pedido, porque una puede depender del efecto de otra.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Dos herramientas a la vez y un error como dato</h3></div><p>Vas a usar el mismo <code>herramientas.py</code> de la primera práctica con dos pedidos nuevos: uno que pide dos datos a la vez y uno con un número de factura que no existe.</p><ol class="steps"><li><span>Cambia <code>MENSAJE</code> por «¿De cuánto es la factura F-88213 y cuánto paga la cuenta 20417 para reconectar?» y ejecuta el programa como antes.</span></li><li><span>Anota si el modelo pidió las dos herramientas en la misma vuelta o en vueltas distintas.</span></li><li><span>Cambia <code>MENSAJE</code> por «¿De cuánto es la factura F-8821?» y vuelve a correrlo.</span></li><li><span>En <code>consultar_factura</code>, cambia la línea del error por <code>raise KeyError(numero)</code> y corre el paso 3 otra vez.</span></li></ol><p><b>Qué observar:</b> en el paso 1 muchos modelos piden las dos herramientas en una sola vuelta, y el programa ejecuta las dos antes de volver al modelo; otros las piden de a una, y eso cuesta una vuelta más. En el paso 3, la herramienta devuelve el error como dato y el modelo responde que no encuentra la factura o pide el número correcto, sin inventar un monto. En el paso 4 la excepción no la atrapa nadie: el programa se cae y la persona no recibe ninguna respuesta. Ese es el motivo para devolver los errores como datos. Vuelve a dejar la línea como estaba.</p></div></section>
+<section><h2>Cuántas herramientas son demasiadas</h2><div class="prose"><p>Cada herramienta que agregas tiene un costo. Su definición viaja en cada llamada, así que cuarenta herramientas con buenas descripciones pueden sumar varios miles de tokens antes de que el modelo lea la pregunta. Y cada herramienta nueva es una opción más para confundirse: si hay <code>consultar_factura</code>, <code>consultar_factura_electronica</code> y <code>consultar_pagos</code>, la elección entre ellas depende de una palabra.</p></div><div class="analogia"><b>Imagínalo así</b><p>Una caja de herramientas con veinte destornilladores casi iguales no te hace mejor carpintero: te hace perder tiempo eligiendo, y a veces eliges el que no calza. El carpintero bueno lleva al trabajo los seis que necesita para ese trabajo.</p></div><div class="prose"><p>No hay un número mágico; depende del modelo y de cuánto se parecen las herramientas entre sí. Lo que sí se observa siempre es que la precisión al elegir baja cuando el catálogo crece y cuando las descripciones se pisan. Las estrategias:</p><ul><li><b>Catálogo por rol y por tarea.</b> El asistente de reclamos no necesita las herramientas de inventario. El registro arma la lista según quién pregunta y en qué pantalla está.</li><li><b>Selección dinámica.</b> Con catálogos grandes, un paso previo elige las diez herramientas más relevantes para el pedido, con una búsqueda por significado sobre las descripciones (la misma técnica del RAG del capítulo 8), y solo esas viajan al modelo.</li><li><b>Consolidar.</b> Tres herramientas que consultan la factura de tres formas pueden ser una con un parámetro.</li><li><b>Nombres con prefijo.</b> <code>facturacion.consultar</code> y <code>ordenes.reprogramar</code> separan dominios y evitan choques cuando las herramientas vienen de varios sistemas.</li></ul><p>La única forma de saber si un catálogo funciona es medirlo: un conjunto de pedidos con la herramienta correcta para cada uno, corrido cada vez que cambia una descripción. El capítulo 16 lo convierte en una batería de evaluación. El laboratorio muestra el efecto de una descripción y del tamaño del catálogo.</p></div><div class="lab" id="09-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Escribe la descripción y mira si el modelo elige bien</h3></div><p class="hint">Diez pedidos de agentes, cada uno con su herramienta correcta. Cambia la descripción de <code>consultar_factura</code> (elige una de ejemplo o escribe la tuya) y activa el catálogo grande. El simulador elige la herramienta por las palabras que comparten el pedido y cada descripción, como una versión muy simplificada de lo que hace un modelo. Mira los aciertos, los empates y los tokens que suman las definiciones.</p><style>
+[id="09-lab-2"] .c9l2-ed{display:grid;gap:4px;font:600 .82rem var(--f-display);color:var(--ink)}
+[id="09-lab-2"] .c9l2-ed textarea{width:100%;box-sizing:border-box;min-height:64px;font:500 .84rem/1.4 var(--f-mono);padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);resize:vertical}
+[id="09-lab-2"] .c9l2-chk{display:flex;gap:8px;align-items:flex-start;font:500 .84rem/1.35 var(--f-display);color:var(--ink);cursor:pointer}
+[id="09-lab-2"] .c9l2-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,120px),1fr));gap:8px}
+[id="09-lab-2"] .c9l2-k{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--paper)}
+[id="09-lab-2"] .c9l2-k span{display:block;font:600 .72rem var(--f-display);color:var(--muted)}
+[id="09-lab-2"] .c9l2-k output{font:700 1.15rem var(--f-mono);color:var(--ink)}
+[id="09-lab-2"] .c9l2-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:5px}
+[id="09-lab-2"] .c9l2-f{display:grid;grid-template-columns:1fr auto;gap:2px 10px;border:1px solid var(--line);border-left-width:4px;border-radius:7px;padding:6px 9px;background:var(--card);font:500 .8rem/1.35 var(--f-display);color:var(--ink)}
+[id="09-lab-2"] .c9l2-f.ok{border-left-color:var(--good)}
+[id="09-lab-2"] .c9l2-f.mal{border-left-color:var(--warm);background:var(--warm-soft)}
+[id="09-lab-2"] .c9l2-f code{font:500 .74rem var(--f-mono);overflow-wrap:anywhere}
+[id="09-lab-2"] .c9l2-f .c9l2-s{grid-column:1/-1;color:var(--muted);font-size:.74rem}
+[id="09-lab-2"] .c9l2-f .c9l2-r{font:700 .74rem var(--f-mono);white-space:nowrap}
+</style>
+<div class="btns" role="group" aria-label="Descripciones de ejemplo">
+  <button type="button" data-d="buena" aria-pressed="true">Buena</button>
+  <button type="button" data-d="vaga" aria-pressed="false">Vaga</button>
+  <button type="button" data-d="amplia" aria-pressed="false">Demasiado amplia</button>
+</div>
+<label class="c9l2-ed">Descripción de <code>consultar_factura</code> (puedes escribir la tuya)
+  <textarea id="c9l2-desc" rows="3"></textarea></label>
+<label class="c9l2-chk"><input type="checkbox" id="c9l2-big"><span>Catálogo grande: agregar 14 herramientas parecidas (facturas electrónicas, pagos, deuda, planes, órdenes…)</span></label>
+<div class="c9l2-kpis">
+  <div class="c9l2-k"><span>Aciertos</span><output id="c9l2-k1"></output></div>
+  <div class="c9l2-k"><span>Empates (duda)</span><output id="c9l2-k2"></output></div>
+  <div class="c9l2-k"><span>Sin herramienta</span><output id="c9l2-k3"></output></div>
+  <div class="c9l2-k"><span>Herramientas · tokens</span><output id="c9l2-k4"></output></div>
+</div>
+<div class="c9l2-lista" id="c9l2-lista" aria-label="Pedidos y herramienta elegida"></div>
+<div class="readout texto" id="c9l2-out" aria-live="polite"></div></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>Herramientas como funciones con contrato. El modelo propone una llamada con datos estructurados; el código valida, revisa permisos, ejecuta y devuelve el resultado, también cuando es un error. Cada herramienta tiene un nombre del negocio, una descripción que dice cuándo usarla y un esquema estricto, y una ficha en el registro con su riesgo, sus roles y su dueño. Las mejores herramientas no se escriben aparte: son los mismos slices de la aplicación, con una segunda puerta.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>En el ciclo de llamada a herramientas, ¿quién ejecuta la función y cómo se entera el modelo del resultado?</summary><p>La ejecuta el código de la aplicación, después de validar la llamada y los permisos. El resultado vuelve al modelo como un mensaje con el rol <code>tool</code> y el identificador de la llamada, en la siguiente vuelta.</p></details><details><summary>¿Por qué el ciclo necesita un tope de vueltas?</summary><p>Porque cada vuelta es una llamada completa al modelo, con costo y latencia, y un modelo confundido puede pedir herramientas una y otra vez sin llegar a una respuesta. Al llegar al tope, se escala a una persona.</p></details><details><summary>¿Qué información de una herramienta ve el modelo y cuál queda solo en el registro?</summary><p>El modelo ve el nombre, la descripción y el esquema de entrada. El registro guarda además la versión, el efecto, el riesgo, los roles, si pide aprobación, si es idempotente, los límites y el dueño.</p></details><details><summary>¿Por qué conviene exponer un slice existente como herramienta en vez de escribir una función nueva para la IA?</summary><p>Porque así las reglas de negocio viven en un solo lugar: la pantalla y el asistente pasan por el mismo manejador y la misma validación, y no aparecen dos formas de hacer lo mismo que validan distinto.</p></details><details><summary>La herramienta <code>consultar_factura</code> recibe un número que no existe. ¿Qué debería devolver y por qué?</summary><p>Un resultado normal con el error como dato (por ejemplo, <code>factura_no_existe</code> y una explicación), para que el modelo pida el número correcto o se lo diga a la persona, en lugar de una excepción que corta la conversación.</p></details><details><summary>¿Por qué <code>ejecutar_sql(consulta)</code> es una mala herramienta para un asistente?</summary><p>Porque traslada al modelo todo el poder y las reglas de negocio, permite cualquier consulta y convierte un texto malicioso en una orden con acceso a la base. Es mejor una acción del negocio con parámetros y permisos.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué es el parámetro <code>tool_choice</code> de las APIs de modelos y cuándo conviene obligar al modelo a usar una herramienta concreta?<small>Pista: busca «tool_choice required auto none».</small></li><li>¿Cómo se entrena un modelo para que produzca llamadas a herramientas con el formato correcto?<small>Pista: busca «function calling fine-tuning dataset».</small></li><li>¿Qué es la arquitectura hexagonal (puertos y adaptadores) y en qué se parece a darle dos puertas a un mismo slice?</li><li>¿Qué es OpenAPI y cómo se puede generar una lista de herramientas a partir de una especificación OpenAPI existente?</li><li>¿Qué es el <i>prompt caching</i> y por qué una lista de herramientas estable, en el mismo orden, puede abaratar las llamadas?</li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://docs.ollama.com/capabilities/tool-calling" target="_blank" rel="noopener">Llamadas a herramientas en Ollama <small>documentación oficial, en inglés</small></a><a class="vid" href="https://json-schema.org/understanding-json-schema/" target="_blank" rel="noopener">Understanding JSON Schema <small>guía oficial, en inglés</small></a><a class="vid" href="https://aaramirez.github.io/arneses/03-herramientas.html" target="_blank" rel="noopener">El runtime de herramientas, en Cómo construir un arnés <small>curso del sitio</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const root=document.querySelector('[id="09-lab-1"]');
+  const NOMBRE={agente:'Agente',codigo:'Asistente',modelo:'Modelo',sistema:'Sistemas'};
+  const SYS={role:'system',content:'Eres el asistente de los agentes de atención. Usa las herramientas para todo dato o monto; nunca inventes cifras. Hoy es martes 24 de noviembre de 2026.'};
+  const TOOLS=4, TOK_TOOL=120;
+  function tc(n,a){return {role:'assistant',content:'',tool_calls:[{id:'call_'+n,name:n,args:a}]};}
+  const C={
+    total:[
+      {a:'agente',b:'codigo',t:'«¿Cuánto paga la cuenta 20417 para reconectar?»',add:[SYS,{role:'user',content:'¿Cuánto paga la cuenta 20417 para reconectar?'}],e:'El asistente arma la conversación: las instrucciones de sistema y la pregunta del agente. Todavía no llamó al modelo.'},
+      {a:'codigo',b:'modelo',t:'Vuelta 1: mensajes + 4 definiciones de herramientas',v:1,e:'Con los mensajes viajan las definiciones de las herramientas que permite el rol del agente. El modelo ve nombres, descripciones y esquemas; nunca el código.'},
+      {a:'modelo',b:'codigo',t:'tool_calls: calcular_total_reconexion',add:[tc('calcular_total_reconexion',{cuenta:20417})],e:'El modelo no responde con texto: pide una herramienta con argumentos en JSON. El motivo de parada es «tool_calls».'},
+      {a:'codigo',b:'codigo',t:'¿Existe? ¿Cumple el esquema? ¿Tiene permiso? Efecto: lectura',e:'Antes de ejecutar, el código revisa la llamada contra el registro: la herramienta existe, «cuenta» es un entero, el rol puede usarla y es de lectura. Se ejecuta sola.'},
+      {a:'codigo',b:'sistema',t:'calcular_total_reconexion(cuenta=20417)',x:1,e:'El código llama al motor de tarifas. El modelo no participa en este paso.'},
+      {a:'sistema',b:'codigo',t:'{"facturas_vencidas": 1, "total": 35.00}',add:[{role:'tool',id:'call_calcular_total_reconexion',content:'{"cuenta": 20417, "facturas_vencidas": 1, "total": 35.00}'}],e:'El resultado entra a la conversación como un mensaje con el rol «tool» y el mismo identificador de la llamada.'},
+      {a:'codigo',b:'modelo',t:'Vuelta 2: todos los mensajes otra vez + el resultado',v:1,e:'La segunda vuelta manda de nuevo todo lo anterior. Por eso cada vuelta cuesta más tokens que la anterior.'},
+      {a:'modelo',b:'codigo',t:'Texto: «Hoy paga US$ 35,00…»',add:[{role:'assistant',content:'Hoy paga US$ 35,00: la factura vencida de US$ 30,00 más US$ 5,00 de reconexión.'}],e:'Ahora el modelo responde con texto y el motivo de parada es «stop». El monto lo copió del resultado de la herramienta: no lo calculó.'},
+      {a:'codigo',b:'agente',t:'Respuesta verificada + traza',e:'El validador comprueba que el monto del texto coincide con el de la herramienta y la respuesta llega al agente. La traza guarda las dos vueltas y la llamada.'}
+    ],
+    error:[
+      {a:'agente',b:'codigo',t:'«¿De cuánto es la factura F-8821?»',add:[SYS,{role:'user',content:'¿De cuánto es la factura F-8821?'}],e:'Al número le falta un dígito. El agente no lo notó.'},
+      {a:'codigo',b:'modelo',t:'Vuelta 1: mensajes + 4 definiciones',v:1,e:'Igual que siempre: los mensajes y las herramientas permitidas.'},
+      {a:'modelo',b:'codigo',t:'tool_calls: consultar_factura',add:[tc('consultar_factura',{numero:'F-8821'})],e:'El modelo pide la herramienta con el número tal como lo escribió el agente.'},
+      {a:'codigo',b:'codigo',t:'Esquema válido (es un texto); efecto: lectura',e:'El esquema pide un texto y recibió un texto: la llamada es válida. Que la factura exista lo sabe el sistema, no el esquema.'},
+      {a:'codigo',b:'sistema',t:'consultar_factura("F-8821")',x:1,e:'El sistema de facturación busca la factura.'},
+      {a:'sistema',b:'codigo',t:'{"error": "factura_no_existe", …}',add:[{role:'tool',id:'call_consultar_factura',content:'{"error": "factura_no_existe", "detalle": "No hay ninguna factura F-8821. Las facturas tienen cinco dígitos."}'}],e:'La herramienta no lanza una excepción: devuelve el error como dato, con una explicación que el modelo puede usar.'},
+      {a:'codigo',b:'modelo',t:'Vuelta 2: mensajes + el error',v:1,e:'El error viaja al modelo como cualquier otro resultado.'},
+      {a:'modelo',b:'codigo',t:'Texto: «No encuentro la factura F-8821…»',add:[{role:'assistant',content:'No encuentro la factura F-8821. ¿Puedes confirmar el número? Las facturas tienen cinco dígitos, como F-88213.'}],e:'Con el error como dato, el modelo pide el número correcto en lugar de inventar un monto.'},
+      {a:'codigo',b:'agente',t:'Pregunta de vuelta al agente',e:'Si la herramienta hubiera lanzado una excepción sin atrapar, el agente no habría recibido nada. Con el error como dato, la conversación sigue.'}
+    ],
+    paralelo:[
+      {a:'agente',b:'codigo',t:'«¿Cuánto debe la cuenta 20417 y en qué va el T-55190?»',add:[SYS,{role:'user',content:'¿Cuánto paga la cuenta 20417 para reconectar y en qué va su ticket T-55190?'}],e:'Una pregunta con dos datos independientes.'},
+      {a:'codigo',b:'modelo',t:'Vuelta 1: mensajes + 4 definiciones',v:1,e:'Los mensajes y las herramientas permitidas.'},
+      {a:'modelo',b:'codigo',t:'tool_calls: dos llamadas en el mismo turno',add:[{role:'assistant',content:'',tool_calls:[{id:'call_1',name:'calcular_total_reconexion',args:{cuenta:20417}},{id:'call_2',name:'estado_ticket',args:{ticket:'T-55190'}}]}],e:'El modelo pide las dos herramientas a la vez, cada una con su propio identificador.'},
+      {a:'codigo',b:'codigo',t:'Las dos son de lectura: se pueden ejecutar en paralelo',e:'Como ninguna cambia nada ni depende de la otra, el código las lanza al mismo tiempo. Dos escrituras irían una por una, en orden.'},
+      {a:'codigo',b:'sistema',t:'calcular_total_reconexion ‖ estado_ticket',x:2,e:'Dos sistemas responden en paralelo: el tiempo total es el de la más lenta, no la suma.'},
+      {a:'sistema',b:'codigo',t:'Dos resultados, uno por identificador',add:[{role:'tool',id:'call_1',content:'{"total": 35.00, "facturas_vencidas": 1}'},{role:'tool',id:'call_2',content:'{"ticket": "T-55190", "asunto": "cobro duplicado de US$ 30,00", "estado": "abierto"}'}],e:'Cada resultado lleva el identificador de su llamada, para que el modelo no los confunda.'},
+      {a:'codigo',b:'modelo',t:'Vuelta 2: todo + los dos resultados',v:1,e:'Una sola vuelta extra para los dos datos. Si el modelo los hubiera pedido de a uno, habrían sido tres vueltas.'},
+      {a:'modelo',b:'codigo',t:'Texto con los dos datos',add:[{role:'assistant',content:'Para reconectar paga US$ 35,00. Su ticket T-55190, por un cobro duplicado de US$ 30,00, sigue abierto.'}],e:'El modelo junta los dos resultados en una respuesta.'},
+      {a:'codigo',b:'agente',t:'Respuesta + traza con las dos llamadas',e:'Dos herramientas, dos vueltas al modelo.'}
+    ],
+    escritura:[
+      {a:'agente',b:'codigo',t:'«Mueve la visita de la 4471 al jueves en la tarde»',add:[SYS,{role:'user',content:'Mueve la visita de la orden 4471 al jueves en la tarde.'}],e:'Un pedido que cambia un sistema: es una escritura.'},
+      {a:'codigo',b:'modelo',t:'Vuelta 1: mensajes + 4 definiciones',v:1,e:'La fecha de hoy va en las instrucciones de sistema: así el modelo puede convertir «el jueves» en una fecha.'},
+      {a:'modelo',b:'codigo',t:'tool_calls: reprogramar_visita',add:[tc('reprogramar_visita',{orden:4471,fecha:'2026-11-26',franja:'tarde'})],e:'El modelo traduce «el jueves en la tarde» a una fecha canónica y a un valor de la enumeración.'},
+      {a:'codigo',b:'codigo',t:'Esquema válido · efecto: escritura · riesgo medio · pide aprobación',e:'El registro dice que esta herramienta escribe y que, por ahora, necesita la aprobación de la supervisora. El código no la ejecuta.'},
+      {a:'codigo',b:'codigo',t:'Se crea la solicitud de aprobación (capítulo 11)',e:'La llamada queda en la cola de aprobaciones con todos sus datos. Ningún sistema cambió todavía.'},
+      {a:'codigo',b:'codigo',t:'Resultado para el modelo: «pendiente de aprobación»',add:[{role:'tool',id:'call_reprogramar_visita',content:'{"estado": "pendiente_de_aprobacion", "detalle": "La supervisora debe aprobar el cambio. Avisaremos al agente cuando responda."}'}],e:'El modelo recibe un resultado honesto: la acción no se hizo, está pendiente.'},
+      {a:'codigo',b:'modelo',t:'Vuelta 2: todo + el estado pendiente',v:1,e:'El modelo redacta con lo que de verdad pasó.'},
+      {a:'modelo',b:'codigo',t:'Texto: «Pedí la reprogramación…»',add:[{role:'assistant',content:'Pedí mover la visita de la orden 4471 al jueves 26 en la tarde. Queda pendiente de la aprobación de la supervisora; te aviso cuando responda.'}],e:'El modelo no dice «listo»: dice «pedido y pendiente», porque eso es lo que devolvió la herramienta.'},
+      {a:'codigo',b:'agente',t:'Respuesta + solicitud de aprobación en la cola',e:'Herramientas ejecutadas: cero. En una escritura, el modelo propone y el registro decide si se hace, si espera o si se niega.'}
+    ]
+  };
+  let caso='total',paso=0;
+  function tokens(m){let s=m.content||'';if(m.tool_calls)s+=JSON.stringify(m.tool_calls);return Math.ceil(s.length/4)+4;}
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+  function linea(m){
+    if(m.tool_calls)return m.tool_calls.map(c=>'tool_call '+c.id+': '+c.name+'('+JSON.stringify(c.args)+')').join('<br>');
+    if(m.role==='tool')return 'tool_call_id '+m.id+': '+esc(m.content);
+    return esc(m.content);
+  }
+  function pintar(){
+    const pasos=C[caso];let msgs=[],vueltas=0,herr=0,tok=0,nuevos=0;
+    for(let i=0;i<paso;i++){const s=pasos[i];
+      if(s.add){msgs=msgs.concat(s.add);if(i===paso-1)nuevos=s.add.length;}
+      if(s.v){vueltas++;tok+=msgs.reduce((a,m)=>a+tokens(m),0)+TOOLS*TOK_TOOL;}
+      if(s.x)herr+=s.x;}
+    const s=paso>0?pasos[paso-1]:null;
+    root.querySelectorAll('.c9l1-a').forEach(el=>el.classList.toggle('on',!!s&&(el.dataset.k===s.a||el.dataset.k===s.b)));
+    $('#c9l1-fl').textContent=s?(s.a===s.b?NOMBRE[s.a]+': ':NOMBRE[s.a]+' → '+NOMBRE[s.b]+': ')+s.t:'Pulsa «Siguiente paso» para empezar.';
+    $('#c9l1-k1').textContent=paso+' de '+pasos.length;
+    $('#c9l1-k2').textContent=vueltas;$('#c9l1-k3').textContent=herr;$('#c9l1-k4').textContent=tok.toLocaleString('es');
+    $('#c9l1-msgs').innerHTML=msgs.length?msgs.map((m,i)=>'<li class="c9l1-m '+m.role+(i>=msgs.length-nuevos?' nuevo':'')+'"><b>'+m.role+'</b>'+linea(m)+'</li>').join(''):'<li class="c9l1-vacio">La lista de mensajes está vacía.</li>';
+    let h=s?'<span>'+s.e+'</span>':'<span>Cada caso muestra los mensajes que viajan al modelo, vuelta por vuelta.</span>';
+    if(paso===pasos.length){
+      h+='<span class="ok">Fin: '+vueltas+' vueltas al modelo, '+herr+(herr===1?' herramienta ejecutada':' herramientas ejecutadas')+' y unos '+tok.toLocaleString('es')+' tokens enviados en total.</span>';
+      if(caso==='escritura')h+='<span class="warn">La escritura no se ejecutó: espera a la supervisora.</span>';
+    }
+    $('#c9l1-out').innerHTML=h;
+    $('#c9l1-ant').disabled=paso===0;$('#c9l1-sig').disabled=paso===pasos.length;
+  }
+  root.querySelectorAll('[data-c]').forEach(b=>b.addEventListener('click',()=>{caso=b.dataset.c;paso=0;root.querySelectorAll('[data-c]').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));pintar();}));
+  $('#c9l1-sig').addEventListener('click',()=>{if(paso<C[caso].length){paso++;pintar();}});
+  $('#c9l1-ant').addEventListener('click',()=>{if(paso>0){paso--;pintar();}});
+  $('#c9l1-rei').addEventListener('click',()=>{paso=0;pintar();});
+  pintar();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const root=document.querySelector('[id="09-lab-2"]');
+  const STOP=new Set('el la los las un una unos unas de del al a en y o que por para con sin se su sus es son lo le les me mi cual como hay este esta ese esa sigue va debe mas cuando usala'.split(' '));
+  function stems(s){return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').split(/[^a-z0-9#]+/).filter(w=>w.length>2&&!STOP.has(w)&&!/^\d+$/.test(w)).map(w=>w.slice(0,5));}
+  const DESC={
+    buena:'Devuelve el mes, el monto, el estado (pagada o vencida) y la cuenta de una factura. Úsala cuando pregunten por una factura concreta, por ejemplo F-88213, o por cuánto fue.',
+    vaga:'Consulta datos.',
+    amplia:'Úsala para cualquier pregunta sobre la cuenta del cliente: facturas, pagos, montos, tickets, reclamos, visitas, órdenes, planes y políticas.'
+  };
+  const BASE=[
+    ['consultar_factura',null],
+    ['calcular_total_reconexion','Calcula cuánto debe pagar una cuenta para reconectar el servicio: facturas vencidas más el cargo de reconexión.'],
+    ['estado_ticket','Devuelve el asunto y el estado de un ticket o reclamo, abierto o cerrado (T-#####).'],
+    ['reprogramar_visita','Cambia el día o la franja (mañana o tarde) de la visita técnica de una orden de trabajo.'],
+    ['buscar_cliente','Busca un cliente por su nombre o documento y devuelve su número de cuenta.'],
+    ['buscar_en_manuales','Busca en los manuales y las políticas de la empresa y devuelve fragmentos con su fuente.']
+  ];
+  const EXTRA=[
+    ['consultar_factura_electronica','Devuelve el PDF de la factura electrónica de un mes.'],
+    ['consultar_pagos','Lista los pagos de una cuenta con su fecha y su monto.'],
+    ['estado_cuenta','Devuelve el estado de la cuenta: activa, suspendida o cortada.'],
+    ['crear_ticket','Crea un ticket de reclamo nuevo.'],
+    ['cerrar_ticket','Cierra un ticket resuelto.'],
+    ['buscar_orden','Busca las órdenes de trabajo de una cuenta.'],
+    ['cancelar_visita','Cancela la visita técnica de una orden.'],
+    ['consultar_plan','Devuelve el plan y la tarifa mensual de una cuenta.'],
+    ['cambiar_plan','Cambia el plan de una cuenta.'],
+    ['buscar_tecnico','Busca el técnico asignado a una zona.'],
+    ['enviar_factura_correo','Envía por correo el PDF de una factura.'],
+    ['consultar_deuda','Devuelve la deuda total de una cuenta.'],
+    ['historial_cliente','Devuelve el historial de contactos de un cliente.'],
+    ['buscar_documento','Busca un documento por su título.']
+  ];
+  const PED=[
+    ['¿De cuánto fue la factura F-88213?','consultar_factura'],
+    ['¿La factura de octubre de Carmen está pagada o vencida?','consultar_factura'],
+    ['¿Qué mes cubre la factura F-88214?','consultar_factura'],
+    ['¿Cuál es el monto de la factura F-88215?','consultar_factura'],
+    ['¿Cuánto debe pagar la cuenta 20417 para que la reconecten?','calcular_total_reconexion'],
+    ['¿En qué estado está el ticket T-55190?','estado_ticket'],
+    ['¿El reclamo de Ana Gómez sigue abierto?','estado_ticket'],
+    ['Mueve la visita de la orden 4471 al jueves en la tarde','reprogramar_visita'],
+    ['¿Cuál es el número de cuenta de Luis Pérez?','buscar_cliente'],
+    ['¿Qué dice la política de reembolsos?','buscar_en_manuales']
+  ];
+  function elegir(p,tools){
+    const q=new Set(stems(p));
+    const sc=tools.map(([n,d])=>{const t=new Set(stems(n.replace(/_/g,' ')+' '+d));let s=0;q.forEach(w=>{if(t.has(w))s++;});return [n,s];}).sort((a,b)=>b[1]-a[1]);
+    if(sc[0][1]===0)return {c:'ninguna',sc};
+    if(sc[1][1]===sc[0][1])return {c:'empate',sc};
+    return {c:sc[0][0],sc};
+  }
+  function pintar(){
+    const desc=$('#c9l2-desc').value.trim()||'(sin descripción)';
+    const big=$('#c9l2-big').checked;
+    const tools=BASE.map(([n,d])=>[n,d||desc]).concat(big?EXTRA:[]);
+    let ok=0,emp=0,nin=0,robos=0,cfMal=0;
+    const filas=PED.map(([p,e])=>{const r=elegir(p,tools);const bien=r.c===e;
+      if(bien)ok++;if(r.c==='empate')emp++;if(r.c==='ninguna')nin++;
+      if(!bien&&r.c==='consultar_factura')robos++;if(!bien&&e==='consultar_factura')cfMal++;
+      let txt=r.c==='empate'?'empate: '+r.sc.filter(x=>x[1]===r.sc[0][1]).map(x=>x[0]).join(' o '):r.c==='ninguna'?'ninguna: responde sin datos':r.c;
+      return '<div class="c9l2-f '+(bien?'ok':'mal')+'"><span>'+p+'</span><span class="c9l2-r">'+(bien?'✓':'✗')+'</span><span class="c9l2-s">elige <code>'+txt+'</code>'+(bien?'':' · correcta: <code>'+e+'</code>')+'</span></div>';});
+    const tok=tools.reduce((a,[n,d])=>a+Math.ceil((n.length+d.length)/4)+45,0);
+    $('#c9l2-lista').innerHTML=filas.join('');
+    $('#c9l2-k1').textContent=ok+' de 10';$('#c9l2-k2').textContent=emp;$('#c9l2-k3').textContent=nin;
+    $('#c9l2-k4').textContent=tools.length+' · '+tok.toLocaleString('es');
+    let h='';
+    if(cfMal)h+='<span class="warn">'+cfMal+(cfMal===1?' pregunta sobre una factura no llegó':' preguntas sobre facturas no llegaron')+' a consultar_factura: la descripción no tiene las palabras con que preguntan los agentes (mes, monto, pagada, vencida).</span>';
+    if(robos)h+='<span class="warn">consultar_factura se quedó con '+robos+(robos===1?' pedido que era':' pedidos que eran')+' de otra herramienta: una descripción demasiado amplia compite con todas.</span>';
+    if(emp)h+='<span>'+emp+(emp===1?' pedido quedó':' pedidos quedaron')+' en empate: un modelo real elegiría una de las dos casi al azar.</span>';
+    if(big)h+='<span>El catálogo grande agrega herramientas con nombres parecidos (consultar_factura_electronica, consultar_pagos) y suma tokens en cada llamada, aunque no se usen.</span>';
+    if(ok===10)h+='<span class="ok">Las diez elecciones son correctas con este catálogo.</span>';
+    h+='<span>Simulación simplificada: un modelo real entiende sinónimos y contexto, pero falla por las mismas causas (descripciones vagas, que se pisan o catálogos grandes).</span>';
+    $('#c9l2-out').innerHTML=h;
+  }
+  root.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('click',()=>{$('#c9l2-desc').value=DESC[b.dataset.d];root.querySelectorAll('[data-d]').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));pintar();}));
+  $('#c9l2-desc').addEventListener('input',()=>{root.querySelectorAll('[data-d]').forEach(x=>x.setAttribute('aria-pressed','false'));pintar();});
+  $('#c9l2-big').addEventListener('change',pintar);
+  $('#c9l2-desc').value=DESC.buena;
+  pintar();
+})();
+</script>
+</body>
+</html>

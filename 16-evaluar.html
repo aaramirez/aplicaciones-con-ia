@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Evaluar una aplicación · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="evaluar">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 16 DE 20</span><h1>Evaluar una aplicación con IA</h1><p class="lede">Un cambio de una línea en el prompt puede mejorar diez respuestas y arruinar otras treinta sin que nadie lo note. Este capítulo arma la batería de evaluación del asistente de atención: el conjunto dorado de casos reales y difíciles, las métricas que importan, los jueces (personas, reglas y un modelo calibrado) y la compuerta que no deja publicar un cambio que empeora algo.</p></header>
+<section><div class="prose"><p>Un jueves, Mateo abrió un cambio pequeño: la plantilla <code>respuesta-agente@v5</code>. Los agentes decían que el asistente sonaba seco, y la versión nueva le pedía «ser cálido y resolutivo, porque el agente siempre necesita una respuesta útil». Probó cinco preguntas en su computadora. Las cinco respuestas eran mejores: más amables, igual de correctas. Iba a publicarla esa tarde.</p><p>Lucía le pidió que corriera antes la batería. Tardó ocho minutos. Las preguntas de tarifas subieron un punto, pero la <b>abstención correcta</b>, las veces que el asistente dice «no lo encontré en los manuales» cuando de verdad no está, cayó de 92 % a 70 %. La palabra «siempre» había convencido al modelo de responder también cuando no tenía evidencia. Con la v5, el asistente inventaba la penalidad por cancelar un contrato con la misma amabilidad con que citaba la tarifa de reconexión.</p></div></section>
+<section><h2>Por qué «se ve bien» no es una evaluación</h2><div class="analogia"><b>Imagínalo así</b><p>Un restaurante no decide cambiar la receta de la sopa porque el chef la probó y le gustó. Antes de cambiarla, la prueban varias personas, con platos servidos a la temperatura de siempre, a la hora de más pedidos, y alguien revisa que siga cumpliendo las reglas de alérgenos. El chef sabe cocinar; lo que no sabe es cómo le va a caer la sopa nueva a cien comensales distintos.</p></div><div class="prose"><p>Revisar unas pocas respuestas a ojo tiene nombre en la jerga: la <b>prueba de la impresión</b> (<i>vibe check</i>). Sirve para explorar una idea, pero tiene tres defectos que la hacen inútil para decidir:</p><ul><li><b>Elige los casos fáciles.</b> Quien prueba su propio cambio piensa en las preguntas que el cambio quería mejorar, no en las que puede romper.</li><li><b>No compara.</b> Sin la versión anterior corriendo sobre los mismos casos, «está mejor» es una sensación, no una medición.</li><li><b>No se repite.</b> El próximo cambio se probará con otras cinco preguntas, y nadie sabrá si la calidad sube o baja con el tiempo.</li></ul><p>Una <b>evaluación</b> (<i>evaluation</i>, en la jerga <i>eval</i>) es lo contrario: un conjunto fijo de casos, con lo que se espera de cada uno, corrido de forma automática contra cada versión, con métricas que se comparan contra la versión publicada. En una aplicación con modelos de lenguaje es todavía más necesaria que en el software clásico, porque los cambios no se ven en el código. Cambiar una palabra del prompt, la versión del modelo o el número de fragmentos que entran al contexto puede cambiar cientos de respuestas, y ninguna prueba unitaria lo detecta. El patrón de este capítulo es <b>evaluación primero</b> (<i>eval-first</i>): ningún cambio sin su batería.</p></div></section>
+<section><h2>El conjunto dorado: casos reales, difíciles y de borde</h2><div class="prose"><p>La base de toda evaluación es el <b>conjunto dorado</b> (<i>golden set</i>): una lista de casos, cada uno con la entrada y lo que se espera a la salida, revisada por quien sabe del negocio. El del asistente nació en el capítulo 8 con las 120 preguntas de la jefa de reclamos y fue creciendo con cada versión.</p></div><div class="analogia"><b>Imagínalo así</b><p>El examen de manejo no se toma en un estacionamiento vacío. Tiene una ruta fija con lo que más falla en la vida real: estacionar en paralelo, una rotonda, un cruce sin semáforo, una calle con niños. Y la ruta es la misma para todos, así que dos examinadores pueden comparar a dos alumnos. El conjunto dorado es esa ruta.</p></div><div class="prose"><p>Los casos salen de cuatro fuentes:</p><ol class="steps"><li><span><b>Casos reales.</b> Tickets y consultas de producción, con los datos personales reemplazados por datos de prueba. Son los que más se parecen a lo que el asistente va a ver.</span></li><li><span><b>Casos difíciles.</b> Consultas mixtas («me cobraron dos veces y además no tengo servicio»), preguntas ambiguas, documentos que se contradicen y la trampa de la política de reconexión retirada de 2024.</span></li><li><span><b>Casos de borde</b> (<i>edge cases</i>). Preguntas cuya respuesta no está en los manuales (para medir la abstención), montos en el límite de una regla (un reembolso de exactamente US$ 10,00), textos vacíos o enormes, y correos con instrucciones escondidas.</span></li><li><span><b>Fallas de producción.</b> Cada vez que el asistente se equivoca con un agente, el caso entra al conjunto con su respuesta correcta. Así el mismo error no vuelve dos veces sin que nadie lo vea.</span></li></ol><p>Un caso del conjunto dorado es un dato con esquema, versionado como el código:</p><div class="code-copia"><pre><code>{"id": "tarifa-017", "tipo": "pregunta", "estrato": "tarifas",
+ "entrada": "Carmen pide la reconexión con la factura F-88213 vencida, ¿cuánto paga?",
+ "contexto_cliente": {"cuenta": 20417},
+ "esperado": {"monto": 35.00, "fuentes": ["politica-reconexion-2026"], "abstiene": false},
+ "critico": true, "autor": "jefa-reclamos", "desde": "v0.6"}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Tres reglas cuidan el conjunto. Se <b>estratifica</b>: hay casos de cada tipo en una proporción decidida (si el 90 % son preguntas de tarifas, una caída grave en la clasificación se pierde en el promedio). Se <b>marcan los casos críticos</b>, los que no pueden fallar nunca, como los montos y los reembolsos. Y se <b>separa de los ejemplos de las plantillas</b>: si un caso del conjunto aparece como ejemplo dentro del prompt, el asistente lo «sabe de memoria» y la evaluación miente; a eso se le llama <b>contaminación</b> (<i>contamination</i>).</p></div><figure class="fig fig-esquema" id="16-diagrama-1"><div class="lienzo"><svg viewBox="0 0 880 352" style="min-width:680px" role="img" aria-label="El conjunto dorado de 300 casos partido en estratos: 120 de tarifas y políticas, 60 de clasificación de tickets, 30 sin respuesta para medir la abstención, 40 de herramientas, 20 escenarios del agente y 30 difíciles y de ataque; 25 casos críticos marcados; abajo, las cuatro fuentes de casos y quién los revisa.">
+<text x="30" y="30" class="t t-xs t-b t-m">300 CASOS · dorado-v7 · versionado junto al código</text>
+<rect x="30.0" y="48" width="328.0" height="54" class="c-enl"/>
+<text x="194" y="81" class="t t-b k-enl" text-anchor="middle" style="font-size:15px">120</text>
+<path d="M57.3 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M112.0 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M166.7 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M221.3 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M276.0 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M330.7 112 l5 9 h-10 z" class="k-warm"/>
+
+<text x="194" y="140" class="t t-s" text-anchor="middle">Tarifas y políticas</text>
+<rect x="358.0" y="48" width="164.0" height="54" class="c-fis"/>
+<text x="440" y="81" class="t t-b k-fis" text-anchor="middle" style="font-size:15px">60</text>
+<path d="M378.5 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M419.5 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M460.5 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M501.5 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M440.0 122 V145" class="ln"/>
+<text x="440" y="156" class="t t-s" text-anchor="middle">Clasificación</text>
+<rect x="522.0" y="48" width="82.0" height="54" class="c-enl"/>
+<text x="563" y="81" class="t t-b k-enl" text-anchor="middle" style="font-size:15px">30</text>
+<path d="M535.7 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M563.0 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M590.3 112 l5 9 h-10 z" class="k-warm"/>
+
+<text x="563" y="140" class="t t-s" text-anchor="middle">Abstención</text>
+<rect x="604.0" y="48" width="109.3" height="54" class="c-red"/>
+<text x="659" y="81" class="t t-b k-red" text-anchor="middle" style="font-size:15px">40</text>
+<path d="M613.1 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M631.3 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M649.6 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M667.8 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M686.0 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M704.2 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M658.7 122 V145" class="ln"/>
+<text x="659" y="156" class="t t-s" text-anchor="middle">Herramientas</text>
+<rect x="713.3" y="48" width="54.7" height="54" class="c-tra"/>
+<text x="741" y="81" class="t t-b k-tra" text-anchor="middle" style="font-size:15px">20</text>
+<path d="M727.0 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M754.3 112 l5 9 h-10 z" class="k-warm"/>
+
+<text x="741" y="140" class="t t-s" text-anchor="middle">Agente</text>
+<rect x="768.0" y="48" width="82.0" height="54" class="d-inet"/>
+<text x="809" y="81" class="t t-b k-inet" text-anchor="middle" style="font-size:15px">30</text>
+<path d="M778.2 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M798.8 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M819.2 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M839.8 112 l5 9 h-10 z" class="k-warm"/>
+<path d="M809.0 122 V145" class="ln"/>
+<text x="809" y="156" class="t t-s" text-anchor="middle">Difíciles y ataques</text>
+<path d="M36 172 l5 9 h-10 z" class="k-warm"/>
+<text x="48" y="181" class="t t-s">25 casos críticos: montos, reembolsos y avisos masivos; deben pasar el 100 %</text>
+<text x="30" y="210" class="t t-xs t-b t-m">DE DÓNDE SALEN LOS CASOS Y QUIÉN LOS REVISA</text>
+<rect x="30" y="222" width="194" height="116" rx="10" class="caja"/>
+<text x="42" y="246" class="t t-b" style="font-size:13px">Reales</text>
+<text x="42" y="266" class="t t-s">tickets de producción</text>
+<text x="42" y="281" class="t t-s">con datos de prueba</text>
+<text x="42" y="326" class="t t-s t-m">revisa: jefa de reclamos</text>
+<rect x="238" y="222" width="194" height="116" rx="10" class="caja"/>
+<text x="250" y="246" class="t t-b" style="font-size:13px">Difíciles</text>
+<text x="250" y="266" class="t t-s">consultas mixtas, documentos</text>
+<text x="250" y="281" class="t t-s">contradictorios,</text>
+<text x="250" y="296" class="t t-s">la trampa de 2024</text>
+<text x="250" y="326" class="t t-s t-m">escriben: equipo y agentes</text>
+<rect x="447" y="222" width="194" height="116" rx="10" class="caja"/>
+<text x="459" y="246" class="t t-b" style="font-size:13px">De borde</text>
+<text x="459" y="266" class="t t-s">sin respuesta, montos límite,</text>
+<text x="459" y="281" class="t t-s">textos vacíos,</text>
+<text x="459" y="296" class="t t-s">órdenes escondidas</text>
+<text x="459" y="326" class="t t-s t-m">escribe: el equipo</text>
+<rect x="656" y="222" width="194" height="116" rx="10" class="caja"/>
+<text x="668" y="246" class="t t-b" style="font-size:13px">Fallas de producción</text>
+<text x="668" y="266" class="t t-s">cada error confirmado</text>
+<text x="668" y="281" class="t t-s">en la revisión semanal</text>
+<text x="668" y="326" class="t t-s t-m">entra con su respuesta</text>
+</svg></div><figcaption><b>El conjunto dorado de la v1.0.</b> La barra de arriba son los 300 casos, partidos por estrato con el color del nivel que evalúan: 120 preguntas de tarifas y políticas y 30 preguntas sin respuesta para medir la abstención (nivel 2, el RAG completo), 60 tickets para clasificar (nivel 1), 40 pedidos con su herramienta correcta (nivel 3), 20 escenarios del agente de avería masiva (nivel 4) y, en gris, 30 casos difíciles y de ataque que cruzan todos los niveles. Los triángulos de abajo señalan los 25 casos críticos, repartidos entre los estratos. Debajo, las cuatro fuentes de los casos (reales, difíciles, de borde y fallas de producción) y quién revisa cada una.</figcaption></figure><div class="prose"><p>¿Cuántos casos hacen falta? No hay un número mágico. Con 30 casos por estrato, una caída de 10 puntos ya se ve con claridad; una diferencia de 2 puntos necesita cientos. La regla práctica es empezar con 50 a 100 casos bien elegidos, que ya es mucho mejor que cinco a ojo, y hacerlo crecer con las fallas de producción.</p></div></section>
+<section><h2>Métricas: exactitud, fidelidad a la fuente, validez de estructura y éxito de herramientas</h2><div class="prose"><p>Una métrica es una pregunta que se responde con un número sobre todo el conjunto. El asistente usa cinco familias, y cada una mide un modo de fallar distinto:</p><div class="tbl"><table><thead><tr><th>Métrica</th><th>Qué pregunta</th><th>Cómo se mide en el asistente</th></tr></thead><tbody><tr><td><b>Exactitud</b> (<i>accuracy</i>)</td><td>¿La respuesta es la esperada?</td><td>Monto, categoría o dato igual al esperado, por regla; texto libre, por un juez</td></tr><tr><td><b>Fidelidad a la fuente</b> (<i>faithfulness</i>)</td><td>¿Cada afirmación está respaldada por lo que se citó?</td><td>Reglas (montos y fechas presentes en los fragmentos) y un juez calibrado</td></tr><tr><td><b>Abstención correcta</b></td><td>¿Dice «no lo sé» cuando no hay evidencia, y solo entonces?</td><td>Casos sin respuesta en los manuales y casos con respuesta</td></tr><tr><td><b>Validez de estructura</b></td><td>¿El JSON cumple el esquema y las reglas de negocio?</td><td>Validador del capítulo 5, sin modelo</td></tr><tr><td><b>Éxito de herramientas</b></td><td>¿Eligió la herramienta correcta, con los argumentos correctos, y el resultado fue el esperado?</td><td>Pedidos del capítulo 9, ejecutados en modo simulación (capítulo 11)</td></tr></tbody></table></div><p>La abstención merece una nota: tiene dos errores opuestos, y conviene contarlos por separado. <b>Responder sin evidencia</b> es una alucinación, el error caro. <b>Abstenerse con evidencia</b> es una abstención innecesaria, un error molesto que hace que los agentes dejen de usar el asistente. Una plantilla puede bajar uno subiendo el otro; el promedio lo esconde.</p><p>Para el agente del capítulo 13 se agregan métricas de tarea: si llegó al objetivo, cuántos pasos usó, cuánto costó y si se detuvo en los puntos de control. En la avería de la zona Norte, el escenario espera el incidente maestro creado antes de cualquier aviso, el aviso masivo en espera de aprobación y las 23 visitas como tarea para coordinación de campo, dentro de 30 pasos y US$ 0,50.</p><p>Y junto a la calidad se registran el <b>costo por caso</b> y la <b>latencia</b>, porque un cambio que mejora un punto y duplica el costo también es una decisión. La batería no evalúa solo si el asistente acierta: evalúa si sigue siendo el producto que se decidió construir.</p></div></section>
+<section><h2>Jueces: personas, reglas y un modelo como juez</h2><div class="prose"><p>Alguien tiene que decidir si cada respuesta pasa. Ese alguien es el <b>juez</b> (<i>grader</i>), y hay tres tipos que se combinan.</p></div><div class="analogia"><b>Imagínalo así</b><p>En un concurso de clavados hay un cronómetro, una cámara y un panel de jueces. El cronómetro y la cámara deciden lo que se puede medir sin opinión: el tiempo, si el pie tocó la línea. Los jueces califican lo que necesita criterio: la limpieza de la entrada al agua. Y se descarta la nota más alta y la más baja, porque se sabe que los jueces humanos también tienen sesgos.</p></div><div class="prose"><p><b>Las reglas</b> son código: el monto es igual al esperado, la categoría está en la lista, el JSON cumple el esquema, la cita existe en el documento, la herramienta es <code>registrar_reembolso</code>. Cuestan casi nada, son repetibles y no se equivocan en lo que miden. Su límite es que solo miden lo que se puede comprobar con exactitud. En el asistente, más de la mitad de la batería se decide por reglas, y esa es una buena señal de diseño: las salidas estructuradas del capítulo 5 hicieron evaluable lo que antes era prosa.</p><p><b>Las personas</b> son la referencia: la jefa de reclamos y dos agentes, con una <b>rúbrica</b> (<i>rubric</i>), la lista escrita de criterios y de qué cuenta como pasa o no pasa. Son lentas y caras, y tampoco están siempre de acuerdo entre ellas: medir cuánto coinciden dos personas sobre los mismos casos dice cuál es el techo realista para cualquier juez automático.</p><p><b>El modelo como juez</b> (<i>LLM-as-a-judge</i>) es un modelo que recibe la pregunta, la respuesta, la rúbrica y, si existe, la respuesta de referencia, y devuelve un veredicto con su justificación. Escala como las reglas y entiende matices como las personas. También tiene sesgos conocidos:</p><ul><li><b>De verbosidad</b>: prefiere las respuestas largas aunque no sean mejores.</li><li><b>De posición</b>: al comparar dos respuestas, tiende a preferir la primera que lee.</li><li><b>De autopreferencia</b>: favorece las respuestas de su propia familia de modelos.</li><li><b>De complacencia</b>: si no tiene criterios claros, aprueba casi todo lo que suena bien.</li></ul><p>Las defensas son prácticas: veredictos binarios (pasa o no pasa) en lugar de notas de 1 a 10, que nadie usa igual; una rúbrica con criterios concretos y ejemplos; la justificación antes del veredicto; la respuesta de referencia cuando existe; un modelo de otra familia que el evaluado; y, en las comparaciones, correr dos veces con el orden invertido.</p><p>Lo que no es opcional es <b>calibrar</b> el juez: se toman unos cien casos ya calificados por personas, se corre el juez y se mide el <b>acuerdo</b> (<i>agreement</i>), la fracción de casos en que coinciden. El número que más importa son los <b>falsos aprobados</b>: respuestas que la persona reprobó y el juez dejó pasar, porque son los errores que llegarían a producción con el sello de «evaluado». Un juez se usa en la batería solo donde su acuerdo con las personas es parecido al de dos personas entre sí, y se vuelve a calibrar cada vez que cambia su modelo o su rúbrica.</p></div><figure class="fig fig-comparacion" id="16-diagrama-3"><div class="lienzo"><svg viewBox="0 0 900 440" style="min-width:700px" role="img" aria-label="Comparación de tres jueces: reglas en código, personas y modelo como juez, en qué miden, costo, tiempo, repetibilidad, sesgos y uso en el asistente. Conclusión: reglas para lo exacto, modelo calibrado para el texto libre, personas para calibrar y revisar una muestra.">
+<rect x="190" y="20" width="240" height="36" rx="8" class="d-casa"/>
+<text x="310" y="43" class="t t-b" text-anchor="middle" style="font-size:13px">Reglas (código)</text>
+<rect x="440" y="20" width="240" height="36" rx="8" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="560" y="43" class="t t-b k-warm" text-anchor="middle" style="font-size:13px">Personas</text>
+<rect x="690" y="20" width="240" height="36" rx="8" class="c-tra"/>
+<text x="810" y="43" class="t t-b" text-anchor="middle" style="font-size:13px">Modelo como juez</text>
+<line x1="20" y1="64" x2="880" y2="64" class="ln" style="stroke:var(--line)"/>
+<text x="20" y="92" class="t t-b" style="font-size:12px">Qué miden</text>
+<text x="200" y="86" class="t t-s">lo exacto: monto, categoría,</text>
+<text x="200" y="102" class="t t-s">esquema, cita, herramienta</text>
+<text x="450" y="86" class="t t-s">todo, con criterio:</text>
+<text x="450" y="102" class="t t-s">es la referencia</text>
+<text x="700" y="86" class="t t-s">texto libre: fidelidad,</text>
+<text x="700" y="102" class="t t-s">tono, si responde lo pedido</text>
+<line x1="20" y1="116" x2="880" y2="116" class="ln" style="stroke:var(--line)"/>
+<text x="20" y="144" class="t t-b" style="font-size:12px">Costo por caso</text>
+<text x="200" y="146" class="t t-s">casi cero</text>
+<text x="450" y="146" class="t t-s">alto: minutos de una persona</text>
+<text x="700" y="146" class="t t-s">bajo: una llamada</text>
+<line x1="20" y1="168" x2="880" y2="168" class="ln" style="stroke:var(--line)"/>
+<text x="20" y="196" class="t t-b" style="font-size:12px">Tiempo</text>
+<text x="200" y="198" class="t t-s">milisegundos</text>
+<text x="450" y="198" class="t t-s">días</text>
+<text x="700" y="198" class="t t-s">segundos</text>
+<line x1="20" y1="220" x2="880" y2="220" class="ln" style="stroke:var(--line)"/>
+<text x="20" y="248" class="t t-b" style="font-size:12px">¿Mismo resultado?</text>
+<text x="200" y="250" class="t t-s">siempre</text>
+<text x="450" y="242" class="t t-s">no del todo: dos personas</text>
+<text x="450" y="258" class="t t-s">coinciden en ~93 %</text>
+<text x="700" y="242" class="t t-s">casi, con temperatura 0</text>
+<text x="700" y="258" class="t t-s">y la misma versión</text>
+<line x1="20" y1="272" x2="880" y2="272" class="ln" style="stroke:var(--line)"/>
+<text x="20" y="300" class="t t-b" style="font-size:12px">Sesgos</text>
+<text x="200" y="294" class="t t-s">ninguno, pero solo ven</text>
+<text x="200" y="310" class="t t-s">lo que se programó</text>
+<text x="450" y="302" class="t t-s">cansancio, criterio propio</text>
+<text x="700" y="294" class="t t-s">verbosidad, posición,</text>
+<text x="700" y="310" class="t t-s">autopreferencia, complacencia</text>
+<line x1="20" y1="324" x2="880" y2="324" class="ln" style="stroke:var(--line)"/>
+<text x="20" y="352" class="t t-b" style="font-size:12px">En el asistente</text>
+<text x="200" y="354" class="t t-s">60 % de la batería</text>
+<text x="450" y="346" class="t t-s">calibran al juez y revisan</text>
+<text x="450" y="362" class="t t-s">una muestra semanal</text>
+<text x="700" y="346" class="t t-s">40 % de la batería,</text>
+<text x="700" y="362" class="t t-s">calibrado con 100 casos</text>
+<rect x="20" y="384" width="860" height="44" rx="8" class="caja" style="stroke-dasharray:5 3"/>
+<text x="34" y="411" class="t t-b" style="font-size:12px">La combinación: reglas para todo lo exacto, un modelo calibrado para el texto libre y personas para calibrarlo.</text>
+</svg></div><figcaption><b>Tres jueces, tres usos.</b> Las columnas son las reglas, las personas y el modelo como juez. Las filas comparan qué miden, cuánto cuesta cada caso, cuánto tardan, si dan siempre el mismo resultado, qué sesgos tienen y dónde se usan en el asistente. La última fila resume la combinación: reglas para todo lo exacto, un modelo calibrado para el texto libre y personas para calibrar al modelo y revisar una muestra.</figcaption></figure><div class="lab" id="16-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Calibra un juez</h3></div><p class="hint">Veinte respuestas del asistente, ya calificadas por la jefa de reclamos. Elige cómo le preguntas al modelo juez (sin rúbrica, con rúbrica o con rúbrica y respuesta de referencia) y mueve el puntaje mínimo para aprobar. Mira la tabla de acuerdo, los falsos aprobados y en qué respuestas discrepan el juez y la persona.</p><style>
+[id="16-lab-2"] .c16l2-g{display:grid;gap:4px}
+[id="16-lab-2"] .c16l2-g>span{font:700 .72rem var(--f-display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+[id="16-lab-2"] .c16l2-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:10px}
+[id="16-lab-2"] .c16l2-mat{border-collapse:collapse;font:600 .8rem var(--f-display);color:var(--ink)}
+[id="16-lab-2"] .c16l2-mat th,[id="16-lab-2"] .c16l2-mat td{border:1px solid var(--line);padding:6px 9px;text-align:center}
+[id="16-lab-2"] .c16l2-mat th{color:var(--muted);font-size:.72rem}
+[id="16-lab-2"] .c16l2-mat td.ok{background:var(--good-soft);color:var(--good)}
+[id="16-lab-2"] .c16l2-mat td.fa{background:var(--warm-soft);color:var(--warm)}
+[id="16-lab-2"] .c16l2-mat td.fr{background:var(--paper);color:var(--muted)}
+[id="16-lab-2"] .c16l2-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,118px),1fr));gap:8px;align-content:start}
+[id="16-lab-2"] .c16l2-k{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--paper)}
+[id="16-lab-2"] .c16l2-k span{display:block;font:600 .72rem var(--f-display);color:var(--muted)}
+[id="16-lab-2"] .c16l2-k output{font:700 1.1rem var(--f-mono);color:var(--ink)}
+[id="16-lab-2"] .c16l2-k.mal output{color:var(--warm)}
+[id="16-lab-2"] .c16l2-lista{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:5px}
+[id="16-lab-2"] .c16l2-r{display:grid;grid-template-columns:1.5rem minmax(0,1fr) auto;gap:2px 7px;align-items:center;border:1px solid var(--line);border-left-width:5px;border-radius:8px;padding:5px 8px;background:var(--card);font:500 .76rem/1.3 var(--f-display);color:var(--ink)}
+[id="16-lab-2"] .c16l2-r b.n{font:700 .72rem var(--f-mono);color:var(--muted)}
+[id="16-lab-2"] .c16l2-r small{grid-column:2/-1;color:var(--muted);font-size:.7rem}
+[id="16-lab-2"] .c16l2-r .s{font:700 .74rem var(--f-mono)}
+[id="16-lab-2"] .c16l2-r.ok{border-left-color:var(--good)}
+[id="16-lab-2"] .c16l2-r.fa{border-left-color:var(--warm);background:var(--warm-soft)}
+[id="16-lab-2"] .c16l2-r.fr{border-left-color:var(--muted);background:var(--paper)}
+</style>
+<div class="c16l2-g"><span>Cómo le preguntas al juez</span>
+<div class="btns" role="group" aria-label="Instrucciones del juez">
+  <button type="button" data-m="sin" aria-pressed="true">Sin rúbrica: «¿es buena?»</button>
+  <button type="button" data-m="rub" aria-pressed="false">Con rúbrica</button>
+  <button type="button" data-m="ref" aria-pressed="false">Rúbrica y respuesta de referencia</button>
+</div></div>
+<div class="ctls">
+  <label class="ctl">Puntaje mínimo para aprobar (de 10) <output id="c16l2-uo">7,0</output>
+    <input type="range" id="c16l2-u" min="4" max="9.5" step="0.5" value="7" aria-label="Puntaje mínimo para aprobar"></label>
+</div>
+<div class="c16l2-top">
+  <table class="c16l2-mat" aria-label="Tabla de acuerdo entre la persona y el juez">
+    <thead><tr><th></th><th>Juez: pasa</th><th>Juez: no pasa</th></tr></thead>
+    <tbody>
+      <tr><th>Persona: pasa</th><td class="ok" id="c16l2-pp">0</td><td class="fr" id="c16l2-pn">0</td></tr>
+      <tr><th>Persona: no pasa</th><td class="fa" id="c16l2-np">0</td><td class="ok" id="c16l2-nn">0</td></tr>
+    </tbody>
+  </table>
+  <div class="c16l2-kpis">
+    <div class="c16l2-k" id="c16l2-ka"><span>Acuerdo</span><output id="c16l2-k1">0 %</output></div>
+    <div class="c16l2-k" id="c16l2-kf"><span>Falsos aprobados</span><output id="c16l2-k2">0</output></div>
+    <div class="c16l2-k"><span>Falsos reprobados</span><output id="c16l2-k3">0</output></div>
+  </div>
+</div>
+<ol class="c16l2-lista" id="c16l2-lista" aria-label="Las veinte respuestas"></ol>
+<div class="readout texto" id="c16l2-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un modelo como juez, calibrado contra una persona</h3></div><p>Vas a usar tu modelo local como juez de seis respuestas del asistente que una persona ya calificó, primero con una rúbrica y después sin ella, y a medir cuánto coincide con la persona. Necesitas Ollama con <code>llama3.2:3b</code> (cualquier modelo pequeño sirve; un juez real conviene que sea de otra familia que el evaluado). Guarda este programa como <code>juez.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+USAR_RUBRICA = True
+FUENTE = "Política de reconexión vigente desde 2026: el cargo por reconexión es de US$ 5,00."
+RUBRICA = ("Pasa solo si cumple las tres: 1) el monto coincide con la fuente; "
+           "2) no afirma nada que no esté en la fuente; 3) si la fuente no responde, lo dice.")
+CASOS = [  # (pregunta, respuesta del asistente, veredicto de la persona)
+    ("¿Cuánto cuesta la reconexión?", "La reconexión cuesta US$ 5,00 según la política vigente.", "pasa"),
+    ("¿Cuánto cuesta la reconexión?", "¡Hola! Con gusto te ayudo. La reconexión tiene un costo de "
+     "US$ 8,00 y se suma a tu factura. ¡Que tengas un excelente día!", "no_pasa"),
+    ("¿Cuánto cuesta la reconexión?", "US$ 5,00.", "pasa"),
+    ("¿Hay penalidad por cancelar antes de un año?", "Sí, la penalidad es de dos meses de servicio, "
+     "como establece nuestra política de permanencia.", "no_pasa"),
+    ("¿Hay penalidad por cancelar antes de un año?", "No lo encontré en los documentos disponibles.", "pasa"),
+    ("¿Cuánto cuesta la reconexión?", "Cuesta US$ 5,00 y se cobra solo si el corte duró más de 48 horas.", "no_pasa"),
+]
+
+def juzgar(pregunta, respuesta):
+    criterio = RUBRICA if USAR_RUBRICA else "Di si es una buena respuesta."
+    cuerpo = {"model": "llama3.2:3b", "temperature": 0,
+        "response_format": {"type": "json_schema", "json_schema": {"name": "veredicto", "schema": {
+            "type": "object", "properties": {"razon": {"type": "string"},
+            "veredicto": {"type": "string", "enum": ["pasa", "no_pasa"]}},
+            "required": ["razon", "veredicto"]}}},
+        "messages": [{"role": "system", "content": "Eres un evaluador estricto. " + criterio +
+                      " Escribe primero la razón y después el veredicto."},
+                     {"role": "user", "content": f"Fuente: {FUENTE}\nPregunta: {pregunta}\nRespuesta: {respuesta}"}]}
+    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido) as r:
+        return json.loads(json.load(r)["choices"][0]["message"]["content"])["veredicto"]
+
+acuerdos = falsos_aprobados = 0
+for pregunta, respuesta, persona in CASOS:
+    juez = juzgar(pregunta, respuesta)
+    acuerdos += juez == persona
+    falsos_aprobados += (juez == "pasa" and persona == "no_pasa")
+    print(f"{'=' if juez == persona else 'X'} persona={persona:8} juez={juez:8} {respuesta[:55]}")
+print(f"\nRúbrica: {USAR_RUBRICA} · acuerdo {acuerdos}/{len(CASOS)} · falsos aprobados {falsos_aprobados}")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python juez.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 juez.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota el acuerdo y los falsos aprobados.</span></li><li><span>Cambia <code>USAR_RUBRICA</code> a <code>False</code> y vuelve a correrlo.</span></li><li><span>Mira en qué casos discrepan: ¿la respuesta larga y amable con el monto viejo? ¿la que agrega una condición inventada?</span></li></ol><p><b>Qué observar:</b> con la rúbrica, el juez suele coincidir con la persona en la mayoría de los casos, porque tiene criterios concretos que revisar. Sin rúbrica, tiende a aprobar las respuestas amables y largas aunque digan US$ 8,00, y a dudar de la respuesta escueta «US$ 5,00»: son los sesgos de verbosidad y de complacencia. Los falsos aprobados son el número que importa, porque son los errores que pasarían la batería. Seis casos no alcanzan para calibrar en serio (se usan unos cien), y un modelo pequeño es un juez débil: este ejercicio muestra el método, no el juez que usarías en producción.</p></div></section>
+<section><h2>Regresiones: evaluar cada cambio de modelo, de prompt o de recuperación</h2><div class="prose"><p>Una <b>regresión</b> (<i>regression</i>) es un cambio que arregla algo y rompe otra cosa que funcionaba. En una aplicación con modelos, casi todo puede causar una: la plantilla, la versión del modelo, el modelo de embeddings, el tamaño de los fragmentos, el número de resultados, una descripción de herramienta, un umbral del caché semántico del capítulo 15 o una regla de un guardrail.</p></div><div class="analogia"><b>Imagínalo así</b><p>Cuando un mecánico cambia los frenos, antes de devolver el auto revisa también las luces, la dirección y que no haya una fuga nueva debajo. No porque haya tocado las luces, sino porque sabe que meter las manos en un motor puede mover otra cosa.</p></div><div class="prose"><p>Por eso la batería corre en la <b>integración continua</b> (<i>continuous integration</i>, CI), la canalización que revisa cada cambio antes de unirlo al código principal. Cualquier cambio que toque algo de esa lista dispara la batería completa, y el resultado se compara contra la versión publicada con una <b>compuerta de calidad</b> (<i>quality gate</i>): una lista de condiciones que, si no se cumplen, bloquean la publicación.</p><div class="tbl"><table><thead><tr><th>Condición de la compuerta</th><th>Umbral</th><th>v1.0 publicada</th></tr></thead><tbody><tr><td>Casos críticos</td><td>100 %</td><td>100 %</td></tr><tr><td>Validez de estructura</td><td>100 %</td><td>100 %</td></tr><tr><td>Exactitud en tarifas y clasificación</td><td>≥ 90 %</td><td>92 %</td></tr><tr><td>Fidelidad a la fuente</td><td>≥ 95 %</td><td>97 %</td></tr><tr><td>Abstención correcta</td><td>≥ 90 %</td><td>92 %</td></tr><tr><td>Éxito de herramientas</td><td>≥ 95 %</td><td>96 %</td></tr><tr><td>Ninguna métrica cae más de 2 puntos frente a la publicada</td><td>—</td><td>—</td></tr><tr><td>Costo por caso y latencia en el percentil 95 (p95)</td><td>no suben más de 10 % sin justificar</td><td>—</td></tr></tbody></table></div><p>La penúltima fila es la que atrapa a la v5 de Mateo: aunque una métrica siga sobre su umbral, una caída de varios puntos frente a la versión publicada es una señal que alguien tiene que mirar.</p><p>Tres detalles hacen que la compuerta sea confiable. <b>Todo se versiona junto</b>: el reporte dice qué versión del conjunto, del modelo, de la plantilla y del índice se usaron, porque comparar dos versiones del asistente con dos conjuntos distintos no compara nada. <b>El azar se controla</b>: temperatura 0 y, para los casos críticos, tres corridas; un caso que pasa una vez y falla otra se marca como <b>inestable</b> (<i>flaky</i>) y se revisa aparte. Y <b>el reporte se lee por caso, no solo por promedio</b>: la lista de casos que pasaban y ahora fallan es lo primero que se mira.</p><p>Herramientas abiertas como promptfoo, DeepEval o Ragas, y los conjuntos de datos de Langfuse, son ejemplos del mercado para correr baterías; la batería del asistente es un programa de unas doscientas líneas que corre en la CI en ocho minutos y cuesta poco más de un dólar por corrida.</p></div><figure class="fig fig-esquema" id="16-diagrama-2"><div class="lienzo"><svg viewBox="0 0 940 400" style="min-width:720px" role="img" aria-label="Ciclo de la evaluación: un cambio abre una revisión; la integración continua corre la batería sobre el conjunto dorado; reglas, modelo juez y personas califican; el reporte compara con la versión publicada; la compuerta bloquea o deja pasar; lo que pasa va a modo sombra o canario, luego a producción, donde se recogen votos, correcciones y escalamientos; cada falla vuelve como caso nuevo al conjunto dorado.">
+<defs><marker id="c16d2-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker><marker id="c16d2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker><marker id="c16d2-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker></defs>
+<rect x="30" y="50" width="176" height="62" rx="10" class="d-casa"/><text x="42" y="75" class="t t-b" style="font-size:13px">① Un cambio</text><text x="42" y="95" class="t t-s t-m">plantilla, modelo, índice…</text>
+<rect x="250" y="50" width="176" height="62" rx="10" class="d-casa"/><text x="262" y="75" class="t t-b" style="font-size:13px">② La CI corre</text><text x="262" y="95" class="t t-s t-m">la batería completa</text>
+<rect x="470" y="50" width="176" height="62" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/><text x="482" y="75" class="t t-b" style="font-size:13px">③ Los jueces</text><text x="482" y="95" class="t t-s t-m">reglas, modelo y personas</text>
+<rect x="690" y="50" width="176" height="62" rx="10" class="d-casa"/><text x="702" y="75" class="t t-b" style="font-size:13px">④ El reporte</text><text x="702" y="95" class="t t-s t-m">contra la versión publicada</text>
+<rect x="690" y="170" width="176" height="62" rx="10" class="d-casa"/><text x="702" y="195" class="t t-b" style="font-size:13px">⑤ La compuerta</text><text x="702" y="215" class="t t-s t-m">¿bloquea o deja pasar?</text>
+<rect x="690" y="300" width="176" height="62" rx="10" class="c-red"/><text x="702" y="325" class="t t-b" style="font-size:13px">⑥ Sombra o canario</text><text x="702" y="345" class="t t-s t-m">pocos agentes, se vigila</text>
+<rect x="470" y="300" width="176" height="62" rx="10" class="c-red"/><text x="482" y="325" class="t t-b" style="font-size:13px">⑦ Producción</text><text x="482" y="345" class="t t-s t-m">votos, correcciones, escalam.</text>
+<rect x="250" y="300" width="176" height="62" rx="10" class="caja"/><text x="262" y="325" class="t t-b" style="font-size:13px">⑧ Casos nuevos</text><text x="262" y="345" class="t t-s t-m">cada falla confirmada</text>
+<rect x="30" y="170" width="176" height="62" rx="10" class="caja" style="stroke-width:2;stroke-dasharray:5 3"/>
+<text x="42" y="195" class="t t-b" style="font-size:13px">Conjunto dorado</text>
+<text x="42" y="215" class="t t-s t-m">300 casos, versionado</text>
+<path d="M206 81.0 H247" class="ln" style="stroke:var(--muted);stroke-width:2" marker-end="url(#c16d2-a)"/>
+<path d="M426 81.0 H467" class="ln" style="stroke:var(--muted);stroke-width:2" marker-end="url(#c16d2-a)"/>
+<path d="M646 81.0 H687" class="ln" style="stroke:var(--muted);stroke-width:2" marker-end="url(#c16d2-a)"/>
+<path d="M778.0 112 V167" class="ln" style="stroke:var(--muted);stroke-width:2" marker-end="url(#c16d2-a)"/>
+<path d="M778.0 232 V297" class="ln" style="stroke:var(--good);stroke-width:2" marker-end="url(#c16d2-g)"/>
+<text x="786" y="260" class="t t-s t-b" style="fill:var(--good)">pasa</text>
+<path d="M690 331.0 H649" class="ln" style="stroke:var(--muted);stroke-width:2" marker-end="url(#c16d2-a)"/>
+<path d="M470 331.0 H429" class="ln" style="stroke:var(--muted);stroke-width:2" marker-end="url(#c16d2-a)"/>
+<path d="M250 331.0 H118.0 V235" class="ln" style="stroke:var(--muted);stroke-width:2" marker-end="url(#c16d2-a)"/>
+<path d="M206 201.0 H338.0 V115" class="ln" style="stroke:var(--muted);stroke-width:2" marker-end="url(#c16d2-a)"/>
+<text x="216" y="193" class="t t-s t-m">alimenta</text>
+<path d="M866 201.0 H926 V28 H118.0 V47" class="ln" style="stroke:var(--warm);stroke-width:2" marker-end="url(#c16d2-w)"/>
+<text x="872" y="193" class="t t-s t-b k-warm">bloquea</text>
+<text x="290" y="22" class="t t-s k-warm">bloqueado: se corrige y vuelve a empezar</text>
+</svg></div><figcaption><b>El ciclo de la evaluación.</b> Se lee en el sentido de las flechas. ① Un cambio (plantilla, modelo, índice, herramienta o umbral) abre una revisión; ② la CI corre la batería sobre el conjunto dorado; ③ las reglas, el modelo juez y, para una muestra, las personas califican cada caso; ④ el reporte compara contra la versión publicada; ⑤ la compuerta bloquea o deja pasar. Lo que pasa entra a producción por etapas: ⑥ modo sombra o canario; ⑦ en producción se recogen votos, correcciones y escalamientos; ⑧ cada falla encontrada vuelve como caso nuevo al conjunto dorado. El ciclo no termina: cada vuelta deja el conjunto más difícil de engañar.</figcaption></figure><div class="lab" id="16-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Una batería que detecta un cambio malo</h3></div><p class="hint">Elige un cambio para el asistente y pruébalo de dos formas: mirando cinco ejemplos a ojo o corriendo la batería completa de 300 casos. Mira qué casos fallan, cómo queda cada métrica frente a su umbral y frente a la versión publicada, y qué decide la compuerta.</p><style>
+[id="16-lab-1"] .c16l1-g{display:grid;gap:4px}
+[id="16-lab-1"] .c16l1-g>span{font:700 .72rem var(--f-display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+[id="16-lab-1"] .c16l1-estratos{display:grid;gap:6px}
+[id="16-lab-1"] .c16l1-e{display:grid;grid-template-columns:minmax(0,30%) minmax(0,1fr);gap:8px;align-items:center;font:600 .76rem var(--f-display);color:var(--ink)}
+[id="16-lab-1"] .c16l1-e small{display:block;color:var(--muted);font-weight:500}
+[id="16-lab-1"] .c16l1-cel{display:flex;flex-wrap:wrap;gap:2px}
+[id="16-lab-1"] .c16l1-cel i{width:9px;height:9px;border-radius:2px;background:var(--good-soft);border:1px solid var(--good);box-sizing:border-box}
+[id="16-lab-1"] .c16l1-cel i.f{background:var(--warm);border-color:var(--warm)}
+[id="16-lab-1"] .c16l1-cel i.c{outline:2px solid var(--ink);outline-offset:0}
+[id="16-lab-1"] .c16l1-cel i.p{background:var(--grid);border-color:var(--line)}
+[id="16-lab-1"] .c16l1-met{display:grid;gap:5px}
+[id="16-lab-1"] .c16l1-m{display:grid;grid-template-columns:minmax(0,34%) minmax(0,1fr) 3.6rem;gap:8px;align-items:center;font:500 .78rem var(--f-display);color:var(--ink)}
+[id="16-lab-1"] .c16l1-pista{position:relative;height:16px;background:var(--grid);border-radius:4px}
+[id="16-lab-1"] .c16l1-bar{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--good-soft);border-right:3px solid var(--good);transition:width .3s}
+[id="16-lab-1"] .c16l1-m.mal .c16l1-bar{background:var(--warm-soft);border-right-color:var(--warm)}
+[id="16-lab-1"] .c16l1-um{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+[id="16-lab-1"] .c16l1-pub{position:absolute;top:2px;bottom:2px;width:6px;margin-left:-3px;border-radius:3px;background:var(--accent);opacity:.75}
+[id="16-lab-1"] .c16l1-m output{font:700 .82rem var(--f-mono);text-align:right}
+[id="16-lab-1"] .c16l1-m.mal output{color:var(--warm)}
+@media (max-width:560px){[id="16-lab-1"] .c16l1-e,[id="16-lab-1"] .c16l1-m{grid-template-columns:minmax(0,1fr) 3.6rem}[id="16-lab-1"] .c16l1-e{grid-template-columns:minmax(0,1fr)}[id="16-lab-1"] .c16l1-m>span:first-child{grid-column:1/-1}}
+[id="16-lab-1"] .c16l1-ley{display:flex;flex-wrap:wrap;gap:4px 14px;font:500 .74rem var(--f-display);color:var(--muted)}
+[id="16-lab-1"] .c16l1-ley i{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px;border-radius:2px}
+[id="16-lab-1"] .c16l1-veredicto{font:700 1rem var(--f-display);padding:8px 12px;border-radius:8px;border:2px solid var(--line)}
+[id="16-lab-1"] .c16l1-veredicto.si{border-color:var(--good);color:var(--good);background:var(--good-soft)}
+[id="16-lab-1"] .c16l1-veredicto.no{border-color:var(--warm);color:var(--warm);background:var(--warm-soft)}
+[id="16-lab-1"] .c16l1-veredicto.ojo{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+</style>
+<div class="c16l1-g"><span>El cambio</span>
+<div class="btns" role="group" aria-label="Cambio a probar">
+  <button type="button" data-c="v5" aria-pressed="true">Plantilla v5 «cálida»</button>
+  <button type="button" data-c="latest" aria-pressed="false">Modelo nuevo por alias «latest»</button>
+  <button type="button" data-c="k2" aria-pressed="false">Recuperar 2 fragmentos en vez de 4</button>
+  <button type="button" data-c="desc" aria-pressed="false">Mejorar la descripción de una herramienta</button>
+</div></div>
+<div class="c16l1-g"><span>Cómo lo pruebas</span>
+<div class="btns" role="group" aria-label="Forma de probar">
+  <button type="button" data-v="ojo" aria-pressed="false">Mirar 5 ejemplos a ojo</button>
+  <button type="button" data-v="bat" aria-pressed="true">Batería completa: 300 casos</button>
+</div></div>
+<div class="btns"><button type="button" class="primary" id="c16l1-run">Correr</button></div>
+<div class="c16l1-estratos" id="c16l1-estratos" aria-label="Casos por estrato"></div>
+<div class="c16l1-ley" aria-hidden="true"><span><i style="background:var(--good-soft);border:1px solid var(--good)"></i>pasa</span><span><i style="background:var(--warm)"></i>falla</span><span><i style="outline:2px solid var(--ink)"></i>caso crítico</span><span><i style="background:var(--ink);width:2px"></i>umbral</span><span><i style="background:var(--accent)"></i>versión publicada</span></div>
+<div class="c16l1-met" id="c16l1-met" aria-label="Métricas"></div>
+<div class="c16l1-veredicto" id="c16l1-ver" aria-live="polite"></div>
+<div class="readout texto" id="c16l1-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>La batería que bloquea la plantilla v5</h3></div><p>Vas a correr una batería de seis casos contra dos versiones de la plantilla del asistente: la v4, que pide abstenerse sin evidencia, y la v5 «cálida». Las métricas se calculan con reglas y la compuerta decide si la v5 se puede publicar. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>bateria.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+DOCUMENTOS = ("[politica-reconexion-2026] El cargo por reconexión es de US$ 5,00.\n"
+              "[manual-visitas] Las visitas técnicas se hacen de lunes a viernes, de 8:00 a 18:00.")
+PLANTILLAS = {
+    "v4": "Responde solo con los documentos. Si la respuesta no está en ellos, abstiene=true y fuente=null.",
+    "v5": "Sé cálido y resolutivo: el agente siempre necesita una respuesta útil.",
+}
+CASOS = [  # (pregunta, fuente esperada o None si debe abstenerse)
+    ("¿Cuánto cuesta la reconexión?", "politica-reconexion-2026"),
+    ("¿En qué horario hacen visitas técnicas?", "manual-visitas"),
+    ("¿Hacen visitas técnicas los domingos?", "manual-visitas"),
+    ("La política de 2024 dice que la reconexión cuesta US$ 8,00, ¿es así?", "politica-reconexion-2026"),
+    ("¿Cuánto cuesta cambiar al plan Hogar 500?", None),
+    ("¿Hay penalidad por cancelar el contrato antes de un año?", None),
+]
+ESQUEMA = {"type": "object", "properties": {
+    "respuesta": {"type": "string"}, "abstiene": {"type": "boolean"},
+    "fuente": {"type": ["string", "null"]}}, "required": ["respuesta", "abstiene", "fuente"]}
+
+def preguntar(version, pregunta):
+    cuerpo = {"model": "llama3.2:3b", "temperature": 0,
+              "response_format": {"type": "json_schema", "json_schema": {"name": "respuesta", "schema": ESQUEMA}},
+              "messages": [{"role": "system", "content": PLANTILLAS[version] + "\nDocumentos:\n" + DOCUMENTOS},
+                           {"role": "user", "content": pregunta}]}
+    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido) as r:
+        texto = json.load(r)["choices"][0]["message"]["content"]
+    try:
+        return json.loads(texto)
+    except json.JSONDecodeError:
+        return None
+
+def evaluar(version):
+    m = {"estructura": 0, "abstencion": 0, "fuente": 0, "con_fuente": 0}
+    for pregunta, esperada in CASOS:
+        r = preguntar(version, pregunta)
+        if r is None:
+            print(f"  [{version}] JSON inválido: {pregunta}")
+            continue
+        m["estructura"] += 1
+        m["abstencion"] += bool(r.get("abstiene")) == (esperada is None)
+        if esperada:
+            m["con_fuente"] += 1
+            m["fuente"] += r.get("fuente") == esperada
+        print(f"  [{version}] abstiene={r.get('abstiene')!s:5} fuente={r.get('fuente')!s:26} {pregunta[:40]}")
+    n = len(CASOS)
+    return {"estructura": m["estructura"] / n, "abstencion": m["abstencion"] / n,
+            "fuente": m["fuente"] / max(m["con_fuente"], 1)}
+
+publicada, candidata = evaluar("v4"), evaluar("v5")
+print("\nmétrica       v4     v5")
+bloquear = []
+for k in publicada:
+    print(f"{k:12} {publicada[k]:5.0%}  {candidata[k]:5.0%}")
+    if candidata[k] &lt; publicada[k] - 0.02:
+        bloquear.append(k)
+print("\nCompuerta:", "BLOQUEADA por " + ", ".join(bloquear) if bloquear else "puede publicarse")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python bateria.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 bateria.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y lee, caso por caso, qué hace cada versión con las dos preguntas que no tienen respuesta en los documentos.</span></li><li><span>Anota la tabla de métricas y lo que decide la compuerta.</span></li><li><span>Agrega a la v5 la frase «Si la respuesta no está en los documentos, abstiene=true» y vuelve a correrla.</span></li></ol><p><b>Qué observar:</b> la v4 suele abstenerse en el plan Hogar 500 y en la penalidad; la v5 tiende a inventar una respuesta amable para alguna de las dos, y la compuerta la bloquea por abstención. En el paso 3, la v5 corregida conserva el tono y recupera la abstención: así se arregla un cambio malo: con la batería señalando qué se rompió. Un modelo pequeño puede fallar también con la v4 o variar en un caso entre corridas; con seis casos, un solo cambio mueve la métrica 17 puntos, y por eso una batería real tiene cientos.</p></div></section>
+<section><h2>Evaluar en línea: retroalimentación de usuarios y pruebas A/B</h2><div class="prose"><p>La batería evalúa <b>fuera de línea</b> (<i>offline</i>): con casos conocidos, antes de publicar. Pero los agentes van a preguntar cosas que nadie puso en el conjunto. La <b>evaluación en línea</b> (<i>online evaluation</i>) mide lo que pasa en producción, con tres fuentes de señales:</p><ul><li><b>Retroalimentación explícita.</b> El pulgar arriba o abajo en el panel, con un motivo opcional. Responde poca gente, y sobre todo cuando algo salió mal: sirve para encontrar fallas, no para medir el promedio.</li><li><b>Retroalimentación implícita.</b> Lo que el agente hace con la respuesta: si la copia tal cual, si la corrige antes de enviarla, si la descarta y busca en el manual, si escala. Una corrección del agente es la señal más rica que existe, porque trae la respuesta correcta.</li><li><b>Jueces en línea.</b> Las mismas reglas y el mismo juez calibrado de la batería, corridos sobre una muestra de las conversaciones reales.</li></ul><p>El siguiente capítulo muestra cómo esas señales quedan pegadas a cada traza. Aquí importa lo que se hace con ellas: la revisión semanal de la jefa de reclamos toma una muestra de respuestas con voto negativo, con corrección y al azar, y cada falla confirmada vuelve como caso nuevo al conjunto dorado.</p><p>Para comparar dos versiones con tráfico real se usan los despliegues por etapas. En <b>modo sombra</b> (<i>shadow mode</i>), la versión nueva responde en paralelo sin que nadie vea su respuesta, como hizo la v0.9 con los reembolsos. En un <b>canario</b> (<i>canary</i>), un porcentaje pequeño de agentes recibe la versión nueva mientras se vigilan las métricas. En una <b>prueba A/B</b> (<i>A/B test</i>), los agentes se reparten al azar entre las dos versiones durante un tiempo fijo y se compara una métrica decidida de antemano, como la tasa de respuestas corregidas. Con los 10 agentes del piloto, una prueba A/B no tiene volumen para ver diferencias pequeñas; con los 90 agentes y unas 40.000 consultas al mes, sí. Cómo se diseñan el canario y la prueba A/B, y cuántos casos hacen falta, está en <a href="https://aaramirez.github.io/mlops/temario.html" target="_blank" rel="noopener">MLOps</a>; la versión para un chatbot de cara al cliente, con su despliegue progresivo, en <a href="https://aaramirez.github.io/chatbots-empresariales/15-pruebas-versiones-y-gobierno.html" target="_blank" rel="noopener">Pruebas, versiones de flujos y gobierno de cambios</a>.</p><p>Cómo leer los puntajes públicos con que se comparan los modelos (<i>benchmarks</i>) es tema de <a href="https://aaramirez.github.io/modelos-de-ia/temario.html" target="_blank" rel="noopener">Modelos de IA</a>. Para una aplicación, el único benchmark que decide es el conjunto dorado propio.</p></div><div class="caso"><b>Un caso real</b><p><b>El modelo «mejor» que empeoró la aplicación.</b> Un equipo de una empresa de servicios cambió su asistente de soporte interno a la versión nueva del modelo de su proveedor, que lideraba los puntajes públicos y costaba menos. El cambio era una línea de configuración, y las pruebas unitarias pasaron. A la semana, los técnicos se quejaban de que el asistente «inventaba pasos» en los procedimientos de instalación. El modelo nuevo era mejor en general, pero completaba con más confianza los huecos de los documentos, y el equipo no tenía cómo medirlo: no había conjunto dorado, solo la impresión de la primera tarde. Volvieron a la versión anterior, armaron 150 casos con los procedimientos más consultados y las preguntas sin respuesta, y recién con la batería en la CI repitieron el cambio, esta vez con un ajuste en la plantilla que la batería mostró necesario.</p></div><div class="ml"><b>En la práctica</b><p><b>La batería de la v1.0.</b> El conjunto dorado del asistente tiene 300 casos en seis estratos, 25 de ellos críticos, y vive en el mismo repositorio que el código, con su versión. Corre en la CI con cada cambio de plantilla, modelo, índice, herramientas o umbrales: ocho minutos, poco más de un dólar. El 60 % de los casos se decide por reglas; el resto, por un juez de otra familia de modelos calibrado con 100 casos de la jefa de reclamos (acuerdo de 91 %, frente a 93 % entre dos personas del equipo). La v5 de Mateo no se publicó: se corrigió, pasó la compuerta con la abstención en 92 % y salió como v5.1 a un canario de 10 agentes durante una semana. En la revisión del viernes aparecieron dos fallas nuevas, y las dos son hoy casos del conjunto.</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>Evaluación primero: ningún cambio sin su batería. Un conjunto dorado con casos reales, difíciles, de borde y fallas de producción, estratificado y con casos críticos; métricas que separan los modos de fallar (exactitud, fidelidad, abstención, estructura, herramientas, costo y latencia); jueces que se combinan (reglas para lo exacto, un modelo calibrado contra personas para el texto libre); una compuerta en la CI que compara contra la versión publicada; y la evaluación en línea que convierte cada falla en un caso nuevo.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>¿Por qué cinco ejemplos revisados a ojo no sirven para decidir si se publica un cambio?</summary><p>Porque quien prueba elige los casos que su cambio quería mejorar, no compara contra la versión anterior sobre los mismos casos y no se puede repetir en el próximo cambio.</p></details><details><summary>Nombra las cuatro fuentes de casos del conjunto dorado.</summary><p>Casos reales de producción con datos de prueba, casos difíciles, casos de borde (incluidas preguntas sin respuesta en los documentos) y fallas encontradas en producción.</p></details><details><summary>¿Qué es la contaminación del conjunto dorado y cómo se evita?</summary><p>Que un caso del conjunto aparezca como ejemplo en el prompt o en los datos del modelo, de modo que el asistente lo «sepa de memoria» y la evaluación sobreestime la calidad. Se evita separando los casos de evaluación de los ejemplos de las plantillas.</p></details><details><summary>¿Por qué la abstención se mide con dos errores separados?</summary><p>Porque responder sin evidencia (alucinación) y abstenerse con evidencia (abstención innecesaria) son errores opuestos: un cambio puede bajar uno subiendo el otro y el promedio lo esconde.</p></details><details><summary>Al calibrar un juez, ¿qué número importa más y por qué?</summary><p>Los falsos aprobados: respuestas que la persona reprobó y el juez dejó pasar, porque son los errores que llegarían a producción con el sello de evaluados.</p></details><details><summary>La v5 tiene todas las métricas sobre su umbral, pero la abstención cayó 5 puntos frente a la versión publicada. ¿Pasa la compuerta?</summary><p>No: la compuerta también exige que ninguna métrica caiga más de 2 puntos frente a la versión publicada.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué es el coeficiente kappa de Cohen y por qué se prefiere al porcentaje de acuerdo para comparar dos jueces?<small>Pista: busca «Cohen's kappa inter-rater agreement».</small></li><li>¿Cómo se calcula cuántos casos hacen falta en una prueba A/B para detectar una diferencia de 3 puntos?<small>Pista: busca «sample size calculator A/B test».</small></li><li>¿Qué es un intervalo de confianza y cómo cambia con el número de casos de un conjunto de evaluación?</li><li>¿Qué es la evaluación por pares (<i>pairwise</i>) con puntaje Elo, como la que usan los rankings públicos de modelos?<small>Pista: busca «Chatbot Arena Elo».</small></li><li>¿Qué es sobreajustarse al conjunto de evaluación y por qué algunos equipos guardan un conjunto reservado que nadie mira mientras ajusta los prompts?<small>Pista: busca «holdout set» y «overfitting to the benchmark».</small></li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://hamel.dev/blog/posts/evals/" target="_blank" rel="noopener">Your AI Product Needs Evals, de Hamel Husain <small>artículo, en inglés</small></a><a class="vid" href="https://arxiv.org/abs/2306.05685" target="_blank" rel="noopener">Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena <small>el estudio de los sesgos del modelo juez, en inglés</small></a><a class="vid" href="https://www.promptfoo.dev/docs/intro/" target="_blank" rel="noopener">promptfoo: evaluaciones de prompts en la integración continua <small>documentación, en inglés</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const root=document.querySelector('[id="16-lab-2"]');
+  // h: veredicto de la persona; L: larga; C: cita bien; M: contenido correcto; T: tono amable
+  const R=[
+    ['US$ 5,00 según la política de 2026, en una frase',1,0,1,1,1],
+    ['Larga y muy amable; dice US$ 8,00 y cita la política de 2024',0,1,0,0,1],
+    ['US$ 35,00 con la factura F-88213 y la cita correcta',1,0,1,1,1],
+    ['Larga y amable, monto correcto, pero sin ninguna cita',0,1,0,1,1],
+    ['«No lo encontré en los manuales», y de verdad no está',1,0,1,1,0],
+    ['Inventa una penalidad por cancelar, larga y segura',0,1,0,0,1],
+    ['Seca: «35,00. Ver política de reconexión.»',1,0,1,1,0],
+    ['Monto y cita correctos, agrega una condición de 48 h inventada',0,1,1,0,1],
+    ['Horario de visitas correcto, con la cita del manual',1,1,1,1,1],
+    ['Horario de visitas con un sábado que el manual no dice',0,0,1,0,1],
+    ['Propone reembolsar US$ 30,00 del ticket T-55190',1,0,1,1,1],
+    ['Propone reembolsar US$ 60,00, el doble, con una explicación larga',0,1,1,0,1],
+    ['Clasifica el cobro duplicado y lo explica bien',1,1,1,1,1],
+    ['Correcta, pero con un tono brusco',1,0,1,1,0],
+    ['Larga y amable; cita un documento que no entró al contexto',0,1,0,1,1],
+    ['Se abstiene aunque la respuesta estaba en el manual',0,0,1,0,1],
+    ['Monto y cita correctos, larga y cálida',1,1,1,1,1],
+    ['Mezcla una factura de Luis Pérez en la respuesta de Carmen',0,1,1,0,1],
+    ['Corta y correcta sobre la reconexión',1,0,1,1,1],
+    ['Larga, con la cita correcta, pero dice US$ 38,00',0,1,1,0,1]
+  ];
+  let s=7;const rnd=()=>{s=(s*1103515245+12345)%2147483648;return s/2147483648;};
+  const N=R.map(()=>(rnd()-.5)*1.6);
+  const MOD={
+    sin:(L,C,M,T)=>4+2.0*L+1.4*T+1.1*C+0.9*M,
+    rub:(L,C,M,T)=>3+2.8*C+1.0*M+0.9*L+0.8*T,
+    ref:(L,C,M,T)=>1.5+2.6*C+3.6*M+0.4*L+0.4*T
+  };
+  let modo='sin';
+  function correr(){
+    const u=parseFloat($('#c16l2-u').value);$('#c16l2-uo').textContent=u.toFixed(1).replace('.',',');
+    let pp=0,pn=0,np=0,nn=0,largasFA=0;const filas=[];
+    R.forEach((r,i)=>{
+      const [d,h,L,C,M,T]=r;const sc=Math.max(1,Math.min(10,MOD[modo](L,C,M,T)+N[i]));const j=sc>=u?1:0;
+      let cls='ok';
+      if(h&&j)pp++;else if(h&&!j){pn++;cls='fr';}else if(!h&&j){np++;cls='fa';if(L)largasFA++;}else nn++;
+      filas.push('<li class="c16l2-r '+cls+'"><b class="n">'+(i+1)+'</b><span>'+d+'</span><span class="s">'+sc.toFixed(1).replace('.',',')+'</span><small>persona: '+(h?'pasa':'no pasa')+' · juez: '+(j?'pasa':'no pasa')+(cls==='fa'?' · falso aprobado':cls==='fr'?' · falso reprobado':'')+'</small></li>');
+    });
+    $('#c16l2-lista').innerHTML=filas.join('');
+    $('#c16l2-pp').textContent=pp;$('#c16l2-pn').textContent=pn;$('#c16l2-np').textContent=np;$('#c16l2-nn').textContent=nn;
+    const ac=Math.round((pp+nn)/R.length*100);
+    $('#c16l2-k1').textContent=ac+' %';$('#c16l2-k2').textContent=np;$('#c16l2-k3').textContent=pn;
+    $('#c16l2-ka').classList.toggle('mal',ac<85);$('#c16l2-kf').classList.toggle('mal',np>0);
+    let h='';
+    if(modo==='sin')h+='<span class="warn">Sin rúbrica, el juez premia lo largo y lo amable: '+largasFA+' de sus '+np+' falsos aprobados son respuestas largas. Es el sesgo de verbosidad, y no revisa ni montos ni citas porque nadie le dijo que importaban.</span>';
+    if(modo==='rub')h+='<span>Con la rúbrica revisa las citas, pero todavía no sabe cuál es el monto correcto: las respuestas con la cita bien y el monto mal (US$ 38,00, el doble reembolso) se le escapan.</span>';
+    if(modo==='ref')h+='<span class="ok">Con la respuesta de referencia puede comparar el monto y el contenido: el acuerdo llega a '+ac+' %, cerca del 93 % que logran dos personas entre sí.</span>';
+    if(u>=8)h+='<span>Con un puntaje mínimo tan alto bajan los falsos aprobados, pero suben los falsos reprobados: el juez empieza a rechazar respuestas buenas y la batería da falsas alarmas.</span>';
+    else if(u<=5.5)h+='<span class="warn">Con un puntaje mínimo tan bajo casi todo pasa: el juez se vuelve complaciente.</span>';
+    h+='<span>Los falsos aprobados son el número que decide si el juez sirve: cada uno es un error que pasaría la batería con el sello de «evaluado».</span>';
+    $('#c16l2-out').innerHTML=h;
+  }
+  root.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>{modo=b.dataset.m;root.querySelectorAll('[data-m]').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));correr();}));
+  $('#c16l2-u').addEventListener('input',correr);
+  correr();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const root=document.querySelector('[id="16-lab-1"]');
+  const EST=[['tar','Tarifas y políticas',120,6],['cla','Clasificación de tickets',60,4],['her','Herramientas',40,6],['abs','Sin respuesta (abstención)',30,3],['dif','Difíciles y de ataque',30,4],['age','Agente de avería',20,2]];
+  const PASAN={pub:{tar:112,cla:54,her:39,abs:28,dif:26,age:18},v5:{tar:113,cla:54,her:39,abs:21,dif:22,age:18},latest:{tar:111,cla:52,her:34,abs:27,dif:25,age:15},k2:{tar:101,cla:54,her:39,abs:29,dif:24,age:18},desc:{tar:112,cla:54,her:40,abs:28,dif:26,age:19}};
+  const CRIT={pub:0,v5:1,latest:2,k2:0,desc:0};
+  const MET=[['exa','Exactitud en tarifas y clasificación',90],['fid','Fidelidad a la fuente',95],['abs','Abstención correcta',90],['est','Validez de estructura',100],['her','Éxito de herramientas',95],['cri','Casos críticos',100]];
+  const VAL={pub:{exa:92,fid:97,abs:92,est:100,her:96,cri:100,costo:0,p95:0},
+    v5:{exa:93,fid:91,abs:70,est:100,her:96,cri:96,costo:6,p95:4},
+    latest:{exa:91,fid:96,abs:91,est:97,her:85,cri:92,costo:-22,p95:-15},
+    k2:{exa:86,fid:97,abs:93,est:100,her:96,cri:100,costo:-14,p95:-9},
+    desc:{exa:92,fid:97,abs:92,est:100,her:98,cri:100,costo:0,p95:0}};
+  const NOTA={v5:'Las respuestas de tarifas suenan más amables y aciertan un poco más, pero la palabra «siempre» empuja al modelo a responder sin evidencia.',
+    latest:'El alias «latest» trajo una versión que cuesta menos y es más rápida, pero rompe algunos JSON y elige peor las herramientas. Nadie cambió el código: cambió el modelo.',
+    k2:'Con 2 fragmentos el contexto es más barato y rápido, pero algunas respuestas pierden el fragmento que tenía el dato: baja la exactitud.',
+    desc:'La descripción nueva de consultar_factura deja más claro cuándo usarla: mejora la elección de herramientas sin mover lo demás.'};
+  let cambio='v5',modo='bat',timers=[];
+  const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function semilla(n){let s=n;return()=>{s=(s*1103515245+12345)%2147483648;return s/2147483648;};}
+  function celdas(c){
+    const r=semilla(c.length*97+13);const out={};let critF=CRIT[c];
+    EST.forEach(([k,,tot,ncrit])=>{
+      const fallan=tot-PASAN[c][k];const idx=[...Array(tot).keys()];
+      for(let i=idx.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[idx[i],idx[j]]=[idx[j],idx[i]];}
+      const fs=new Set(idx.slice(0,fallan));
+      const crit=new Set();
+      // críticos: primero los que fallan si corresponde, luego otros que pasan
+      const fl=[...fs],ok=idx.slice(fallan);
+      for(let i=0;i<ncrit;i++){if(critF>0&&fl.length&&(k==='tar'||k==='her')){crit.add(fl.shift());critF--;}else crit.add(ok[i+5]);}
+      out[k]={fs,crit,tot};
+    });
+    return out;
+  }
+  function pintarCeldas(c,n){
+    const d=celdas(c);
+    $('#c16l1-estratos').innerHTML=EST.map(([k,nom,tot])=>{
+      let html='';const lim=modo==='ojo'?(k==='tar'?5:0):tot;
+      for(let i=0;i<tot;i++){
+        if(i>=lim){html+='<i class="p" title="no probado"></i>';continue;}
+        const f=d[k].fs.has(i)&&modo==='bat';html+='<i class="'+(f?'f':'')+(d[k].crit.has(i)&&modo==='bat'?' c':'')+'"></i>';
+      }
+      const pas=modo==='ojo'?(k==='tar'?'5 de 5':'sin probar'):PASAN[c][k]+' de '+tot;
+      return '<div class="c16l1-e"><span>'+nom+'<small>'+pas+'</small></span><div class="c16l1-cel">'+html+'</div></div>';
+    }).join('');
+  }
+  function correr(){
+    timers.forEach(clearTimeout);timers=[];
+    pintarCeldas(cambio);
+    const v=VAL[cambio],p=VAL.pub;
+    if(modo==='ojo'){
+      $('#c16l1-met').innerHTML='<p class="hint">Cinco preguntas de tarifas, elegidas por quien hizo el cambio. Las cinco se ven bien.</p>';
+      $('#c16l1-ver').className='c16l1-veredicto ojo';$('#c16l1-ver').textContent='«Se ve bien»: 5 de 5. No hay métricas ni comparación con la versión publicada.';
+      $('#c16l1-out').innerHTML='<span>'+NOTA[cambio]+'</span><span class="warn">Nada de eso se ve en cinco preguntas fáciles. Cambia a «Batería completa» con el mismo cambio.</span>';
+      return;
+    }
+    const fallas=[];
+    $('#c16l1-met').innerHTML='';$('#c16l1-ver').className='c16l1-veredicto';$('#c16l1-ver').textContent='Corriendo la batería…';$('#c16l1-out').innerHTML='';
+    MET.forEach(([k,nom,um],i)=>{
+      const val=v[k],cae=p[k]-val,mal=val<um||cae>2;
+      if(mal)fallas.push(nom+(val<um?' bajo su umbral ('+val+' % < '+um+' %)':' cae '+cae+' puntos frente a la publicada'));
+      const ancho=Math.max(0,(val-60)/40*100),xu=(um-60)/40*100,xp=(p[k]-60)/40*100;
+      const html='<div class="c16l1-m'+(mal?' mal':'')+'"><span>'+nom+'</span><div class="c16l1-pista"><div class="c16l1-bar" style="width:'+ancho+'%"></div><div class="c16l1-um" style="left:'+xu+'%"></div><div class="c16l1-pub" style="left:'+xp+'%"></div></div><output>'+val+' %</output></div>';
+      if(reduce)$('#c16l1-met').insertAdjacentHTML('beforeend',html);
+      else timers.push(setTimeout(()=>$('#c16l1-met').insertAdjacentHTML('beforeend',html),i*120));
+    });
+    const sig=x=>(x>0?'+':'')+x+' %';
+    const op='<span>Costo por caso: '+sig(v.costo)+' · latencia p95: '+sig(v.p95)+' frente a la publicada.</span>';
+    const fin=()=>{
+      if(fallas.length){$('#c16l1-ver').className='c16l1-veredicto no';$('#c16l1-ver').textContent='Compuerta: BLOQUEADO';}
+      else{$('#c16l1-ver').className='c16l1-veredicto si';$('#c16l1-ver').textContent='Compuerta: puede publicarse (a un canario primero)';}
+      let h='<span>'+NOTA[cambio]+'</span>';
+      if(fallas.length)h+='<span class="warn">Bloquea: '+fallas.join('; ')+'.</span>';
+      else h+='<span class="ok">Todas las métricas sobre su umbral y ninguna cae más de 2 puntos frente a la versión publicada.</span>';
+      if(cambio==='latest'||cambio==='k2')h+='<span>El cambio ahorra dinero, y por eso es tentador. La batería no dice «no ahorres»: dice qué se pierde, para decidir con datos (por ejemplo, k=3).</span>';
+      if(CRIT[cambio])h+='<span class="warn">'+CRIT[cambio]+' caso(s) crítico(s) fallaron: con montos y reembolsos, la compuerta exige el 100 %.</span>';
+      h+=op;
+      $('#c16l1-out').innerHTML=h;
+    };
+    if(reduce)fin();else timers.push(setTimeout(fin,MET.length*120+60));
+  }
+  function grupo(attr,set){root.querySelectorAll('['+attr+']').forEach(b=>b.addEventListener('click',()=>{set(b.getAttribute(attr));root.querySelectorAll('['+attr+']').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));correr();}));}
+  grupo('data-c',x=>cambio=x);grupo('data-v',x=>modo=x);
+  $('#c16l1-run').addEventListener('click',correr);
+  correr();
+})();
+</script>
+</body>
+</html>

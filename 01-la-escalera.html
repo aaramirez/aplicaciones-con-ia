@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>La escalera de la IA · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="la-escalera">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 01 DE 20</span><h1>La escalera de la IA en una empresa</h1><p class="lede">Una demostración con un modelo de lenguaje se arma en una tarde; un producto que la empresa usa todos los días, no. Este capítulo presenta la escalera de cinco niveles vista desde la arquitectura: qué piezas de software agrega cada nivel, qué datos y controles pide antes de empezar y cómo un mismo asistente de atención la sube a lo largo del curso.</p></header>
+<section><h2>Por qué un camino por niveles y no un gran proyecto</h2><div class="prose"><p>Un viernes por la tarde, alguien del equipo de sistemas conecta un modelo de lenguaje a un documento de tarifas y le pregunta cuánto cuesta una reconexión. La respuesta es correcta, bien escrita y llega en dos segundos. El lunes, la gerencia pide «lo mismo, pero que atienda a todos los clientes, que conozca sus facturas y que haga los reembolsos». Esa frase junta, sin saberlo, cuatro sistemas distintos, y cada uno tiene sus propias formas de fallar.</p></div><div class="analogia"><b>Imagínalo así</b><p>Construir una casa no empieza por el techo. Primero van los cimientos, después las paredes, después la instalación eléctrica y al final el techo. Un arquitecto puede dibujar la casa completa el primer día, pero el maestro de obras la levanta por pisos y no pone el siguiente hasta que el anterior aguanta el peso. Si alguien pone el techo sobre paredes sin fraguar, la casa se ve terminada una semana y se cae la siguiente.</p></div><div class="prose"><p>Este curso trata de construir productos con un <b>modelo de lenguaje grande</b> (<i>large language model</i>, LLM): un programa entrenado con enormes cantidades de texto que, dada una entrada, produce la continuación más plausible. Lo usas por una <b>API</b> (<i>Application Programming Interface</i>, interfaz de programación): tu programa le manda un pedido por la red y recibe una respuesta. Llamar a esa API es fácil. Lo difícil es todo lo que va alrededor para que la empresa pueda confiar en el resultado.</p><p>Por eso el curso no propone un gran proyecto, sino una <b>escalera de madurez</b> (<i>maturity ladder</i>) de cinco niveles. Cada nivel agrega una capacidad y un conjunto de piezas de software, y se apoya en las del nivel anterior. La misma escalera, mirada desde el negocio (qué habilita cada nivel, cómo se decide y cómo se mide la adopción), está en <a href="https://aaramirez.github.io/adopcion-de-ia/temario.html" target="_blank" rel="noopener">IA en la empresa</a>. Aquí la miramos desde el código: qué componentes construyes en cada peldaño y qué tiene que existir antes de empezar.</p><p>Hay tres razones técnicas para subir por niveles:</p><ul><li><b>Cada nivel reutiliza las piezas del anterior.</b> El asistente que reprograma una visita necesita la identidad de quien pide (nivel 2) y la política de visitas recuperada de los documentos (nivel 1). Si esas piezas no existen, se improvisan dentro del prompt.</li><li><b>Cada nivel se puede medir por separado.</b> Un nivel 1 se evalúa con preguntas y respuestas esperadas. Si saltas al nivel 4, cuando el agente falla no sabes si falló la búsqueda, la memoria, la herramienta o el plan.</li><li><b>El riesgo crece con cada peldaño.</b> En el nivel 1 un error es una respuesta equivocada que una persona lee. En el nivel 3 es un cambio en un sistema. Conviene llegar ahí con trazas, evaluación y controles probados en los niveles de abajo.</li></ul></div><figure class="fig fig-capas" id="01-diagrama-1"><div class="lienzo"><svg viewBox="0 0 900 440" style="min-width:700px" role="img" aria-label="Arquitectura por capas: abajo la base común (puerta a los modelos, trazas, costos, secretos y evaluación); encima, de abajo hacia arriba, los componentes que agrega cada nivel: nivel 1 plantillas, recuperador, índice vectorial y validador; nivel 2 identidad, sesión, memoria y adaptadores de canal; nivel 3 registro de herramientas, servidores MCP, motor de políticas, aprobaciones y orquestador; nivel 4 planificador, eventos, presupuestos, revisor e interruptor; nivel 5 datos etiquetados, conjunto dorado, entrenamiento, registro de modelos y enrutador">
+<rect x="20" y="20" width="860" height="58" rx="10" class="c-apl"/>
+<text x="34" y="40" class="t t-xs t-b k-apl">NIVEL 5</text>
+<text x="34" y="57" class="t t-b">Modelos ajustados</text>
+<text x="34" y="71" class="t t-s t-m">propios</text>
+<rect x="200" y="36" width="122" height="26" rx="13" class="caja"/>
+<text x="261" y="53" class="t t-s" text-anchor="middle">datos etiquetados</text>
+<rect x="330" y="36" width="110" height="26" rx="13" class="caja"/>
+<text x="384" y="53" class="t t-s" text-anchor="middle">conjunto dorado</text>
+<rect x="447" y="36" width="97" height="26" rx="13" class="caja"/>
+<text x="496" y="53" class="t t-s" text-anchor="middle">entrenamiento</text>
+<rect x="552" y="36" width="134" height="26" rx="13" class="caja"/>
+<text x="619" y="53" class="t t-s" text-anchor="middle">registro de modelos</text>
+<rect x="694" y="36" width="73" height="26" rx="13" class="caja"/>
+<text x="731" y="53" class="t t-s" text-anchor="middle">enrutador</text>
+<text x="866" y="54" class="t t-b k-apl" text-anchor="end">especializa</text>
+<rect x="20" y="88" width="860" height="58" rx="10" class="c-tra"/>
+<text x="34" y="108" class="t t-xs t-b k-tra">NIVEL 4</text>
+<text x="34" y="125" class="t t-b">Agentes con objetivos</text>
+<rect x="200" y="104" width="91" height="26" rx="13" class="caja"/>
+<text x="246" y="121" class="t t-s" text-anchor="middle">planificador</text>
+<rect x="299" y="104" width="103" height="26" rx="13" class="caja"/>
+<text x="351" y="121" class="t t-s" text-anchor="middle">bus de eventos</text>
+<rect x="411" y="104" width="91" height="26" rx="13" class="caja"/>
+<text x="456" y="121" class="t t-s" text-anchor="middle">presupuestos</text>
+<rect x="510" y="104" width="61" height="26" rx="13" class="caja"/>
+<text x="540" y="121" class="t t-s" text-anchor="middle">revisor</text>
+<rect x="578" y="104" width="146" height="26" rx="13" class="caja"/>
+<text x="652" y="121" class="t t-s" text-anchor="middle">interruptor de parada</text>
+<text x="866" y="122" class="t t-b k-tra" text-anchor="end">persigue</text>
+<rect x="20" y="156" width="860" height="58" rx="10" class="c-red"/>
+<text x="34" y="176" class="t t-xs t-b k-red">NIVEL 3</text>
+<text x="34" y="193" class="t t-b">Automatizaciones</text>
+<text x="34" y="207" class="t t-s t-m">con herramientas</text>
+<rect x="200" y="172" width="164" height="26" rx="13" class="caja"/>
+<text x="282" y="189" class="t t-s" text-anchor="middle">registro de herramientas</text>
+<rect x="372" y="172" width="103" height="26" rx="13" class="caja"/>
+<text x="424" y="189" class="t t-s" text-anchor="middle">servidores MCP</text>
+<rect x="484" y="172" width="128" height="26" rx="13" class="caja"/>
+<text x="548" y="189" class="t t-s" text-anchor="middle">motor de políticas</text>
+<rect x="620" y="172" width="91" height="26" rx="13" class="caja"/>
+<text x="665" y="189" class="t t-s" text-anchor="middle">aprobaciones</text>
+<rect x="719" y="172" width="85" height="26" rx="13" class="caja"/>
+<text x="761" y="189" class="t t-s" text-anchor="middle">orquestador</text>
+<text x="866" y="190" class="t t-b k-red" text-anchor="end">actúa</text>
+<rect x="20" y="224" width="860" height="58" rx="10" class="c-enl"/>
+<text x="34" y="244" class="t t-xs t-b k-enl">NIVEL 2</text>
+<text x="34" y="261" class="t t-b">Interacciones</text>
+<text x="34" y="275" class="t t-s t-m">personalizadas</text>
+<rect x="200" y="240" width="79" height="26" rx="13" class="caja"/>
+<text x="240" y="257" class="t t-s" text-anchor="middle">SSO y RBAC</text>
+<rect x="287" y="240" width="55" height="26" rx="13" class="caja"/>
+<text x="314" y="257" class="t t-s" text-anchor="middle">sesión</text>
+<rect x="350" y="240" width="61" height="26" rx="13" class="caja"/>
+<text x="380" y="257" class="t t-s" text-anchor="middle">memoria</text>
+<rect x="418" y="240" width="140" height="26" rx="13" class="caja"/>
+<text x="488" y="257" class="t t-s" text-anchor="middle">adaptadores de canal</text>
+<text x="866" y="258" class="t t-b k-enl" text-anchor="end">recuerda</text>
+<rect x="20" y="292" width="860" height="58" rx="10" class="c-fis"/>
+<text x="34" y="312" class="t t-xs t-b k-fis">NIVEL 1</text>
+<text x="34" y="329" class="t t-b">Generación</text>
+<text x="34" y="343" class="t t-s t-m">contextualizada</text>
+<rect x="200" y="308" width="79" height="26" rx="13" class="caja"/>
+<text x="240" y="325" class="t t-s" text-anchor="middle">plantillas</text>
+<rect x="287" y="308" width="85" height="26" rx="13" class="caja"/>
+<text x="330" y="325" class="t t-s" text-anchor="middle">recuperador</text>
+<rect x="380" y="308" width="116" height="26" rx="13" class="caja"/>
+<text x="438" y="325" class="t t-s" text-anchor="middle">índice vectorial</text>
+<rect x="504" y="308" width="134" height="26" rx="13" class="caja"/>
+<text x="571" y="325" class="t t-s" text-anchor="middle">validador de salida</text>
+<text x="866" y="326" class="t t-b k-fis" text-anchor="end">responde</text>
+<rect x="20" y="360" width="860" height="70" rx="10" class="caja" style="stroke-width:2"/>
+<text x="34" y="380" class="t t-xs t-b t-m">BASE COMÚN</text>
+<text x="34" y="397" class="t t-b">Desde la</text>
+<text x="34" y="413" class="t t-b">primera llamada</text>
+<rect x="200" y="382" width="140" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/>
+<text x="270" y="399" class="t t-s" text-anchor="middle">puerta a los modelos</text>
+<rect x="348" y="382" width="55" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/>
+<text x="375" y="399" class="t t-s" text-anchor="middle">trazas</text>
+<rect x="411" y="382" width="116" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/>
+<text x="468" y="399" class="t t-s" text-anchor="middle">costo por pedido</text>
+<rect x="534" y="382" width="122" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/>
+<text x="595" y="399" class="t t-s" text-anchor="middle">secretos y claves</text>
+<rect x="664" y="382" width="146" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/>
+<text x="737" y="399" class="t t-s" text-anchor="middle">evaluación automática</text>
+<text x="866" y="400" class="t t-b t-m" text-anchor="end">mide</text>
+</svg></div><figcaption><b>La arquitectura que se acumula.</b> Se lee de abajo hacia arriba. La franja gris del fondo es la base que comparten todos los niveles: la puerta a los modelos, las trazas, los costos, los secretos y la evaluación. Cada fila de color es un nivel, con los componentes que agrega. Ninguna fila reemplaza a la de abajo: el nivel 3 sigue usando el recuperador del nivel 1 y la identidad del nivel 2. A la derecha, el verbo de cada nivel: responde, recuerda, actúa, persigue y especializa; la base común, mide.</figcaption></figure></section>
+<section><h2>Nivel 1, generación contextualizada: responder y producir con el conocimiento de la empresa</h2><div class="prose"><p>En el nivel 1 la aplicación <b>responde y produce contenido con el conocimiento de la empresa</b>: manuales, políticas, tarifas, tickets resueltos. El modelo no sabe nada de tu empresa: aprendió de textos públicos hasta cierta fecha. Todo lo que necesita saber se lo das tú, en cada llamada, dentro del <b>contexto</b> (<i>context</i>): el texto que el modelo lee antes de responder.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un traductor experto que llega a una empresa nueva sabe el idioma, pero no sabe cómo se llaman los productos ni qué dice el contrato. Si le das el glosario y el documento, traduce perfecto. Si no se lo das, traduce con lo que se imagina, y lo hace con la misma seguridad.</p></div><div class="prose"><p>Las piezas de software del nivel 1 son pocas y muy concretas:</p><ul><li><b>La puerta a los modelos</b> (<i>model gateway</i>): un módulo propio por el que pasan todas las llamadas. Guarda las claves, elige el modelo, aplica límites de gasto y registra cada llamada. Es lo primero que se construye y lo usan los cinco niveles.</li><li><b>Las plantillas de instrucciones</b> (<i>prompt templates</i>): el texto fijo que le dice al modelo su rol, su tarea y su formato, con variables que el código llena. Se versionan como código.</li><li><b>El recuperador</b> (<i>retriever</i>): busca en los documentos los fragmentos que responden la pregunta. Detrás suele haber un <b>índice vectorial</b> (<i>vector index</i>), donde cada fragmento está guardado como un <b>embedding</b> (vector de significado): una lista de números que permite buscar por parecido de significado y no solo por palabras exactas. La técnica completa se llama <b>RAG</b> (<i>Retrieval-Augmented Generation</i>, generación aumentada con recuperación).</li><li><b>El validador de salida</b>: comprueba que la respuesta tenga el formato pedido, por ejemplo un JSON con los campos <code>respuesta</code> y <code>fuentes</code>, antes de mostrarla.</li></ul><p>También es nivel 1 lo <b>multimodal</b> (<i>multimodal</i>): leer un PDF escaneado, la foto de la etiqueta de un equipo o el audio de una llamada, y convertirlo en texto o en datos.</p><p>En código, el nivel 1 es una función que arma un pedido y valida lo que vuelve. Más o menos así (es un esbozo; los capítulos 3 a 5 lo construyen de verdad):</p><div class="code-copia"><pre><code>def responder(pregunta: str) -&gt; Respuesta:
+    fragmentos = recuperador.buscar(pregunta, k=4)
+    mensajes = plantilla("respuesta-agente@v1", pregunta=pregunta, fragmentos=fragmentos)
+    salida = puerta.llamar(modelo="pequeno", mensajes=mensajes, temperatura=0)
+    return validar(salida, esquema=Respuesta)  # respuesta + fuentes, o "no lo sé"</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El modelo no sabe nada de tu empresa</h3></div><p>Vas a hacerle la misma pregunta a un modelo local dos veces: primero sola y después con un párrafo de contexto. Necesitas Ollama con un modelo pequeño descargado (la práctica de la sección «La lista de preparación» lo instala; si ya lo tienes, sigue).</p><div class="cmds"><div class="cmd-panel" data-so="win mac linux"><div class="cmd-l"><code>ollama run llama3.2:3b "¿Cuánto cobra la empresa por reconectar el servicio después de un corte por falta de pago?"</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>ollama run llama3.2:3b "Contexto: Política de reconexión vigente desde 2026: el cargo por reconexión es de US$ 5,00 y se suma a la factura vencida. Pregunta: ¿Cuánto cobra la empresa por reconectar el servicio después de un corte por falta de pago? Responde solo con el contexto y cita la política."</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta la primera línea y lee la respuesta completa. Anota si da un monto y de dónde dice que lo saca.</span></li><li><span>Ejecuta la segunda línea y compara. Anota si cita la política y si agrega algo que no está en el contexto.</span></li><li><span>Repite la primera línea dos veces más y mira si el monto cambia.</span></li></ol><p><b>Qué observar:</b> sin contexto, el modelo responde algo genérico o inventa un monto con total seguridad, y puede cambiar de una vez a otra. Con el párrafo de contexto, responde US$ 5,00 y lo atribuye a la política. Eso es el nivel 1 en miniatura: el conocimiento lo pone la aplicación, no el modelo. Cualquier modelo pequeño sirve (<code>qwen2.5:3b</code>, por ejemplo); las palabras exactas cambian de un modelo a otro.</p></div></section>
+<section><h2>Nivel 2, interacciones personalizadas: asistentes que recuerdan y se adaptan a cada rol</h2><div class="prose"><p>En el nivel 2 la aplicación <b>sabe con quién habla</b>: conoce su rol, sus permisos y su historia, recuerda lo que importa y lo atiende por el canal que use.</p></div><div class="analogia"><b>Imagínalo así</b><p>El mesero de tu restaurante de siempre te saluda por tu nombre, sabe que no comes picante y te pregunta si quieres «lo de siempre». No es más inteligente que un mesero nuevo: tiene memoria y sabe quién eres. Y si un día llamas para pedir a domicilio, te reconoce igual.</p></div><div class="prose"><p>El salto técnico es que el contexto ya no es igual para todos. Cada turno, la aplicación arma un contexto distinto según quién pregunta. Las piezas nuevas:</p><ul><li><b>Identidad y permisos.</b> La persona entra con la cuenta de la empresa por <b>inicio de sesión único</b> (<i>single sign-on</i>, SSO), y la aplicación aplica un <b>control de acceso basado en roles</b> (<i>Role-Based Access Control</i>, RBAC). Un agente de atención ve la ficha del cliente que atiende; un técnico, las órdenes de su zona. El recuperador del nivel 1 filtra por esos mismos permisos.</li><li><b>El almacén de sesión y de memoria.</b> La conversación en curso vive en un almacén de sesión; lo que conviene recordar más allá de la conversación (una preferencia, un pendiente) va a un almacén de memoria con reglas de retención y de borrado.</li><li><b>Los adaptadores de canal</b> (<i>channel adapters</i>): traducen la misma respuesta a la web, al chat interno, al correo o a la mensajería. El chatbot de cara al cliente, con WhatsApp y el traspaso a una persona, es tema de <a href="https://aaramirez.github.io/chatbots-empresariales/temario.html" target="_blank" rel="noopener">Chatbots empresariales</a>.</li></ul><p>En código, la firma de la función cambia: ya no recibe solo la pregunta, sino también quién la hace.</p><div class="code-copia"><pre><code>def responder(pregunta: str, usuario: Usuario, sesion: Sesion) -&gt; Respuesta:
+    perfil = identidad.perfil(usuario)            # rol y permisos
+    recuerdos = memoria.leer(usuario, sesion)     # lo que importa de antes
+    fragmentos = recuperador.buscar(pregunta, k=4, permisos=perfil.permisos)
+    ...</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div></div></section>
+<section><h2>Nivel 3, automatizaciones con herramientas: leer, decidir y actuar con supervisión</h2><div class="prose"><p>En el nivel 3 la aplicación <b>deja de solo hablar y empieza a actuar</b>: consulta una factura, reprograma una visita, prepara un reembolso. El modelo nunca toca un sistema. Lo que hace es proponer, en un formato estructurado, qué función llamar y con qué datos. A eso se le llama <b>llamada a herramientas</b> (<i>tool calling</i>). Tu código decide si la ejecuta.</p></div><div class="analogia"><b>Imagínalo así</b><p>En un quirófano, la instrumentista no opera, pero sabe qué va a necesitar el cirujano y se lo prepara. El cirujano pide «bisturí del 10» y ella se lo pasa; nadie toma un instrumento por su cuenta. Y antes de cerrar, alguien cuenta las gasas en voz alta: hay un protocolo para que nada salga mal sin que se note.</p></div><div class="prose"><p>Las piezas nuevas del nivel 3:</p><ul><li><b>El registro de herramientas</b> (<i>tool registry</i>): la lista de funciones que el modelo puede pedir, cada una con su nombre, su descripción, su esquema de entrada, su nivel de riesgo y su dueño. Muchas se publican con el <b>MCP</b> (<i>Model Context Protocol</i>, protocolo de contexto de modelos), un estándar abierto para conectar modelos con sistemas.</li><li><b>El motor de políticas</b> (<i>policy engine</i>): decide, con reglas escritas en código, si una acción se ejecuta sola, pide aprobación o se rechaza. OPA y Cedar son ejemplos del mercado.</li><li><b>La cola de aprobaciones</b>: donde esperan las acciones que una persona debe confirmar. Es el <b>humano en el bucle</b> (<i>human in the loop</i>).</li><li><b>El orquestador</b> (<i>orchestrator</i>): encadena los pasos de una tarea, reintenta los que fallan y deshace lo hecho si algo sale mal a mitad de camino. Temporal, las funciones durables de los proveedores de nube y n8n son ejemplos del mercado.</li></ul><p>Para que una acción no se aplique dos veces por un reintento, cada llamada lleva una <b>clave de idempotencia</b> (<i>idempotency key</i>); y cada acción deja su huella en un <b>registro de auditoría</b> (<i>audit log</i>). El capítulo 11 lo construye.</p></div></section>
+<section><h2>Niveles 4 y 5: agentes con objetivos y modelos ajustados</h2><div class="prose"><p>Hasta el nivel 3, una persona pide cada acción. En el nivel 4 la persona da un <b>objetivo</b> y la aplicación decide los pasos. Un <b>agente</b> (<i>AI agent</i>) es un programa que, con un modelo, planifica, usa las herramientas del nivel 3, mira el resultado, corrige el plan y sigue hasta terminar o hasta que un límite lo detiene. Las piezas nuevas son un <b>planificador</b> que produce planes como datos con esquema, una fuente de <b>eventos</b> (<i>events</i>) que despierta al agente (un ticket nuevo, una alarma), <b>presupuestos</b> de pasos, dinero y tiempo, un revisor y un <b>interruptor de parada</b> (<i>kill switch</i>). Cómo se gobierna un agente por dentro (su bucle, sus reglas y sus validadores) es el tema de <a href="https://aaramirez.github.io/arneses/temario.html" target="_blank" rel="noopener">Cómo construir un arnés</a>; aquí el agente es un cliente más de lo que construiste en los niveles 1 a 3.</p><p>En el nivel 5 cambia el modelo mismo. El <b>ajuste fino</b> (<i>fine-tuning</i>) sigue entrenando un modelo existente con miles de ejemplos propios para que aprenda un formato, un tono o una tarea. Pide piezas que nada tienen que ver con las anteriores: un <b>conjunto dorado</b> (<i>golden set</i>) de ejemplos con su respuesta correcta, un registro de modelos con versiones y un <b>enrutador</b> (<i>router</i>) que manda cada pedido al modelo más pequeño que alcanza la calidad. Cómo se entrena un modelo por dentro está en <a href="https://aaramirez.github.io/modelos-de-ia/temario.html" target="_blank" rel="noopener">Modelos de IA</a>.</p><p>Los dos niveles altos son los que más se piden y los que menos se necesitan al principio. El laboratorio siguiente pone doce casos reales de distintas áreas frente a la escalera.</p></div><div class="lab" id="01-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Doce casos en la escalera</h3></div><p class="hint">Doce casos de distintas áreas de una empresa de servicios. Elige el nivel de cada uno (N1 a N5) y mira, abajo, qué componentes de la arquitectura se encienden con lo que elegiste. Pulsa «Revisar» para ver el nivel correcto de cada caso y qué pide de datos, herramientas y control.</p><style>
+[id="01-lab-1"] .c1l1-lista{display:grid;gap:8px}
+[id="01-lab-1"] .c1l1-it{border:1px solid var(--line);border-radius:10px;padding:8px 12px;display:grid;gap:6px;background:var(--card)}
+[id="01-lab-1"] .c1l1-it p{margin:0;font:500 .88rem/1.4 var(--f-body)}
+[id="01-lab-1"] .c1l1-area{font:700 .68rem var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-right:6px}
+[id="01-lab-1"] .c1l1-it .btns button{font-size:.78rem;padding:4px 9px}
+[id="01-lab-1"] .c1l1-it.bien{border-color:var(--good);background:var(--good-soft)}
+[id="01-lab-1"] .c1l1-it.mal{border-color:var(--warm);background:var(--warm-soft)}
+[id="01-lab-1"] .c1l1-exp{font:500 .82rem/1.45 var(--f-display);color:var(--ink);display:grid;gap:2px}
+[id="01-lab-1"] .c1l1-exp b{color:var(--good)}
+[id="01-lab-1"] .c1l1-it.mal .c1l1-exp b.c1l1-v{color:var(--warm)}
+[id="01-lab-1"] .c1l1-arq{display:grid;gap:5px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--paper)}
+[id="01-lab-1"] .c1l1-fila{display:grid;grid-template-columns:44px 1fr;gap:8px;align-items:center}
+[id="01-lab-1"] .c1l1-fila>span{font:700 .78rem var(--f-mono);color:var(--muted)}
+[id="01-lab-1"] .c1l1-chips{display:flex;flex-wrap:wrap;gap:4px}
+[id="01-lab-1"] .c1l1-chips i{font:500 .74rem var(--f-display);font-style:normal;padding:3px 7px;border-radius:999px;border:1px dashed var(--line);color:var(--muted);background:var(--card)}
+[id="01-lab-1"] .c1l1-chips i.on{border-style:solid;color:var(--ink);font-weight:600}
+[id="01-lab-1"] .c1l1-tit{font:700 .78rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+</style>
+<div class="btns">
+  <button type="button" class="primary" id="c1l1-rev">Revisar</button>
+  <button type="button" id="c1l1-sol">Ver la solución</button>
+  <button type="button" id="c1l1-reset">Borrar respuestas</button>
+</div>
+<div class="c1l1-lista" id="c1l1-lista"></div>
+<div class="c1l1-arq" aria-label="Componentes de la arquitectura que pide tu clasificación">
+  <div class="c1l1-tit">Lo que tendrías que construir con tu clasificación</div>
+  <div id="c1l1-arq"></div>
+</div>
+<div class="readout texto" id="c1l1-out" aria-live="polite"></div></div></section>
+<section><h2>La lista de preparación: problema, datos, cumplimiento, plataforma y equipo</h2><div class="prose"><p>Antes de escribir una línea de código conviene revisar una <b>lista de preparación</b> (<i>readiness checklist</i>). No es burocracia: cada punto que falta se convierte, más adelante, en un problema técnico que nadie puede arreglar con un mejor prompt.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un piloto revisa la lista antes de despegar aunque haya volado mil veces: combustible, flaps, instrumentos, permiso de la torre. No lo hace porque dude de su habilidad, sino porque un olvido que en tierra se arregla en un minuto, en el aire no tiene arreglo.</p></div><div class="prose"><p>La lista tiene cinco grupos:</p><ol class="steps"><li><span><b>Problema.</b> Un problema escrito con una métrica y una <b>línea base</b> (<i>baseline</i>), la medición de cómo se hace hoy. «Que los agentes respondan más rápido las preguntas de tarifas» no alcanza; «bajar de 4 a 2 minutos el tiempo medio de las consultas de tarifas, medido en el sistema de tickets» sí.</span></li><li><span><b>Datos.</b> Documentos con dueño, fecha y permisos para el nivel 1; perfiles y roles en los sistemas para el nivel 2; <b>APIs</b> documentadas con un ambiente de pruebas para el nivel 3; eventos para el nivel 4; ejemplos etiquetados para el nivel 5.</span></li><li><span><b>Cumplimiento.</b> Una regla clara sobre los <b>datos personales</b> (<i>personally identifiable information</i>, PII): cuáles pueden salir hacia un proveedor de modelos, cuáles se enmascaran antes y cuáles nunca salen. Sin esa regla, el primer piloto se detiene en la revisión legal.</span></li><li><span><b>Plataforma.</b> Qué proveedor o modelo se usa, dónde viven las claves, qué base vectorial, cómo se registran las trazas y los costos, y cómo se evalúa. Es la base gris de la figura del principio.</span></li><li><span><b>Equipo.</b> Un dueño de producto y un experto del área como mínimo, más un ingeniero que construya la plataforma. El nivel 3 suma a alguien de integración, y el nivel 5, a alguien de datos y aprendizaje automático.</span></li></ol></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Tu plataforma mínima: un modelo local</h3></div><p>Todas las prácticas del curso usan Ollama, un programa gratuito y sin cuenta que corre modelos abiertos en tu computadora y los expone con una API compatible con la de OpenAI en <code>http://localhost:11434</code>. Vas a instalarlo, descargar un modelo pequeño y comprobar que la API responde. El modelo pesa unos 2 GB.</p><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>irm https://ollama.com/install.ps1 | iex</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>ollama pull llama3.2:3b</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>ollama list</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl.exe -s http://localhost:11434/api/tags</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl.exe -s http://localhost:11434/v1/models</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>curl -fsSL https://ollama.com/install.sh | sh</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>ollama pull llama3.2:3b</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>ollama list</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl -s http://localhost:11434/api/tags</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl -s http://localhost:11434/v1/models</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Instala Ollama con la primera línea (o descarga el instalador desde <a href="https://ollama.com/download" target="_blank" rel="noopener">ollama.com/download</a>) y abre una terminal nueva.</span></li><li><span>Descarga el modelo y lista los modelos instalados. Anota el tamaño que muestra <code>ollama list</code>.</span></li><li><span>Consulta las dos rutas de la API. La primera es la API propia de Ollama; la segunda imita la de OpenAI.</span></li></ol><p><b>Qué observar:</b> las dos rutas devuelven un JSON con el modelo que descargaste: la misma información en dos formatos. La segunda es la que usa el curso, porque el mismo código sirve para un proveedor comercial cambiando solo la dirección y la clave. Si tu computadora es lenta, prueba <code>qwen2.5:1.5b</code>; cualquier modelo pequeño sirve. Un proveedor comercial (OpenAI, Anthropic, Google y otros) es una alternativa, no un requisito.</p></div><div class="prose"><p>El laboratorio convierte la lista en un tablero: marcas lo que tiene una organización y ves hasta qué nivel puede llegar hoy y qué le falta para el siguiente.</p></div><div class="lab" id="01-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>La lista de preparación</h3></div><p class="hint">Marca lo que ya tiene una organización, o carga uno de los perfiles de ejemplo. Las barras muestran cuánto está listo para cada nivel y la lectura dice qué nivel se puede abordar primero y qué falta para subir.</p><style>
+[id="01-lab-2"] .c1l2-grupos{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:10px}
+[id="01-lab-2"] fieldset{border:1px solid var(--line);border-radius:10px;padding:8px 10px 10px;margin:0;background:var(--card);min-width:0}
+[id="01-lab-2"] legend{font:700 .74rem var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:0 4px}
+[id="01-lab-2"] fieldset label{display:grid;grid-template-columns:18px 1fr auto;gap:6px;align-items:start;font:500 .84rem/1.35 var(--f-display);color:var(--ink);padding:3px 0;cursor:pointer}
+[id="01-lab-2"] fieldset label input{margin:2px 0 0}
+[id="01-lab-2"] .c1l2-n{font:700 .7rem var(--f-mono);padding:1px 5px;border-radius:4px;border:1px solid}
+[id="01-lab-2"] .c1l2-barras{display:grid;gap:6px}
+[id="01-lab-2"] .c1l2-b{display:grid;grid-template-columns:150px 1fr 48px;gap:8px;align-items:center;font:600 .8rem var(--f-display)}
+[id="01-lab-2"] .c1l2-b .pista{height:14px;border-radius:7px;background:var(--grid);overflow:hidden}
+[id="01-lab-2"] .c1l2-b .pista i{display:block;height:100%;transition:width .25s}
+[id="01-lab-2"] .c1l2-b output{font-family:var(--f-mono);text-align:right}
+@media (max-width:520px){[id="01-lab-2"] .c1l2-b{grid-template-columns:96px 1fr 42px;font-size:.74rem}}
+@media (prefers-reduced-motion: reduce){[id="01-lab-2"] .c1l2-b .pista i{transition:none}}
+</style>
+<div class="btns" role="group" aria-label="Perfiles de ejemplo">
+  <button type="button" data-p="dia1" aria-pressed="false">La empresa ficticia, día uno</button>
+  <button type="button" data-p="d90" aria-pressed="false">Después de 90 días</button>
+  <button type="button" data-p="prisa" aria-pressed="false">Mucho entusiasmo, poca base</button>
+  <button type="button" data-p="nada" aria-pressed="false">Vaciar</button>
+</div>
+<div class="c1l2-grupos" id="c1l2-grupos"></div>
+<div class="c1l2-barras" id="c1l2-barras"></div>
+<div class="readout texto" id="c1l2-out" aria-live="polite"></div></div></section>
+<section><h2>Qué pide cada nivel de datos, herramientas y control</h2><div class="prose"><p>Cada peldaño suma exigencias a las anteriores; ninguna desaparece al subir. La tabla junta lo que necesitas construir o tener, nivel por nivel. La estrategia de adopción, los KPIs de negocio y el plan de la empresa para recorrer la escalera están en <a href="https://aaramirez.github.io/adopcion-de-ia/temario.html" target="_blank" rel="noopener">IA en la empresa</a>; aquí está lo técnico.</p><div class="tbl"><table><thead><tr><th>Nivel</th><th>Datos</th><th>Herramientas y piezas</th><th>Control</th><th>Capítulos</th></tr></thead><tbody><tr><td>1 · Generación contextualizada</td><td>Documentos con dueño, fecha, sensibilidad y permisos</td><td>Puerta a los modelos, plantillas versionadas, recuperador e índice vectorial, validador de esquemas</td><td>Citar o abstenerse, filtro de datos personales, evaluación de fidelidad</td><td>3, 4, 5 y 8</td></tr><tr><td>2 · Interacciones personalizadas</td><td>Perfiles, roles, historial con retención</td><td>SSO y RBAC, almacén de sesión y memoria, adaptadores de canal</td><td>Memoria acotada y visible, consentimiento, permisos heredados</td><td>6, 7</td></tr><tr><td>3 · Automatizaciones con herramientas</td><td>APIs documentadas, datos de prueba, ambiente aislado</td><td>Registro de herramientas, servidores MCP, motor de políticas, cola de aprobaciones, orquestador</td><td>Simulación, aprobación humana, idempotencia, auditoría</td><td>9 a 12</td></tr><tr><td>4 · Agentes con objetivos</td><td>Eventos en tiempo real, relaciones entre entidades</td><td>Planificador, revisor, bus de eventos</td><td>Presupuestos, puntos de control, interruptor de parada, trazas completas</td><td>13</td></tr><tr><td>5 · Modelos ajustados</td><td>Ejemplos etiquetados con consentimiento, conjunto dorado</td><td>Infraestructura de entrenamiento, registro de modelos, enrutador</td><td>Evaluación contra el modelo base, respaldo y vuelta atrás</td><td>14</td></tr></tbody></table></div><p>Una aclaración sobre el RAG: es una técnica del nivel 1, pero su versión completa (capítulo 8) llega en la parte del nivel 2, porque en producción el recuperador filtra por los permisos de quien pregunta. Mientras tanto, el nivel 1 empieza con un contexto armado a mano, como en la práctica de la sección del nivel 1.</p><p>Debajo de todas las filas va la base común: trazas de cada llamada, costo por pedido, evaluación automática y manejo de secretos. Los capítulos 15 a 20 la cubren, pero no se construye al final: empieza el primer día, con la primera llamada al modelo.</p></div><figure class="fig fig-flujo" id="01-diagrama-2"><div class="lienzo"><svg viewBox="0 0 1010 580" style="min-width:800px" role="img" aria-label="Diagrama de secuencia de una petición de nivel 3: el agente de atención pide reprogramar la visita 4471; la aplicación consulta identidad y permisos, el recuperador trae la política de visitas, el modelo propone la herramienta reprogramar_visita, el motor de políticas pide aprobación, la supervisora aprueba y el sistema de órdenes ejecuta con clave de idempotencia; todo queda en la traza">
+<defs>
+<marker id="c1d2-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+<marker id="c1d2-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-fis"/></marker>
+<marker id="c1d2-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker>
+<marker id="c1d2-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-red"/></marker>
+<marker id="c1d2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+</defs>
+<rect x="12" y="14" width="92" height="50" rx="10" class="caja"/>
+<text x="58" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Agente de</text>
+<text x="58" y="52" class="t t-s t-m" text-anchor="middle">atención</text>
+<line x1="58" y1="64" x2="58" y2="564" class="vida"/>
+<rect x="117" y="14" width="92" height="50" rx="10" class="caja"/>
+<text x="163" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Supervisora</text>
+<text x="163" y="52" class="t t-s t-m" text-anchor="middle">aprueba</text>
+<line x1="163" y1="64" x2="163" y2="564" class="vida"/>
+<rect x="222" y="14" width="92" height="50" rx="10" class="caja"/>
+<text x="268" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Asistente</text>
+<text x="268" y="52" class="t t-s t-m" text-anchor="middle">la aplicación</text>
+<line x1="268" y1="64" x2="268" y2="564" class="vida"/>
+<rect x="327" y="14" width="92" height="50" rx="10" class="c-enl"/>
+<text x="373" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Identidad</text>
+<text x="373" y="52" class="t t-s t-m" text-anchor="middle">nivel 2</text>
+<line x1="373" y1="64" x2="373" y2="564" class="vida"/>
+<rect x="432" y="14" width="92" height="50" rx="10" class="c-fis"/>
+<text x="478" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Recuperador</text>
+<text x="478" y="52" class="t t-s t-m" text-anchor="middle">nivel 1</text>
+<line x1="478" y1="64" x2="478" y2="564" class="vida"/>
+<rect x="537" y="14" width="92" height="50" rx="10" class="c-fis"/>
+<text x="583" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Puerta y</text>
+<text x="583" y="52" class="t t-s t-m" text-anchor="middle">modelo</text>
+<line x1="583" y1="64" x2="583" y2="564" class="vida"/>
+<rect x="642" y="14" width="92" height="50" rx="10" class="c-red"/>
+<text x="688" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Motor de</text>
+<text x="688" y="52" class="t t-s t-m" text-anchor="middle">políticas · N3</text>
+<line x1="688" y1="64" x2="688" y2="564" class="vida"/>
+<rect x="747" y="14" width="92" height="50" rx="10" class="caja"/>
+<text x="793" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Sistema de</text>
+<text x="793" y="52" class="t t-s t-m" text-anchor="middle">órdenes</text>
+<line x1="793" y1="64" x2="793" y2="564" class="vida"/>
+<text x="66" y="98" class="t" style="font-size:12px">① «Reprograma la 4471</text>
+<line x1="58" y1="126" x2="266" y2="126" class="ln" style="stroke-width:2" marker-end="url(#c1d2-m)"/>
+<text x="66" y="118" class="t" style="font-size:12px">al jueves en la tarde»</text>
+<line x1="268" y1="166" x2="371" y2="166" class="ln s-enl" style="stroke-width:2" marker-end="url(#c1d2-e)"/>
+<text x="276" y="158" class="t" style="font-size:12px">② ¿quién es?</text>
+<line x1="373" y1="196" x2="270" y2="196" class="ln s-enl" style="stroke-width:2" marker-end="url(#c1d2-e)"/>
+<text x="276" y="188" class="t" style="font-size:12px">rol y permisos</text>
+<line x1="268" y1="236" x2="476" y2="236" class="ln s-fis" style="stroke-width:2" marker-end="url(#c1d2-f)"/>
+<text x="276" y="228" class="t" style="font-size:12px">③ buscar «visitas»</text>
+<line x1="478" y1="266" x2="270" y2="266" class="ln s-fis" style="stroke-width:2" marker-end="url(#c1d2-f)"/>
+<text x="276" y="258" class="t" style="font-size:12px">política de visitas §2</text>
+<line x1="268" y1="306" x2="581" y2="306" class="ln s-fis" style="stroke-width:2" marker-end="url(#c1d2-f)"/>
+<text x="276" y="298" class="t" style="font-size:12px">④ mensajes + contexto + herramientas</text>
+<line x1="583" y1="346" x2="270" y2="346" class="ln s-red" style="stroke-width:2" marker-end="url(#c1d2-r)"/>
+<text x="282" y="338" class="t" style="font-size:12px">⑤ <tspan class="t-mono">reprogramar_visita(4471, jue, tarde)</tspan></text>
+<line x1="268" y1="386" x2="686" y2="386" class="ln s-red" style="stroke-width:2" marker-end="url(#c1d2-r)"/>
+<text x="418" y="378" class="t" style="font-size:12px">⑥ ¿se puede ejecutar?</text>
+<line x1="688" y1="416" x2="270" y2="416" class="ln s-red" style="stroke-width:2" marker-end="url(#c1d2-r)"/>
+<text x="418" y="408" class="t" style="font-size:12px">requiere aprobación</text>
+<line x1="268" y1="452" x2="165" y2="452" class="ln s-warm" style="stroke-width:2" marker-end="url(#c1d2-w)"/>
+<text x="171" y="444" class="t" style="font-size:12px">vista previa</text>
+<line x1="163" y1="482" x2="266" y2="482" class="ln s-warm" style="stroke-width:2" marker-end="url(#c1d2-w)"/>
+<text x="171" y="474" class="t" style="font-size:12px">⑦ aprueba</text>
+<line x1="268" y1="522" x2="791" y2="522" class="ln s-red" style="stroke-width:2" marker-end="url(#c1d2-r)"/>
+<text x="418" y="514" class="t" style="font-size:12px">⑧ ejecutar · clave de idempotencia 7c1e</text>
+<line x1="793" y1="552" x2="270" y2="552" class="ln s-red" style="stroke-width:2" marker-end="url(#c1d2-r)"/>
+<text x="418" y="544" class="t" style="font-size:12px">hecho · todo queda en la traza</text>
+<path d="M870 84v188" class="ln s-fis" style="stroke-width:3"/>
+<text x="882" y="170" class="t t-xs t-b k-fis">ENTENDER</text>
+<text x="882" y="185" class="t t-s t-m">identidad y</text>
+<text x="882" y="199" class="t t-s t-m">contexto</text>
+<path d="M870 290v62" class="ln s-red" style="stroke-width:3"/>
+<text x="882" y="313" class="t t-xs t-b k-red">DECIDIR</text>
+<text x="882" y="328" class="t t-s t-m">el modelo</text>
+<text x="882" y="342" class="t t-s t-m">propone</text>
+<path d="M870 372v118" class="ln s-warm" style="stroke-width:3"/>
+<text x="882" y="423" class="t t-xs t-b k-warm">APROBAR</text>
+<text x="882" y="438" class="t t-s t-m">humano en</text>
+<text x="882" y="452" class="t t-s t-m">el bucle</text>
+<path d="M870 508v52" class="ln s-red" style="stroke-width:3"/>
+<text x="882" y="526" class="t t-xs t-b k-red">EJECUTAR</text>
+<text x="882" y="541" class="t t-s t-m">el código,</text>
+<text x="882" y="555" class="t t-s t-m">una sola vez</text>
+</svg></div><figcaption><b>Una petición de nivel 3 que usa los niveles de abajo.</b> Los participantes están arriba y el tiempo corre hacia abajo; cada flecha lleva el color del nivel que la hace posible. ① El agente de atención escribe «reprograma la visita de la orden 4471 para el jueves en la tarde»; ② la aplicación consulta la identidad y los permisos (nivel 2); ③ el recuperador trae la política de visitas (nivel 1); ④ la puerta a los modelos manda el contexto al modelo; ⑤ el modelo propone la herramienta <code>reprogramar_visita</code> con sus datos (nivel 3); ⑥ el motor de políticas pide aprobación; ⑦ la supervisora aprueba; ⑧ el sistema de órdenes ejecuta con una clave de idempotencia y todo queda en la traza. A la derecha, las fases: entender, decidir, aprobar y ejecutar.</figcaption></figure></section>
+<section><h2>El asistente de atención que sube de nivel en todo el curso</h2><div class="prose"><p>Para que cada pieza tenga un ejemplo concreto, el curso construye una sola aplicación de principio a fin. La empresa es la misma de <a href="https://aaramirez.github.io/adopcion-de-ia/temario.html" target="_blank" rel="noopener">IA en la empresa</a>: una <b>empresa de servicios ficticia</b> que vende un servicio por suscripción a hogares y pequeños negocios, lo instala, lo mantiene y lo cobra cada mes. Tiene 800 empleados, 150.000 clientes activos, 90 agentes de atención que reciben unos 40.000 contactos al mes y 120 técnicos que hacen unas 9.000 visitas. Sus sistemas son el <b>CRM</b> (<i>Customer Relationship Management</i>, gestión de la relación con clientes), el sistema de tickets, el de órdenes de trabajo, el de facturación y unas carpetas compartidas con manuales y políticas. Todos los datos son inventados.</p><p>Allá, la directora de operaciones es la patrocinadora y decidió subir la escalera en orden. Aquí conocemos al equipo que lo construye: <b>Lucía</b>, la líder técnica del pequeño equipo de producto de IA, y <b>Mateo</b>, el desarrollador que escribe el servicio. Su usuaria principal es la jefa del equipo de reclamos, con diez agentes que serán los primeros en usarlo.</p><p>La aplicación se llama, sin mucha imaginación, <b>el asistente de atención</b>. Es un servicio con una API REST (<code>POST /v1/consultas</code>) que se muestra como un panel al costado de la pantalla de tickets. Empieza respondiendo preguntas de los agentes con los manuales y termina actuando con aprobación. Los datos de ejemplo se repiten en todo el curso:</p><div class="tbl"><table><thead><tr><th>Dato de ejemplo</th><th>Valor</th></tr></thead><tbody><tr><td>Clienta</td><td>Carmen Rojas, cuenta 20417, plan Hogar 200 a US$ 30,00 al mes</td></tr><tr><td>Factura</td><td>F-88213, de octubre, por US$ 30,00, vencida</td></tr><tr><td>Cargo de reconexión</td><td>US$ 5,00, según la política de reconexión vigente desde 2026</td></tr><tr><td>Ticket</td><td>T-55190: Carmen reclama un cobro duplicado de US$ 30,00</td></tr><tr><td>Orden de trabajo</td><td>4471: visita técnica que Carmen quiere mover al jueves en la tarde</td></tr><tr><td>Regla de reembolsos</td><td>hasta US$ 10,00 pasa sola; más, con aprobación de una supervisora</td></tr></tbody></table></div></div><figure class="fig fig-mapa" id="01-diagrama-3"><div class="lienzo"><svg viewBox="0 0 900 454" style="min-width:700px" role="img" aria-label="Ruta del curso en seis franjas: el mapa con los capítulos 1 y 2; nivel 1 con los capítulos 3 a 5; nivel 2 con 6 a 8; nivel 3 con 9 a 12; niveles 4 y 5 con 13 y 14; calidad y operación con 15 a 20; cada franja con la versión del asistente de atención que construye">
+<rect x="20" y="16" width="860" height="62" rx="10" class="caja" style="stroke-width:2;stroke-dasharray:5 4"/>
+<text x="34" y="38" class="t t-xs t-b t-m">EL MAPA</text>
+<text x="34" y="60" class="t t-m" style="font-size:12px">el plan y el envoltorio</text>
+<rect x="631" y="34" width="237" height="26" rx="6" class="caja"/>
+<text x="749" y="51" class="t" style="font-size:12px" text-anchor="middle">2 · Probabilístico y determinista</text>
+<rect x="508" y="34" width="116" height="26" rx="6" class="caja"/>
+<text x="567" y="51" class="t" style="font-size:12px" text-anchor="middle">1 · La escalera</text>
+<rect x="20" y="88" width="860" height="62" rx="10" class="c-fis"/>
+<text x="34" y="110" class="t t-xs t-b k-fis">NIVEL 1</text>
+<text x="34" y="132" class="t t-m" style="font-size:12px">v0.1 a v0.3 · responde y clasifica</text>
+<rect x="684" y="106" width="184" height="26" rx="6" class="caja"/>
+<text x="776" y="123" class="t" style="font-size:12px" text-anchor="middle">5 · Salidas estructuradas</text>
+<rect x="475" y="106" width="204" height="26" rx="6" class="caja"/>
+<text x="577" y="123" class="t" style="font-size:12px" text-anchor="middle">4 · Contexto e instrucciones</text>
+<rect x="306" y="106" width="163" height="26" rx="6" class="caja"/>
+<text x="387" y="123" class="t" style="font-size:12px" text-anchor="middle">3 · Llamar a un modelo</text>
+<rect x="20" y="160" width="860" height="62" rx="10" class="c-enl"/>
+<text x="34" y="182" class="t t-xs t-b k-enl">NIVEL 2</text>
+<text x="34" y="204" class="t t-m" style="font-size:12px">v0.4 a v0.6 · conoce a Carmen y cita el manual</text>
+<rect x="805" y="178" width="63" height="26" rx="6" class="caja"/>
+<text x="837" y="195" class="t" style="font-size:12px" text-anchor="middle">8 · RAG</text>
+<rect x="709" y="178" width="90" height="26" rx="6" class="caja"/>
+<text x="754" y="195" class="t" style="font-size:12px" text-anchor="middle">7 · Memoria</text>
+<rect x="480" y="178" width="224" height="26" rx="6" class="caja"/>
+<text x="592" y="195" class="t" style="font-size:12px" text-anchor="middle">6 · Interfaces conversacionales</text>
+<rect x="20" y="232" width="860" height="62" rx="10" class="c-red"/>
+<text x="34" y="254" class="t t-xs t-b k-red">NIVEL 3</text>
+<text x="34" y="276" class="t t-m" style="font-size:12px">v0.7 a v0.9 · reprograma la 4471, reembolso con aprobación</text>
+<rect x="778" y="250" width="90" height="26" rx="6" class="caja"/>
+<text x="823" y="267" class="t" style="font-size:12px" text-anchor="middle">12 · Flujos</text>
+<rect x="642" y="250" width="130" height="26" rx="6" class="caja"/>
+<text x="707" y="267" class="t" style="font-size:12px" text-anchor="middle">11 · Aprobaciones</text>
+<rect x="567" y="250" width="70" height="26" rx="6" class="caja"/>
+<text x="602" y="267" class="t" style="font-size:12px" text-anchor="middle">10 · MCP</text>
+<rect x="438" y="250" width="123" height="26" rx="6" class="caja"/>
+<text x="499" y="267" class="t" style="font-size:12px" text-anchor="middle">9 · Herramientas</text>
+<rect x="20" y="304" width="860" height="62" rx="10" class="c-tra"/>
+<text x="34" y="326" class="t t-xs t-b k-tra">NIVELES 4 Y 5</text>
+<text x="34" y="348" class="t t-m" style="font-size:12px">v1.0 · agente de avería masiva y clasificador propio</text>
+<rect x="691" y="322" width="177" height="26" rx="6" class="caja"/>
+<text x="780" y="339" class="t" style="font-size:12px" text-anchor="middle">14 · ¿Ajustar un modelo?</text>
+<rect x="488" y="322" width="197" height="26" rx="6" class="caja"/>
+<text x="587" y="339" class="t" style="font-size:12px" text-anchor="middle">13 · Agentes en el producto</text>
+<rect x="20" y="376" width="860" height="62" rx="10" class="caja" style="stroke-width:2;stroke-dasharray:5 4"/>
+<text x="34" y="398" class="t t-xs t-b t-m">CALIDAD Y OPERACIÓN</text>
+<text x="34" y="420" class="t t-m" style="font-size:12px">en todas las versiones</text>
+<rect x="765" y="394" width="103" height="26" rx="6" class="caja"/>
+<text x="816" y="411" class="t" style="font-size:12px" text-anchor="middle">20 · Integrar</text>
+<rect x="662" y="394" width="96" height="26" rx="6" class="caja"/>
+<text x="711" y="411" class="t" style="font-size:12px" text-anchor="middle">19 · Prompts</text>
+<rect x="547" y="394" width="110" height="26" rx="6" class="caja"/>
+<text x="602" y="411" class="t" style="font-size:12px" text-anchor="middle">18 · Seguridad</text>
+<rect x="397" y="394" width="143" height="26" rx="6" class="caja"/>
+<text x="469" y="411" class="t" style="font-size:12px" text-anchor="middle">17 · Observabilidad</text>
+<rect x="295" y="394" width="96" height="26" rx="6" class="caja"/>
+<text x="343" y="411" class="t" style="font-size:12px" text-anchor="middle">16 · Evaluar</text>
+<rect x="186" y="394" width="103" height="26" rx="6" class="caja"/>
+<text x="237" y="411" class="t" style="font-size:12px" text-anchor="middle">15 · Patrones</text>
+</svg></div><figcaption><b>La ruta del curso.</b> Cada franja de color es un nivel de la escalera, con los capítulos que lo construyen y la versión del asistente de atención que sale de ellos: de la v0.1, que llama al modelo, a la v1.0, que atiende una avería masiva con un agente. La franja de arriba es el mapa (capítulos 1 y 2) y la de abajo, la calidad y la operación (capítulos 15 a 20), que acompaña a todas. Usa esta figura para saber, en cualquier capítulo, qué pieza del asistente se está construyendo.</figcaption></figure><div class="ml"><b>En la práctica</b><p><b>El primer corte del asistente.</b> La gerencia quería «un asistente que atienda todo». Lucía propuso algo mucho más angosto: un nivel 1 para los diez agentes del equipo de reclamos, solo para las preguntas sobre tarifas, reconexión y cobros, con respuesta citada o «no lo sé». La línea base ya existía en el sistema de tickets: esas consultas tardaban 4 minutos en promedio. La regla para subir al nivel 2 quedó escrita antes de empezar: al menos 80 % de respuestas correctas según la jefa de reclamos en una muestra semanal, y ninguna respuesta sin fuente. Es el patrón de este capítulo hecho plan.</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>Empezar angosto, medir y subir de nivel solo cuando el anterior funciona. Cada nivel agrega piezas de software concretas (la puerta a los modelos y el recuperador, la identidad y la memoria, las herramientas y las aprobaciones, el planificador, el enrutador) y se apoya en las de abajo. La base común de trazas, costos y evaluación empieza con la primera llamada.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>¿Qué pieza de software se construye primero y por qué la usan los cinco niveles?</summary><p>La puerta a los modelos: todas las llamadas pasan por ella, y ahí viven las claves, la elección del modelo, los límites de gasto y el registro de cada llamada.</p></details><details><summary>¿Qué cambia en la firma de la función <code>responder</code> al pasar del nivel 1 al nivel 2?</summary><p>Además de la pregunta, recibe quién pregunta y su sesión; con eso se leen el perfil, los permisos y la memoria, y el recuperador filtra por permisos.</p></details><details><summary>En el nivel 3, ¿quién ejecuta la acción en el sistema?</summary><p>El código de la aplicación. El modelo solo propone la llamada a una herramienta con datos estructurados; el motor de políticas decide si se ejecuta, pide aprobación o se rechaza.</p></details><details><summary>Un caso clasifica 40.000 contactos al mes con un modelo pequeño entrenado con ejemplos propios. ¿En qué nivel está y qué pieza nueva exige?</summary><p>Nivel 5. Exige ejemplos etiquetados, un conjunto dorado para compararlo contra el modelo base, un registro de modelos y un enrutador con respaldo.</p></details><details><summary>¿Por qué un problema sin línea base bloquea el proyecto aunque la tecnología funcione?</summary><p>Porque sin la medición de cómo se hace hoy no hay forma de demostrar la mejora ni de decidir si se sube de nivel: solo queda una impresión.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué es pgvector y en qué se diferencia de una base de datos vectorial dedicada?<small>Pista: busca «pgvector vs vector database».</small></li><li>¿Qué es SCIM y por qué se usa junto con el inicio de sesión único en las aplicaciones de empresa?</li><li>¿Qué es Open Policy Agent y cómo se escribe una regla en su lenguaje Rego?<small>Pista: mira los ejemplos de la documentación oficial.</small></li><li>¿Qué significan sufijos como <code>Q4_K_M</code> en los modelos que descarga Ollama?<small>Pista: busca «GGUF quantization types».</small></li><li>¿Qué es una ejecución durable (<i>durable execution</i>) y qué problema resuelve en un flujo de varios pasos?</li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://docs.ollama.com/api" target="_blank" rel="noopener">Documentación de la API de Ollama <small>referencia, en inglés</small></a><a class="vid" href="https://modelcontextprotocol.io/" target="_blank" rel="noopener">Model Context Protocol: introducción oficial <small>documentación del estándar, en inglés</small></a><a class="vid" href="https://aaramirez.github.io/adopcion-de-ia/temario.html" target="_blank" rel="noopener">IA en la empresa: la escalera vista desde el negocio <small>curso del sitio</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const NOM=['','Generación contextualizada','Interacciones personalizadas','Automatizaciones con herramientas','Agentes con objetivos','Modelos ajustados'];
+  const COL=['','--c-fis','--c-enl','--c-red','--c-tra','--c-apl'];
+  const COMP=[[],
+    ['plantillas','recuperador','índice vectorial','validador de salida'],
+    ['SSO y RBAC','sesión','memoria','adaptadores de canal'],
+    ['registro de herramientas','servidores MCP','motor de políticas','aprobaciones','orquestador'],
+    ['planificador','bus de eventos','presupuestos','revisor','interruptor de parada'],
+    ['datos etiquetados','conjunto dorado','entrenamiento','registro de modelos','enrutador']];
+  const BASE=['puerta a los modelos','trazas','costo por pedido','secretos y claves','evaluación automática'];
+  const IT=[
+    {a:'Atención',t:'El agente pregunta cuánto cuesta la reconexión y el asistente responde con la política vigente y la cita.',n:1,
+     d:'la política de reconexión con fecha y dueño',h:'recuperador, plantilla y puerta a los modelos',c:'citar o abstenerse'},
+    {a:'Técnicos',t:'Leer la foto de la etiqueta de un equipo y llenar el número de serie en la orden de trabajo.',n:1,
+     d:'fotos y el formato de las etiquetas',h:'modelo con entrada de imagen y validador del número de serie',c:'una persona confirma el número antes de guardar'},
+    {a:'Finanzas',t:'Extraer proveedor, fecha y monto de facturas de proveedores en PDF a un JSON para contabilidad.',n:1,
+     d:'facturas de ejemplo con sus valores reales',h:'esquema JSON y validador',c:'rechazar o reintentar si el JSON no valida'},
+    {a:'Ventas',t:'Un asistente que conoce la cartera de cada vendedor y recuerda en qué quedó con cada prospecto.',n:2,
+     d:'la cartera por vendedor en el CRM',h:'SSO, RBAC y memoria de largo plazo',c:'cada vendedor ve solo su cartera; memoria con retención'},
+    {a:'Atención',t:'Un copiloto que sabe qué cliente está en la llamada, su plan y sus tickets, y sugiere la respuesta al agente.',n:2,
+     d:'ficha del cliente e historial de tickets',h:'sesión enlazada a la pantalla del agente',c:'permisos heredados del CRM'},
+    {a:'Personas',t:'Responder dudas de vacaciones según el país y el tipo de contrato de quien pregunta.',n:2,
+     d:'políticas por país y el perfil del empleado',h:'identidad y recuperador filtrado por perfil',c:'nadie ve el contrato de otro'},
+    {a:'Sistemas',t:'Crear un ticket de mesa de ayuda con categoría y prioridad desde el chat interno.',n:3,
+     d:'la API del sistema de tickets y su ambiente de pruebas',h:'herramienta crear_ticket en el registro',c:'herramienta de bajo riesgo: se ejecuta sola, con auditoría'},
+    {a:'Atención',t:'Reprogramar la visita de la orden 4471 al jueves en la tarde; el cliente confirma la nueva fecha.',n:3,
+     d:'la API de órdenes y la agenda de técnicos',h:'herramienta reprogramar_visita con simulación',c:'confirmación, idempotencia y auditoría'},
+    {a:'Cobranza',t:'Preparar un acuerdo de pago en cuotas y dejarlo en la cola de aprobación de la supervisora.',n:3,
+     d:'saldo, historial de pagos y reglas de acuerdos',h:'motor de políticas y cola de aprobaciones',c:'humano en el bucle antes de ejecutar'},
+    {a:'Operaciones',t:'Ante una avería, agrupar los tickets de la zona, confirmarla con el monitoreo, avisar a los clientes y proponer visitas, con un tope de acciones.',n:4,
+     d:'eventos del monitoreo y relaciones zona-cliente',h:'planificador, eventos y herramientas de los niveles 1 a 3',c:'presupuesto, puntos de control e interruptor de parada'},
+    {a:'Compras',t:'Cada semana, comparar inventario y consumo de equipos y proponer los pedidos sin pasar de un presupuesto.',n:4,
+     d:'inventario y consumo histórico',h:'planificador con objetivo y presupuesto',c:'tope de gasto y aprobación del pedido'},
+    {a:'Atención',t:'Un modelo pequeño entrenado con miles de contactos etiquetados que clasifica los 40.000 contactos del mes en 30 categorías.',n:5,
+     d:'miles de ejemplos etiquetados con consentimiento',h:'entrenamiento, registro de modelos y enrutador',c:'conjunto dorado y respaldo al modelo general'}
+  ];
+  const resp=IT.map(()=>0);
+  const lista=$('#c1l1-lista');
+  IT.forEach((it,i)=>{
+    const d=document.createElement('div');d.className='c1l1-it';d.id='c1l1-i'+i;
+    d.innerHTML='<p><span class="c1l1-area">'+it.a+'</span><b>'+(i+1)+'.</b> '+it.t+'</p><div class="btns" role="group" aria-label="Nivel del caso '+(i+1)+'">'+
+      [1,2,3,4,5].map(n=>'<button type="button" data-i="'+i+'" data-n="'+n+'" aria-pressed="false" title="'+NOM[n]+'">N'+n+'</button>').join('')+'</div><div class="c1l1-exp" hidden></div>';
+    lista.appendChild(d);
+  });
+  function arq(niveles){
+    const max=Math.max(0,...niveles);
+    let h='';
+    for(let n=5;n>=1;n--){
+      const on=n<=max;
+      h+='<div class="c1l1-fila"><span style="color:var('+(on?COL[n]:'--muted')+')">N'+n+'</span><div class="c1l1-chips">'+
+        COMP[n].map(c=>'<i class="'+(on?'on':'')+'" style="'+(on?'border-color:var('+COL[n]+');background:var('+COL[n]+'-s)':'')+'">'+c+'</i>').join('')+'</div></div>';
+    }
+    h+='<div class="c1l1-fila"><span>Base</span><div class="c1l1-chips">'+BASE.map(c=>'<i class="on">'+c+'</i>').join('')+'</div></div>';
+    $('#c1l1-arq').innerHTML=h;
+    return BASE.length+COMP.slice(1,max+1).reduce((s,c)=>s+c.length,0);
+  }
+  function pintar(){
+    lista.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',resp[+b.dataset.i]===+b.dataset.n?'true':'false'));
+    const elegidos=resp.filter(x=>x);
+    const k=arq(elegidos);
+    const cuenta=[1,2,3,4,5].map(n=>elegidos.filter(x=>x===n).length);
+    $('#c1l1-out').innerHTML='<span>Respondidos: '+elegidos.length+' de 12. Por nivel: '+cuenta.map((c,j)=>'N'+(j+1)+' '+c).join(' · ')+'.</span>'+
+      (elegidos.length?'<span>Tu caso más alto es nivel '+Math.max(...elegidos)+': para atenderlo hay que construir '+k+' componentes, contando la base común, porque cada nivel usa los de abajo.</span>':'<span>Elige un nivel para cada caso: la arquitectura de abajo se enciende con el caso más alto.</span>');
+  }
+  function mostrar(sol){
+    let ok=0,arriba=0,abajo=0;
+    IT.forEach((it,i)=>{
+      const d=$('#c1l1-i'+i),e=d.querySelector('.c1l1-exp');let r=resp[i];
+      if(sol){r=it.n;resp[i]=it.n;}
+      d.classList.remove('bien','mal');
+      if(!r){e.hidden=true;return;}
+      const b=r===it.n;if(b)ok++;else if(r>it.n)arriba++;else abajo++;
+      d.classList.add(b?'bien':'mal');e.hidden=false;
+      e.innerHTML='<span><b class="c1l1-v">'+(b?'Nivel '+it.n+': ':'Es nivel '+it.n+': ')+'</b>'+NOM[it.n]+'.</span>'+
+        '<span><b>Datos:</b> '+it.d+'.</span><span><b>Herramientas:</b> '+it.h+'.</span><span><b>Control:</b> '+it.c+'.</span>';
+    });
+    pintar();
+    const n=resp.filter(x=>x).length;
+    let h='<span class="big">Aciertos: '+ok+' de '+n+' respondidos.</span>';
+    if(arriba)h+='<span class="warn">Pusiste '+arriba+' más arriba de lo que son. Es el error más común: lo que suena avanzado suele ser un buen nivel 1 o 2, y subirlo encarece la arquitectura.</span>';
+    if(abajo)h+='<span class="warn">Pusiste '+abajo+' más abajo. Pregúntate: ¿cambia algo en un sistema (nivel 3)? ¿recibe un objetivo y decide los pasos (nivel 4)? ¿cambia el modelo (nivel 5)?</span>';
+    h+='<span>Regla rápida: si solo responde, nivel 1; si sabe quién pregunta, 2; si cambia un sistema, 3; si decide los pasos, 4; si cambia el modelo, 5. Fíjate que la mitad de los casos de una empresa típica se resuelve en los niveles 1 y 2.</span>';
+    $('#c1l1-out').innerHTML+=h;
+  }
+  lista.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;resp[+b.dataset.i]=+b.dataset.n;
+    const d=$('#c1l1-i'+b.dataset.i);d.classList.remove('bien','mal');d.querySelector('.c1l1-exp').hidden=true;pintar();});
+  $('#c1l1-rev').addEventListener('click',()=>mostrar(false));
+  $('#c1l1-sol').addEventListener('click',()=>mostrar(true));
+  $('#c1l1-reset').addEventListener('click',()=>{resp.fill(0);lista.querySelectorAll('.c1l1-it').forEach(d=>{d.classList.remove('bien','mal');d.querySelector('.c1l1-exp').hidden=true;});pintar();});
+  pintar();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const COL=['','--c-fis','--c-enl','--c-red','--c-tra','--c-apl'];
+  const NOM=['','N1 · contexto','N2 · personalizar','N3 · herramientas','N4 · agentes','N5 · ajuste'];
+  const G=[
+    ['Problema',[
+      ['pb1','Problema escrito con una métrica',1],
+      ['pb2','Línea base medida en un sistema',1],
+      ['pb3','Patrocinador con presupuesto',1]]],
+    ['Datos',[
+      ['da1','Documentos con dueño, fecha y permisos',1],
+      ['da2','Perfiles y roles en los sistemas',2],
+      ['da3','Historial de conversaciones con retención',2],
+      ['da4','APIs documentadas con ambiente de pruebas',3],
+      ['da5','Eventos en tiempo real (tickets, alarmas)',4],
+      ['da6','Miles de ejemplos etiquetados',5]]],
+    ['Cumplimiento',[
+      ['cu1','Regla sobre datos personales y enmascarado',1],
+      ['cu2','Consentimiento y borrado de la memoria',2],
+      ['cu3','Registro de auditoría de acciones',3],
+      ['cu4','Quién aprueba qué, por escrito',3]]],
+    ['Plataforma',[
+      ['pl1','Modelo elegido y claves en una puerta propia',1],
+      ['pl2','Trazas y costo por llamada',1],
+      ['pl3','Índice vectorial con filtros',1],
+      ['pl4','SSO conectado a la aplicación',2],
+      ['pl5','Orquestador y cola de aprobaciones',3],
+      ['pl6','Presupuestos e interruptor de parada',4],
+      ['pl7','Infraestructura de entrenamiento y registro de modelos',5]]],
+    ['Equipo',[
+      ['eq1','Dueño de producto y experto del área',1],
+      ['eq2','Ingeniero de plataforma de IA',1],
+      ['eq3','Ingeniero de integración',3],
+      ['eq4','Responsable de operar el agente',4],
+      ['eq5','Especialista en datos y aprendizaje automático',5]]]
+  ];
+  const ITEMS=[];G.forEach(([g,l])=>l.forEach(([id,t,n])=>ITEMS.push({id,t,n,g})));
+  const PERF={
+    dia1:['pb3','da1','pl1','eq1'],
+    d90:['pb1','pb2','pb3','da1','da2','cu1','pl1','pl2','pl3','pl4','eq1','eq2'],
+    prisa:['pb3','da4','da5','pl5','pl6','eq3','eq4','pl1'],
+    nada:[]
+  };
+  $('#c1l2-grupos').innerHTML=G.map(([g,l])=>'<fieldset><legend>'+g+'</legend>'+l.map(([id,t,n])=>
+    '<label><input type="checkbox" id="c1l2-'+id+'"><span>'+t+'</span><span class="c1l2-n" style="color:var('+COL[n]+');border-color:var('+COL[n]+')">N'+n+'</span></label>').join('')+'</fieldset>').join('');
+  $('#c1l2-barras').innerHTML=[1,2,3,4,5].map(n=>'<div class="c1l2-b"><span style="color:var('+COL[n]+')">'+NOM[n]+'</span><span class="pista"><i id="c1l2-bar'+n+'" style="background:var('+COL[n]+')"></i></span><output id="c1l2-pc'+n+'"></output></div>').join('');
+  const marcado=id=>$('#c1l2-'+id).checked;
+  const min=t=>/^[A-ZÁÉÍÓÚ][A-Z]/.test(t)?t:t.charAt(0).toLowerCase()+t.slice(1);
+  function leer(){
+    const pc=[],faltan=[];
+    for(let n=1;n<=5;n++){
+      const req=ITEMS.filter(x=>x.n<=n);const ok=req.filter(x=>marcado(x.id)).length;
+      pc[n]=Math.round(ok/req.length*100);faltan[n]=req.filter(x=>!marcado(x.id));
+      $('#c1l2-bar'+n).style.width=pc[n]+'%';$('#c1l2-pc'+n).textContent=pc[n]+' %';
+    }
+    let lvl=0;for(let n=1;n<=5;n++){if(faltan[n].length===0)lvl=n;else break;}
+    const sig=Math.min(lvl+1,5);
+    const sueltos=ITEMS.filter(x=>x.n>sig&&marcado(x.id));
+    let h='';
+    if(lvl===0)h+='<span class="big">Todavía no está lista para el nivel 1.</span>';
+    else h+='<span class="big">Puede abordar el nivel '+lvl+(lvl<5?' y preparar el '+(lvl+1):'')+'.</span>';
+    if(lvl<5){
+      const f=faltan[sig];
+      h+='<span>Para el nivel '+sig+' faltan '+f.length+': '+f.map(x=>min(x.t)+' ('+x.g.toLowerCase()+')').join('; ')+'.</span>';
+    }
+    if(sueltos.length)h+='<span class="warn">Hay '+sueltos.length+' piezas de niveles más altos sin la base de abajo: '+sueltos.map(x=>min(x.t)).join('; ')+'. Es plataforma comprada antes de tiempo: no se puede usar hasta completar los niveles anteriores.</span>';
+    if(lvl>=1&&lvl<5)h+='<span>Empieza angosto en el nivel '+lvl+', mide contra la línea base y sube cuando el nivel funcione.</span>';
+    $('#c1l2-out').innerHTML=h;
+  }
+  $('#c1l2-grupos').addEventListener('change',()=>{document.querySelectorAll('[id="01-lab-2"] [data-p]').forEach(b=>b.setAttribute('aria-pressed','false'));leer();});
+  document.querySelectorAll('[id="01-lab-2"] [data-p]').forEach(b=>b.addEventListener('click',()=>{
+    const p=PERF[b.dataset.p];ITEMS.forEach(x=>{$('#c1l2-'+x.id).checked=p.includes(x.id);});
+    document.querySelectorAll('[id="01-lab-2"] [data-p]').forEach(o=>o.setAttribute('aria-pressed',o===b?'true':'false'));leer();}));
+  ITEMS.forEach(x=>{$('#c1l2-'+x.id).checked=PERF.dia1.includes(x.id);});
+  document.querySelector('[id="01-lab-2"] [data-p="dia1"]').setAttribute('aria-pressed','true');
+  leer();
+})();
+</script>
+</body>
+</html>

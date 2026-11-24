@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Memoria de los asistentes · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="memoria">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 07 DE 20</span><h1>Memoria de los asistentes</h1><p class="lede">Un modelo de lenguaje olvida todo entre una llamada y la siguiente. Lo que el asistente «recuerda» lo guarda y lo elige la aplicación, turno a turno. Este capítulo construye la memoria por capas: qué se guarda en cada una, quién la puede ver, cómo se resume, se olvida y vence, y cómo se arma el contexto de cada turno sin pasarse del presupuesto.</p></header>
+<section><h2>El modelo no recuerda: la memoria la pone la aplicación</h2><div class="prose"><p>Con la versión 0.4, el asistente de atención llegó a cuatro canales. Dos semanas después, la jefa de reclamos le llevó a Lucía una lista de quejas de sus agentes. «Cada mañana le tengo que volver a explicar que estoy en el equipo de reclamos y que solo veo cobros.» «Ayer le conté todo el caso de Carmen Rojas y hoy me pregunta de nuevo qué pasó.» Y la más rara: un técnico le dijo por voz que la clienta de la orden 4471 prefería las tardes, y al otro día el asistente propuso una visita a las nueve de la mañana.</p><p>Mateo sabía la causa antes de terminar de leer: el asistente no tenía memoria. Nunca la había tenido. Lo que parecía memoria dentro de una conversación era otra cosa.</p></div><div class="analogia"><b>Imagínalo así</b><p>El médico de guardia que te atiende a las tres de la mañana nunca te había visto. Igual sabe que eres alérgico a la penicilina y que te operaron el año pasado, porque antes de entrar leyó tu historia clínica. No te recuerda: lee lo que otros escribieron. Y si la historia clínica está desordenada, o tiene veinte páginas sobre un resfriado de hace diez años, el médico pierde tiempo o se le escapa lo importante.</p></div><div class="prose"><p>La API de un modelo de lenguaje es <b>sin estado</b> (<i>stateless</i>): cada llamada empieza de cero. El modelo no guarda nada de una llamada a la siguiente. Cuando una conversación de chat parece recordar lo dicho tres mensajes atrás, es porque la aplicación <b>vuelve a enviar</b> todos los mensajes anteriores en cada llamada, dentro de la lista <code>messages</code>. El modelo los lee otra vez, como el médico lee la historia.</p><p>Eso tiene tres consecuencias de diseño:</p><ul><li><b>La memoria es un problema de la aplicación</b>, con su base de datos, sus permisos y sus reglas de borrado. No es una función del modelo que se activa.</li><li><b>Todo lo que se recuerda cuesta tokens</b> en cada llamada, porque se vuelve a enviar. Una conversación larga se encarece y se hace lenta turno a turno, hasta chocar con la <b>ventana de contexto</b> (<i>context window</i>), el máximo de tokens que el modelo puede leer de una vez.</li><li><b>Recordar es elegir.</b> No cabe todo, y tampoco conviene: un dato viejo o irrelevante en el contexto confunde al modelo tanto como uno que falta. Cada turno, la aplicación decide qué entra.</li></ul></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El modelo no recuerda</h3></div><p>Vas a hacer dos llamadas seguidas al modelo: primero le das un dato y después se lo preguntas. Una vez sin reenviar la historia y otra reenviándola. Guarda este programa como <code>sin_memoria.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+
+def llamar(mensajes):
+    cuerpo = {"model": "llama3.2:3b", "temperature": 0, "messages": mensajes}
+    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido) as r:
+        return json.load(r)["choices"][0]["message"]["content"].strip()
+
+dato = {"role": "user", "content": "Atiendo a Carmen Rojas, cuenta 20417. "
+        "Prefiere que la visiten en la tarde."}
+pregunta = {"role": "user", "content": "¿Qué cuenta atiendo y qué horario prefiere la clienta?"}
+
+print("Turno 1:", llamar([dato]))
+print("\nSin historia:", llamar([pregunta]))
+
+historia = [dato, {"role": "assistant", "content": llamar([dato])}, pregunta]
+print("\nCon historia:", llamar(historia))
+tokens = sum(len(m["content"].split()) for m in historia)
+print(f"\nPalabras reenviadas en la segunda llamada: {tokens}")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python sin_memoria.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 sin_memoria.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y compara la respuesta «sin historia» con la respuesta «con historia».</span></li><li><span>Agrega a <code>historia</code> diez mensajes de relleno antes de la pregunta (por ejemplo, copias del dato) y vuelve a correrlo.</span></li><li><span>Mira cómo crece el número de palabras reenviadas.</span></li></ol><p><b>Qué observar:</b> sin historia, el modelo no sabe nada de Carmen: o lo admite, o inventa una cuenta. Con historia responde bien, pero solo porque el programa le reenvió el dato. Cada mensaje que agregas viaja otra vez en cada llamada: eso es lo que cuesta la «memoria» de un chat y lo que obliga a elegir qué entra. Cualquier modelo pequeño sirve.</p></div></section>
+<section><h2>Las capas: de trabajo, de sesión, de largo plazo y de equipo</h2><div class="prose"><p>No todo lo que conviene recordar dura lo mismo ni lo puede ver cualquiera. La forma ordenada de manejarlo es la <b>memoria por capas</b> (<i>layered memory</i>): cuatro almacenes con reglas distintas.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un buen mecánico trabaja con cuatro memorias. Lo que tiene sobre el banco ahora mismo (las piezas del motor que está armando). La orden de trabajo del auto, que dura hasta que el cliente lo retira. La ficha del cliente, que dice que siempre pide repuestos originales y que su auto tuvo un problema eléctrico hace dos años. Y el pizarrón del taller, donde todos anotan los trucos para cada modelo de auto. Nadie guardaría la ficha del cliente en el banco, ni pegaría en el pizarrón algo que solo le importa a un cliente.</p></div><div class="prose"><ol class="steps"><li><span><b>Memoria de trabajo</b> (<i>working memory</i>): lo que entra al contexto de este turno. Los últimos mensajes, los resultados de las herramientas que se acaban de llamar, los fragmentos de documentos recuperados. Vive en la memoria del proceso y desaparece cuando el turno termina.</span></li><li><span><b>Memoria de sesión</b> (<i>session memory</i>): lo que importa de esta conversación. Un resumen que se actualiza, las entidades mencionadas (la cuenta 20417, el ticket T-55190), los pendientes y las decisiones. Dura lo que dura la sesión del capítulo 6, o unas horas más para poder retomarla desde otro canal.</span></li><li><span><b>Memoria de largo plazo</b> (<i>long-term memory</i>): lo que importa de una persona más allá de una conversación. Preferencias («responde corto», «trabajo solo cobros»), hechos estables y <b>episodios</b> (<i>episodes</i>): momentos clave con fecha, como «el 18 de noviembre se aprobó un reembolso de US$ 30,00 a la cuenta 20417». Dura meses, con reglas de retención y consentimiento.</span></li><li><span><b>Memoria de equipo</b> (<i>team memory</i>): lo que sabe el grupo. Notas compartidas de un caso, acuerdos del equipo de reclamos, respuestas que funcionaron. Tiene dueño, fecha y permisos por rol.</span></li></ol><p>Dos aclaraciones evitan confusiones. La memoria no es la <b>fuente de verdad</b> (<i>source of truth</i>) de los datos del negocio: el saldo, el plan y el correo de Carmen viven en facturación y en el CRM, y se consultan cada vez. La memoria guarda lo que no está en ningún sistema: preferencias, contexto de trabajo, lo que se conversó. Y los manuales y las políticas tampoco son memoria: son conocimiento de la empresa, y el capítulo 8 los recupera con RAG.</p><div class="tbl"><table><thead><tr><th>Capa</th><th>Qué guarda</th><th>Dónde vive (ejemplos del mercado)</th><th>Cuánto dura</th><th>Quién la ve</th></tr></thead><tbody><tr><td>De trabajo</td><td>Últimos turnos, resultados de herramientas, fragmentos</td><td>Memoria del proceso</td><td>Un turno</td><td>Solo esa llamada</td></tr><tr><td>De sesión</td><td>Resumen, entidades, pendientes, decisiones</td><td>Redis o Valkey</td><td>Horas</td><td>La persona y su sesión</td></tr><tr><td>De largo plazo</td><td>Preferencias, hechos, episodios</td><td>PostgreSQL con pgvector, o una base vectorial</td><td>Meses, con vencimiento</td><td>La persona y quien ella autorice</td></tr><tr><td>De equipo</td><td>Notas de casos, acuerdos, respuestas que funcionaron</td><td>Base relacional con permisos por fila</td><td>Mientras esté vigente</td><td>El equipo, según su rol</td></tr></tbody></table></div></div><figure class="fig fig-capas" id="07-diagrama-1"><div class="lienzo"><svg viewBox="0 0 980 480" style="min-width:780px" role="img" aria-label="Cuatro capas de memoria apiladas, de la que dura menos a la que dura más: de trabajo, de sesión, de largo plazo y de equipo, con lo que guarda cada una, dónde vive, cuánto dura y quién la ve; una flecha a la izquierda muestra que un dato pasa a una capa más duradera y otra a la derecha que lo relevante vuelve al contexto del turno; abajo, fuera de la memoria, los sistemas de registro y los manuales">
+<defs><marker id="c7d1-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker><marker id="c7d1-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker></defs>
+<text x="84" y="44" class="t t-xs t-b t-m">CAPA</text>
+<text x="260" y="44" class="t t-xs t-b t-m">QUÉ GUARDA</text>
+<text x="480" y="44" class="t t-xs t-b t-m">DÓNDE VIVE</text>
+<text x="660" y="44" class="t t-xs t-b t-m">CUÁNTO DURA</text>
+<text x="790" y="44" class="t t-xs t-b t-m">QUIÉN LA VE</text>
+<rect x="70" y="58" width="820" height="74" rx="10" class="caja" style="stroke:var(--c-enl)"/>
+<text x="84" y="88" class="t t-b">De trabajo</text>
+<text x="84" y="108" class="t t-s t-m">este turno</text>
+<text x="260" y="88" class="t" style="font-size:12px">últimos turnos completos</text>
+<text x="260" y="106" class="t" style="font-size:12px">resultados de herramientas</text>
+<text x="480" y="98" class="t t-mono" style="font-size:11px">memoria del proceso</text>
+<rect x="70" y="142" width="820" height="74" rx="10" class="c-enl"/>
+<text x="84" y="172" class="t t-b">De sesión</text>
+<text x="84" y="192" class="t t-s t-m">esta conversación</text>
+<text x="260" y="172" class="t" style="font-size:12px">resumen, entidades,</text>
+<text x="260" y="190" class="t" style="font-size:12px">pendientes y decisiones</text>
+<text x="480" y="182" class="t t-mono" style="font-size:11px">Redis o Valkey</text>
+<rect x="70" y="226" width="820" height="74" rx="10" class="c-enl"/>
+<text x="84" y="256" class="t t-b">De largo plazo</text>
+<text x="84" y="276" class="t t-s t-m">esta persona</text>
+<text x="260" y="256" class="t" style="font-size:12px">preferencias, hechos</text>
+<text x="260" y="274" class="t" style="font-size:12px">estables y episodios</text>
+<text x="480" y="266" class="t t-mono" style="font-size:11px">PostgreSQL + pgvector</text>
+<rect x="70" y="310" width="820" height="74" rx="10" class="c-enl"/>
+<text x="84" y="340" class="t t-b">De equipo</text>
+<text x="84" y="360" class="t t-s t-m">este grupo</text>
+<text x="260" y="340" class="t" style="font-size:12px">notas de casos, acuerdos,</text>
+<text x="260" y="358" class="t" style="font-size:12px">respuestas que funcionaron</text>
+<text x="480" y="350" class="t t-mono" style="font-size:11px">base con permisos</text>
+<text x="660" y="98" class="t" style="font-size:12px">un turno</text>
+<text x="790" y="90" class="t" style="font-size:12px">solo esa</text>
+<text x="790" y="107" class="t" style="font-size:12px">llamada</text>
+<text x="660" y="182" class="t" style="font-size:12px">horas</text>
+<text x="790" y="174" class="t" style="font-size:12px">la persona</text>
+<text x="790" y="191" class="t" style="font-size:12px">y su sesión</text>
+<text x="660" y="258" class="t" style="font-size:12px">meses, con</text>
+<text x="660" y="275" class="t" style="font-size:12px">vencimiento</text>
+<text x="790" y="258" class="t" style="font-size:12px">la persona y</text>
+<text x="790" y="275" class="t" style="font-size:12px">quien autorice</text>
+<text x="660" y="342" class="t" style="font-size:12px">mientras esté</text>
+<text x="660" y="359" class="t" style="font-size:12px">vigente</text>
+<text x="790" y="342" class="t" style="font-size:12px">el equipo,</text>
+<text x="790" y="359" class="t" style="font-size:12px">según su rol</text>
+<path d="M40 158V374" class="ln s-enl" style="stroke-width:2.4" marker-end="url(#c7d1-e)"/>
+<text transform="translate(28 266) rotate(-90)" class="t t-s t-b k-enl" text-anchor="middle">se vuelve importante: pasa a una capa más duradera</text>
+<path d="M930 374V78" class="ln" style="stroke:var(--d-casa);stroke-width:2.4" marker-end="url(#c7d1-m)"/>
+<text transform="translate(950 226) rotate(-90)" class="t t-s t-b k-casa" text-anchor="middle">lo relevante y permitido vuelve al contexto del turno</text>
+<rect x="70" y="400" width="820" height="64" rx="10" class="caja" style="stroke-dasharray:6 5"/>
+<text x="84" y="426" class="t t-xs t-b t-m">FUERA DE LA MEMORIA · SE CONSULTAN, NO SE RECUERDAN</text>
+<text x="84" y="448" class="t" style="font-size:12px">Sistemas de registro: CRM, facturación, tickets, órdenes (el saldo, el plan, la franja)  ·  Manuales y políticas: RAG, capítulo 8</text>
+</svg></div><figcaption><b>Las cuatro capas de memoria.</b> Se lee de arriba hacia abajo, de lo que dura menos a lo que dura más. Cada fila es una capa, con lo que guarda, dónde vive, cuánto dura y quién la ve. La flecha de la izquierda muestra cómo un dato pasa a una capa más duradera cuando se vuelve importante (un pendiente de la sesión que se vuelve un episodio) y la de la derecha, cómo lo relevante y permitido vuelve al contexto de cada turno. Abajo, fuera de la memoria, los sistemas de la empresa y los manuales: se consultan, no se recuerdan.</figcaption></figure></section>
+<section><h2>Tareas y pendientes como contexto personal</h2><div class="prose"><p>Para un agente de reclamos, lo más útil que el asistente puede recordar no es una preferencia de tono: son sus <b>pendientes</b>. Los tickets que vencen hoy, la respuesta que facturación prometió para el mediodía, el llamado a Carmen que quedó para la tarde.</p><p>Esas tareas viven en varios sistemas: los tickets en la mesa de ayuda, las órdenes en el sistema de órdenes de trabajo, los recordatorios en el CRM. El asistente no las copia: las lee y las lleva a un <b>modelo canónico de tarea</b> (<i>canonical task model</i>), una forma común para todas, con la referencia al sistema de origen.</p><div class="code-copia"><pre><code>{
+  "id": "tarea-3381",
+  "origen": {"sistema": "tickets", "ref": "T-55190"},
+  "titulo": "Confirmar reembolso de cobro duplicado a Carmen Rojas",
+  "dueno": "u-agente-07",
+  "asignada_por": "u-supervisora-02",
+  "vence": "2026-11-24T18:00:00Z",
+  "estado": "esperando_aprobacion",
+  "objetivo": "cerrar reclamos de cobros en menos de 48 h"
+}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Con eso, el saludo de la mañana pasa a ser «Tienes tres tickets que vencen hoy; el T-55190 espera la aprobación del reembolso desde ayer a las 16:00». Cada tarea lleva su <b>procedencia</b> (<i>provenance</i>): quién la creó o la asignó y desde qué sistema. El asistente no inventa pendientes, y cuando propone uno nuevo («llamar a Carmen el jueves»), lo crea en el sistema de origen con la confirmación de la persona.</p></div></section>
+<section><h2>Operaciones de memoria: escribir, resumir, olvidar y expirar</h2><div class="prose"><p>La memoria no se llena sola. Hay cuatro operaciones, y cada una tiene su regla.</p><p><b>Escribir.</b> Después de cada turno, la aplicación le pide al modelo, con una salida estructurada, los <b>recuerdos candidatos</b> (<i>memory candidates</i>): «la agente prefiere respuestas cortas», «Carmen pidió visitas en la tarde». El modelo propone; el código decide. Una política revisa cada candidato: ¿es estable o es del momento?, ¿es un dato sensible que no se guarda (salud, religión, una tarjeta)?, ¿es una inferencia sobre la persona («parece enojada») en lugar de algo que dijo? Solo pasan los que cumplen.</p><p><b>Resumir.</b> La historia completa de una sesión larga no cabe en el contexto. Cada cierto número de turnos, el modelo condensa los mensajes viejos en un <b>resumen</b> (<i>summary</i>) y los originales salen del contexto, aunque quedan en el registro. A esto se le llama a veces <b>compactar</b> (<i>compaction</i>). El resumen conserva las decisiones, los números y los pendientes, y se escribe con su propia plantilla versionada, porque un resumen mal hecho borra justo lo que importaba.</p><p><b>Olvidar.</b> Una persona puede pedir que se borre algo, y la política puede exigirlo. Olvidar de verdad incluye las copias derivadas: el recuerdo, su <b>embedding</b> (<i>embedding</i>, el vector de números que permite buscarlo por significado) y cualquier resumen que lo mencione.</p><p><b>Expirar.</b> Cada recuerdo tiene un <b>tiempo de vida</b> (<i>time to live</i>, TTL). Los de sesión vencen en horas; una preferencia, en meses si no se vuelve a confirmar. Lo que nadie usa en mucho tiempo se va.</p><p>Para elegir qué recordar cuando hay demasiado, se usa un <b>puntaje de relevancia</b> (<i>salience score</i>) que combina tres señales: qué tan reciente es, cuántas veces apareció y qué tan importante es según su tipo. Un compromiso con un cliente pesa más que una preferencia de formato.</p></div><figure class="fig fig-esquema" id="07-diagrama-3"><div class="lienzo"><svg viewBox="0 0 980 330" style="min-width:780px" role="img" aria-label="La vida de un recuerdo en seis pasos de izquierda a derecha: termina un turno, el modelo propone recuerdos candidatos, la política filtra y descarta lo sensible, lo efímero y lo inferido, el código escribe con procedencia, capa y vencimiento, el modelo resume y compacta, y al final el recuerdo expira o se olvida a pedido con todas sus copias">
+<defs><marker id="c7d3-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker><marker id="c7d3-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker></defs>
+<rect x="17" y="40" width="146" height="96" rx="10" class="caja"/>
+<text x="29" y="66" class="t t-b" style="font-size:12px">① Termina</text>
+<text x="29" y="84" class="t t-s t-m">un turno</text>
+<text x="29" y="108" class="t t-mono" style="font-size:10px">«Prefiere que la</text>
+<text x="29" y="123" class="t t-mono" style="font-size:10px">llamen en la tarde»</text>
+<line x1="164" y1="88" x2="176" y2="88" class="ln" style="stroke-width:1.8" marker-end="url(#c7d3-m)"/>
+<rect x="177" y="40" width="146" height="96" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="189" y="66" class="t t-b k-warm" style="font-size:12px">② El modelo</text>
+<text x="189" y="84" class="t t-s t-m">propone candidatos</text>
+<text x="189" y="108" class="t t-mono" style="font-size:10px">tarde · dicho</text>
+<text x="189" y="123" class="t t-mono" style="font-size:10px">apuros · inferido</text>
+<line x1="324" y1="88" x2="336" y2="88" class="ln" style="stroke-width:1.8" marker-end="url(#c7d3-m)"/>
+<rect x="337" y="40" width="146" height="96" rx="10" class="d-casa"/>
+<text x="349" y="66" class="t t-b" style="font-size:12px">③ La política</text>
+<text x="349" y="84" class="t t-s t-m">filtra</text>
+<text x="349" y="108" class="t t-mono" style="font-size:10px">¿estable?</text>
+<text x="349" y="123" class="t t-mono" style="font-size:10px">¿sensible? ¿inferido?</text>
+<line x1="484" y1="88" x2="496" y2="88" class="ln" style="stroke-width:1.8" marker-end="url(#c7d3-m)"/>
+<rect x="497" y="40" width="146" height="96" rx="10" class="d-casa"/>
+<text x="509" y="66" class="t t-b" style="font-size:12px">④ Escribe</text>
+<text x="509" y="84" class="t t-s t-m">con procedencia</text>
+<text x="509" y="108" class="t t-mono" style="font-size:10px">capa: largo plazo</text>
+<text x="509" y="123" class="t t-mono" style="font-size:10px">vence: 6 meses</text>
+<line x1="644" y1="88" x2="656" y2="88" class="ln" style="stroke-width:1.8" marker-end="url(#c7d3-m)"/>
+<rect x="657" y="40" width="146" height="96" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="669" y="66" class="t t-b k-warm" style="font-size:12px">⑤ El modelo</text>
+<text x="669" y="84" class="t t-s t-m">resume y compacta</text>
+<text x="669" y="108" class="t t-mono" style="font-size:10px">episodios viejos →</text>
+<text x="669" y="123" class="t t-mono" style="font-size:10px">un resumen citado</text>
+<line x1="804" y1="88" x2="816" y2="88" class="ln" style="stroke-width:1.8" marker-end="url(#c7d3-m)"/>
+<rect x="817" y="40" width="146" height="96" rx="10" class="d-casa"/>
+<text x="829" y="66" class="t t-b" style="font-size:12px">⑥ Expira</text>
+<text x="829" y="84" class="t t-s t-m">u olvida a pedido</text>
+<text x="829" y="108" class="t t-mono" style="font-size:10px">borra también el</text>
+<text x="829" y="123" class="t t-mono" style="font-size:10px">embedding y resumen</text>
+<path d="M410 137V190" class="ln ln-d s-warm" style="stroke-width:1.8" marker-end="url(#c7d3-w)"/>
+<rect x="300" y="194" width="232" height="70" rx="10" class="caja" style="stroke:var(--warm);stroke-dasharray:5 4"/>
+<text x="314" y="216" class="t t-xs t-b k-warm">DESCARTADOS ANTES DE ESCRIBIR</text>
+<text x="314" y="235" class="t t-s">datos sensibles, lo del momento</text>
+<text x="314" y="251" class="t t-s">e inferencias sobre personas</text>
+<rect x="20" y="290" width="14" height="14" rx="3" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="42" y="302" class="t t-s">el modelo propone y resume</text>
+<rect x="230" y="290" width="14" height="14" rx="3" class="d-casa"/>
+<text x="252" y="302" class="t t-s">el código filtra, escribe y borra con reglas escritas</text>
+<path d="M570 137V230H800" class="ln ln-d" style="stroke:var(--d-casa);stroke-width:1.6" marker-end="url(#c7d3-m)"/>
+<text x="584" y="222" class="t t-s k-casa">mientras vive, se lee en cada turno</text>
+<text x="584" y="248" class="t t-s t-m">si alguien lo contradice: vigencia</text>
+<text x="584" y="263" class="t t-s t-m">desde y hasta, nunca se sobrescribe</text>
+</svg></div><figcaption><b>La vida de un recuerdo.</b> Se lee de izquierda a derecha. ① Un turno de conversación termina; ② el modelo propone recuerdos candidatos con esquema; ③ la política de memoria los filtra: los sensibles, los efímeros y las inferencias se descartan; ④ los que pasan se escriben con su procedencia, su capa y su vencimiento; ⑤ con el tiempo, se resumen y se compactan; ⑥ al final, expiran o se olvidan a pedido, con todas sus copias. El color separa lo que hace el modelo (propone y resume) de lo que hace el código (filtra, escribe, borra).</figcaption></figure></section>
+<section><h2>Permisos: qué puede ver cada actor</h2><div class="prose"><p>La memoria tiene más de un autor. La propia persona escribe sus preferencias; la supervisora asigna tareas; el sistema de tickets agrega episodios; otro asistente puede dejar una nota. Y tiene más de un lector. Por eso cada recuerdo lleva <b>procedencia</b> y <b>visibilidad</b>, y el acceso se decide con el RBAC del capítulo 6 y, cuando hace falta más detalle, con <b>control de acceso basado en atributos</b> (<i>Attribute-Based Access Control</i>, ABAC): reglas que miran atributos del recuerdo y de quien lo pide, como el equipo, la cuenta o la sensibilidad.</p><p>Un ejemplo con el caso de Carmen:</p><ul><li>La nota «segunda vez que llama por el mismo cobro; atender con prioridad» es memoria de equipo: la ven los agentes de reclamos y la supervisora.</li><li>La preferencia «visitas en la tarde» es un hecho sobre la clienta: la ven quienes atienden su cuenta, incluido el técnico de la orden 4471.</li><li>La preferencia «responde corto» de la agente 07 es suya: nadie más la ve.</li></ul><p>La regla técnica que importa es una sola: <b>lo que una persona no puede ver no entra al contexto</b>. El filtro de permisos se aplica al leer la memoria, antes de armar el pedido al modelo. Si un recuerdo prohibido entra al contexto, no hay instrucción que garantice que el modelo no lo repita: el modelo no es una frontera de seguridad. La seguridad completa está en el capítulo 18.</p></div></section>
+<section><h2>Ensamblar el contexto en cada turno</h2><div class="prose"><p>Con las capas y los permisos listos, cada turno arma un contexto distinto. El <b>ensamblado del contexto</b> (<i>context assembly</i>) sigue siempre el mismo orden:</p><ol class="steps"><li><span>Identificar a la persona, su rol y la sesión (capítulo 6).</span></li><li><span>Cargar la memoria de trabajo: los últimos turnos completos.</span></li><li><span>Cargar el resumen de la sesión y sus entidades.</span></li><li><span>Buscar en la memoria de largo plazo los recuerdos relevantes para este mensaje, por significado y por fecha, filtrados por permisos.</span></li><li><span>Traer las tareas pendientes de la persona.</span></li><li><span>Traer los fragmentos de documentos (capítulo 8) y los datos vivos de los sistemas.</span></li><li><span>Repartir el presupuesto de tokens y ordenar las piezas según la plantilla.</span></li></ol><p>El <b>presupuesto de contexto</b> (<i>context budget</i>) es una tabla que dice cuántos tokens puede ocupar cada pieza. El del asistente, para un modelo pequeño con contexto de 8.000 tokens, quedó así: instrucciones 800, perfil y preferencias 200, resumen de sesión 400, recuerdos de largo plazo 600, tareas 300, documentos 3.000, últimos turnos 2.000 y una reserva de 700 para la respuesta. Si una pieza no cabe, se recorta según su regla: de los turnos se quitan los más viejos (ya están en el resumen), de los recuerdos los de menor puntaje, y de los documentos los de menor relevancia. Nunca se recortan las instrucciones ni la pregunta.</p></div><figure class="fig fig-flujo" id="07-diagrama-2"><div class="lienzo"><svg viewBox="0 0 1010 540" style="min-width:800px" role="img" aria-label="Diagrama de secuencia del ensamblado del contexto en un turno: la agente pregunta cómo va lo de Carmen; el núcleo lee la sesión y su resumen, busca recuerdos de largo plazo con filtro de permisos, trae las tareas, reparte el presupuesto, llama al modelo, recibe la respuesta con recuerdos candidatos y la política filtra y escribe; a la derecha, una barra con el presupuesto de 8.000 tokens repartido por pieza">
+<defs>
+<marker id="c7d2-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+<marker id="c7d2-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c7d2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+<marker id="c7d2-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker>
+</defs>
+<rect x="4" y="14" width="112" height="50" rx="10" class="caja"/>
+<text x="60" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Agente 07</text>
+<text x="60" y="52" class="t t-s t-m" text-anchor="middle">reclamos</text>
+<line x1="60" y1="64" x2="60" y2="524" class="vida"/>
+<rect x="139" y="14" width="112" height="50" rx="10" class="d-casa"/>
+<text x="195" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Núcleo</text>
+<text x="195" y="52" class="t t-s t-m" text-anchor="middle">ensamblador</text>
+<line x1="195" y1="64" x2="195" y2="524" class="vida"/>
+<rect x="274" y="14" width="112" height="50" rx="10" class="c-enl"/>
+<text x="330" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Sesión</text>
+<text x="330" y="52" class="t t-s t-m" text-anchor="middle">resumen y turnos</text>
+<line x1="330" y1="64" x2="330" y2="524" class="vida"/>
+<rect x="409" y="14" width="112" height="50" rx="10" class="c-enl"/>
+<text x="465" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Largo plazo</text>
+<text x="465" y="52" class="t t-s t-m" text-anchor="middle">recuerdos</text>
+<line x1="465" y1="64" x2="465" y2="524" class="vida"/>
+<rect x="544" y="14" width="112" height="50" rx="10" class="d-sis"/>
+<text x="600" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Tareas</text>
+<text x="600" y="52" class="t t-s t-m" text-anchor="middle">tickets y órdenes</text>
+<line x1="600" y1="64" x2="600" y2="524" class="vida"/>
+<rect x="679" y="14" width="112" height="50" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="735" y="35" class="t t-b k-warm" text-anchor="middle" style="font-size:12px">Modelo</text>
+<text x="735" y="52" class="t t-s t-m" text-anchor="middle">pequeño, 8k</text>
+<line x1="735" y1="64" x2="735" y2="524" class="vida"/>
+<line x1="60" y1="100" x2="193" y2="100" class="ln" style=";stroke-width:2" marker-end="url(#c7d2-m)"/>
+<text x="68" y="92" class="t" style="font-size:12px">① «¿cómo va</text>
+<text x="68" y="118" class="t" style="font-size:12px">lo de Carmen?»</text>
+<line x1="195" y1="146" x2="328" y2="146" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c7d2-s)"/>
+<text x="203" y="138" class="t" style="font-size:12px">② sesión</text>
+<line x1="330" y1="174" x2="197" y2="174" class="ln s-enl ln-d" style=";stroke-width:1.6" marker-end="url(#c7d2-e)"/>
+<text x="203" y="166" class="t" style="font-size:11px">resumen + 3 turnos</text>
+<line x1="195" y1="214" x2="463" y2="214" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c7d2-s)"/>
+<text x="203" y="206" class="t" style="font-size:12px">③ recuerdos, con permisos</text>
+<line x1="465" y1="242" x2="197" y2="242" class="ln s-enl ln-d" style=";stroke-width:1.6" marker-end="url(#c7d2-e)"/>
+<text x="300" y="234" class="t" style="font-size:11px">2 recuerdos permitidos</text>
+<line x1="195" y1="282" x2="598" y2="282" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c7d2-s)"/>
+<text x="203" y="274" class="t" style="font-size:12px">④ pendientes de la agente</text>
+<line x1="600" y1="310" x2="197" y2="310" class="ln ln-d" style=";stroke-width:1.6" marker-end="url(#c7d2-m)"/>
+<text x="470" y="302" class="t" style="font-size:11px">3 tareas</text>
+<path d="M195 334 h40 v24 h-38" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c7d2-s)"/>
+<text x="242" y="352" class="t" style="font-size:12px">⑤ reparte el presupuesto y ordena</text>
+<line x1="195" y1="392" x2="733" y2="392" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c7d2-s)"/>
+<text x="330" y="384" class="t" style="font-size:12px">⑥ contexto armado: 6.100 de 8.000 tokens</text>
+<line x1="735" y1="432" x2="197" y2="432" class="ln s-warm" style=";stroke-width:2" marker-end="url(#c7d2-w)"/>
+<text x="330" y="424" class="t" style="font-size:12px">⑦ respuesta + recuerdos candidatos (JSON)</text>
+<line x1="195" y1="472" x2="463" y2="472" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c7d2-s)"/>
+<text x="203" y="464" class="t" style="font-size:12px">⑧ política: filtra y escribe</text>
+<line x1="195" y1="500" x2="62" y2="500" class="ln s-enl" style=";stroke-width:2" marker-end="url(#c7d2-e)"/>
+<text x="68" y="492" class="t" style="font-size:11px">respuesta</text>
+<text x="830" y="88" class="t t-xs t-b t-m">PRESUPUESTO · 8.000</text>
+<rect x="830" y="100" width="26" height="40" class="caja"/>
+<rect x="866" y="101" width="10" height="10" rx="2" class="caja"/>
+<text x="882" y="110" class="t t-s">Instrucciones</text>
+<text x="1000" y="110" class="t t-s t-b t-mono" text-anchor="end">800</text>
+<rect x="830" y="140" width="26" height="10" class="c-fis"/>
+<rect x="866" y="125" width="10" height="10" rx="2" class="c-fis"/>
+<text x="882" y="134" class="t t-s">Perfil</text>
+<text x="1000" y="134" class="t t-s t-b t-mono" text-anchor="end">200</text>
+<rect x="830" y="150" width="26" height="20" class="c-enl"/>
+<rect x="866" y="149" width="10" height="10" rx="2" class="c-enl"/>
+<text x="882" y="158" class="t t-s">Resumen sesión</text>
+<text x="1000" y="158" class="t t-s t-b t-mono" text-anchor="end">400</text>
+<rect x="830" y="170" width="26" height="30" class="c-tra"/>
+<rect x="866" y="173" width="10" height="10" rx="2" class="c-tra"/>
+<text x="882" y="182" class="t t-s">Recuerdos</text>
+<text x="1000" y="182" class="t t-s t-b t-mono" text-anchor="end">600</text>
+<rect x="830" y="200" width="26" height="15" class="d-sis"/>
+<rect x="866" y="197" width="10" height="10" rx="2" class="d-sis"/>
+<text x="882" y="206" class="t t-s">Tareas</text>
+<text x="1000" y="206" class="t t-s t-b t-mono" text-anchor="end">300</text>
+<rect x="830" y="215" width="26" height="150" class="c-red"/>
+<rect x="866" y="221" width="10" height="10" rx="2" class="c-red"/>
+<text x="882" y="230" class="t t-s">Documentos</text>
+<text x="1000" y="230" class="t t-s t-b t-mono" text-anchor="end">3.000</text>
+<rect x="830" y="365" width="26" height="100" class="c-apl"/>
+<rect x="866" y="245" width="10" height="10" rx="2" class="c-apl"/>
+<text x="882" y="254" class="t t-s">Últimos turnos</text>
+<text x="1000" y="254" class="t t-s t-b t-mono" text-anchor="end">2.000</text>
+<rect x="830" y="465" width="26" height="35" class="caja" style="stroke-dasharray:4 3"/>
+<rect x="866" y="269" width="10" height="10" rx="2" class="caja"/>
+<text x="882" y="278" class="t t-s">Reserva salida</text>
+<text x="1000" y="278" class="t t-s t-b t-mono" text-anchor="end">700</text>
+<text x="866" y="320" class="t t-s t-m">nunca se recortan:</text>
+<text x="866" y="335" class="t t-s t-m">instrucciones y pregunta</text>
+</svg></div><figcaption><b>El ensamblado de un turno.</b> Los participantes están arriba y el tiempo corre hacia abajo. ① La agente pregunta «¿cómo va lo de Carmen?»; ② el núcleo lee la sesión y su resumen; ③ busca en la memoria de largo plazo con el filtro de permisos; ④ trae las tareas pendientes; ⑤ reparte el presupuesto y arma el contexto; ⑥ llama al modelo; ⑦ el modelo responde y propone recuerdos candidatos; ⑧ la política filtra y escribe. A la derecha, el presupuesto que ocupó cada pieza.</figcaption></figure><div class="lab" id="07-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Las capas de memoria en una conversación</h3></div><p class="hint">Avanza la conversación entre la agente y el asistente, turno a turno. En cada turno mira qué guarda cada capa, qué entra al contexto y qué queda afuera. Achica el presupuesto de contexto y mira qué se recorta primero y qué pregunta deja de responderse bien.</p><style>
+[id="07-lab-1"] .c7l1-chat{display:grid;gap:6px;max-height:260px;overflow-y:auto;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+[id="07-lab-1"] .c7l1-m{max-width:86%;padding:6px 10px;border-radius:10px;font:500 .84rem/1.4 var(--f-body);overflow-wrap:anywhere}
+[id="07-lab-1"] .c7l1-m.u{justify-self:end;background:var(--c-enl-s);border:1px solid var(--c-enl)}
+[id="07-lab-1"] .c7l1-m.a{justify-self:start;background:var(--card);border:1px solid var(--line)}
+[id="07-lab-1"] .c7l1-m b{display:block;font:700 .66rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+[id="07-lab-1"] .c7l1-capas{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:8px}
+[id="07-lab-1"] .c7l1-c{border:1px solid var(--line);border-top:4px solid var(--c-enl);border-radius:10px;padding:7px 9px;background:var(--card);display:grid;gap:4px;align-content:start;min-width:0}
+[id="07-lab-1"] .c7l1-c h4{margin:0;font:700 .7rem var(--f-display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+[id="07-lab-1"] .c7l1-c ul{margin:0;padding:0;list-style:none;display:grid;gap:3px}
+[id="07-lab-1"] .c7l1-c li{font:500 .78rem/1.35 var(--f-body);border-left:3px solid var(--line);padding-left:6px}
+[id="07-lab-1"] .c7l1-c li small{display:block;color:var(--muted);font:500 .68rem var(--f-mono)}
+[id="07-lab-1"] .c7l1-c li.nuevo{border-left-color:var(--good);background:var(--good-soft)}
+[id="07-lab-1"] .c7l1-c .vacio{color:var(--muted);font:italic .76rem var(--f-body)}
+[id="07-lab-1"] .c7l1-pres{display:flex;height:30px;border-radius:7px;overflow:hidden;border:1px solid var(--line);background:var(--paper)}
+[id="07-lab-1"] .c7l1-pres i{display:block;height:100%;min-width:2px;border-right:1px solid var(--card)}
+[id="07-lab-1"] .c7l1-ley{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:3px 12px;font:500 .78rem var(--f-display)}
+[id="07-lab-1"] .c7l1-ley span{display:flex;gap:6px;align-items:center;min-width:0}
+[id="07-lab-1"] .c7l1-ley i{width:11px;height:11px;border-radius:3px;flex:none}
+[id="07-lab-1"] .c7l1-ley b{margin-left:auto;font:600 .74rem var(--f-mono);white-space:nowrap}
+[id="07-lab-1"] .c7l1-ley .fuera{color:var(--muted);text-decoration:line-through}
+</style>
+<div class="ctls">
+  <label class="ctl">Presupuesto de contexto <output id="c7l1-p-o"></output>
+    <input id="c7l1-p" type="range" min="1800" max="4000" step="100" value="4000"></label>
+</div>
+<div class="btns">
+  <button type="button" class="primary" id="c7l1-sig">Siguiente turno</button>
+  <button type="button" id="c7l1-man">Al día siguiente: nueva sesión</button>
+  <button type="button" id="c7l1-rei">Reiniciar</button>
+</div>
+<div class="c7l1-chat" id="c7l1-chat" aria-live="polite"></div>
+<div class="c7l1-capas">
+  <div class="c7l1-c"><h4>De trabajo · este turno</h4><ul id="c7l1-L0"></ul></div>
+  <div class="c7l1-c"><h4>De sesión · horas</h4><ul id="c7l1-L1"></ul></div>
+  <div class="c7l1-c"><h4>De largo plazo · meses</h4><ul id="c7l1-L2"></ul></div>
+  <div class="c7l1-c"><h4>De equipo · reclamos</h4><ul id="c7l1-L3"></ul></div>
+</div>
+<div class="c7l1-pres" id="c7l1-pres" role="img" aria-label="Uso del presupuesto de contexto en este turno"></div>
+<div class="c7l1-ley" id="c7l1-ley"></div>
+<div class="readout texto" id="c7l1-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Ventana, resumen y hechos</h3></div><p>Vas a construir una memoria mínima de dos capas: una ventana con los últimos turnos y un resumen que el modelo actualiza cuando la ventana se llena, más una lista de hechos que el código guarda. En cada turno el programa imprime el contexto que arma. Guarda este programa como <code>memoria.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+VENTANA = 4          # turnos completos que se mandan tal cual
+
+def llamar(mensajes):
+    cuerpo = {"model": "llama3.2:3b", "temperature": 0, "messages": mensajes}
+    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido) as r:
+        return json.load(r)["choices"][0]["message"]["content"].strip()
+
+resumen = ""
+hechos = {"agente": "equipo de reclamos", "cuenta en pantalla": "20417"}
+turnos = []
+guion = ["Atiendo a Carmen Rojas por el ticket T-55190.",
+         "Facturación confirmó el doble cobro de US$ 30,00.",
+         "La clienta prefiere que la llamen en la tarde.",
+         "El reembolso necesita aprobación de la supervisora.",
+         "Ya lo mandé a aprobar a las 16:00.",
+         "Resume el caso en dos frases y dime qué falta."]
+
+for texto in guion:
+    turnos.append({"role": "user", "content": texto})
+    limite = VENTANA * 2 + 1   # pares completos más el mensaje nuevo
+    if len(turnos) &gt; limite:
+        viejos, turnos = turnos[:-limite], turnos[-limite:]
+        resumen = llamar([{"role": "user", "content":
+            "Actualiza este resumen con los mensajes nuevos. Conserva números, "
+            f"decisiones y pendientes. Máximo 60 palabras.\nResumen: {resumen}\n"
+            f"Mensajes: {json.dumps(viejos, ensure_ascii=False)}"}])
+    sistema = ("Eres el asistente interno de atención. Responde en una o dos frases.\n"
+               f"Hechos: {json.dumps(hechos, ensure_ascii=False)}\n"
+               f"Resumen de la sesión: {resumen or '(vacío)'}")
+    contexto = [{"role": "system", "content": sistema}] + turnos
+    respuesta = llamar(contexto)
+    turnos.append({"role": "assistant", "content": respuesta})
+    print(f"\n&gt; {texto}\n&lt; {respuesta}")
+    print(f"  [contexto: {len(contexto)} mensajes, resumen de {len(resumen.split())} palabras]")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python memoria.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 memoria.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y mira cuándo aparece el resumen y cuántos mensajes viajan en cada turno.</span></li><li><span>Lee la última respuesta: ¿menciona el monto, la preferencia de horario y la aprobación pendiente?</span></li><li><span>Cambia <code>VENTANA = 1</code> y vuelve a correrlo. Compara la última respuesta.</span></li></ol><p><b>Qué observar:</b> el número de mensajes del contexto deja de crecer cuando entra el resumen: la memoria tiene un tope. Con una ventana grande, la última respuesta tiene todo. Con <code>VENTANA = 1</code>, todo depende del resumen, y si el modelo pequeño omitió un dato al resumir (el horario de la tarde, por ejemplo), ese dato se perdió para siempre en esa sesión. Por eso los hechos importantes conviene guardarlos aparte, como hace el diccionario <code>hechos</code>, y el resumen se evalúa como cualquier otra salida.</p></div></section>
+<section><h2>Conflictos: el dato viejo frente al nuevo</h2><div class="prose"><p>Tarde o temprano, la memoria se contradice. El lunes la agente 07 dijo «mándame los avisos por correo»; el jueves, por voz, dijo «avísame por el chat interno». El técnico anotó que Carmen prefiere las tardes; una semana después, Carmen escribió que esta vez necesita la mañana. Si el asistente guarda las dos cosas sin una regla, cada turno elegirá al azar según cuál recuperó primero.</p></div><div class="analogia"><b>Imagínalo así</b><p>En una familia, la nevera tiene una nota que dice «hay que comprar leche» y otra, de otra letra, que dice «ya compré leche». Para saber cuál vale miras la fecha, quién la escribió y, si dudas, abres la nevera. Lo que no haces es tirar una moneda.</p></div><div class="prose"><p>Las reglas de resolución, de la más fuerte a la más débil:</p><ol class="steps"><li><span><b>El sistema de registro gana siempre.</b> Si el dato existe en un sistema del negocio (el correo de Carmen en el CRM, la franja de la orden 4471), se consulta ahí y la memoria no compite. Un recuerdo que contradice al sistema se marca como viejo.</span></li><li><span><b>Lo dicho gana a lo inferido.</b> «Avísame por el chat» dicho por la persona vale más que «parece que prefiere el chat» deducido por el modelo.</span></li><li><span><b>La fuente con más autoridad gana, según el tipo de dato.</b> Para las preferencias de una persona, la propia persona; para las reglas de un equipo, la supervisora.</span></li><li><span><b>Lo más reciente gana, si lo anterior no era permanente.</b> «Esta vez en la mañana» cambia la próxima visita, pero no la preferencia general.</span></li><li><span><b>Si no se puede decidir, se pregunta.</b> «La última vez pediste avisos por correo y el jueves dijiste chat interno: ¿cuál uso?».</span></li></ol><p>Técnicamente, nada se sobrescribe: cada recuerdo tiene <b>vigencia</b> (<i>validity</i>), con fecha desde y hasta, y una referencia al recuerdo que lo reemplazó. Así se puede auditar qué sabía el asistente en cada momento, y deshacer una corrección equivocada.</p></div><div class="lab" id="07-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Un conflicto de memoria</h3></div><p class="hint">Hay dos recuerdos que se contradicen sobre la misma persona. Cambia quién los dijo, cuándo, si fue dicho o inferido y si el dato existe en un sistema. Elige la regla de resolución y mira cuál gana, qué responde el asistente y qué queda en la auditoría.</p><style>
+[id="07-lab-2"] .opciones{grid-template-columns:minmax(0,1fr)}
+[id="07-lab-2"] .c7l2-mems{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:10px}
+[id="07-lab-2"] .c7l2-mem{border:1px solid var(--line);border-left:5px solid var(--c-enl);border-radius:10px;padding:8px 10px;background:var(--card);display:grid;gap:6px;min-width:0}
+[id="07-lab-2"] .c7l2-mem.gana{border-left-color:var(--good);background:var(--good-soft)}
+[id="07-lab-2"] .c7l2-mem.pierde{opacity:.7}
+[id="07-lab-2"] .c7l2-mem h4{margin:0;font:700 .72rem var(--f-display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+[id="07-lab-2"] .c7l2-mem q{font:600 .92rem/1.35 var(--f-body);color:var(--ink)}
+[id="07-lab-2"] .c7l2-mem label{display:grid;gap:2px;font:600 .76rem var(--f-display);color:var(--muted)}
+[id="07-lab-2"] .c7l2-sis{display:flex;gap:8px;align-items:center;font:500 .86rem var(--f-display);color:var(--ink)}
+[id="07-lab-2"] .c7l2-resp{border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:var(--paper);font:500 .9rem/1.45 var(--f-body)}
+[id="07-lab-2"] .c7l2-resp b{display:block;font:700 .68rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+[id="07-lab-2"] .c7l2-aud{margin:0;font:500 .74rem/1.5 var(--f-mono);white-space:pre-wrap;overflow-wrap:anywhere;background:var(--paper);border-radius:8px;padding:8px 10px;color:var(--ink)}
+</style>
+<div class="opciones">
+  <label>Caso
+    <select id="c7l2-esc">
+      <option value="0">Por dónde avisarle a la agente 07</option>
+      <option value="1">En qué horario visitar a Carmen (cuenta 20417)</option>
+    </select></label>
+</div>
+<div class="c7l2-mems">
+  <div class="c7l2-mem" id="c7l2-mA"><h4>Recuerdo A</h4><q id="c7l2-tA"></q>
+    <label>Lo dijo<select id="c7l2-aA"></select></label>
+    <label>Cuándo<select id="c7l2-dA"><option value="1">el lunes</option><option value="3">el miércoles</option><option value="4">el jueves</option></select></label>
+    <label>Alcance<select id="c7l2-sA"><option value="p">permanente</option><option value="v">solo la próxima vez</option></select></label>
+  </div>
+  <div class="c7l2-mem" id="c7l2-mB"><h4>Recuerdo B</h4><q id="c7l2-tB"></q>
+    <label>Lo dijo<select id="c7l2-aB"></select></label>
+    <label>Cuándo<select id="c7l2-dB"><option value="1">el lunes</option><option value="3">el miércoles</option><option value="4" selected>el jueves</option></select></label>
+    <label>Alcance<select id="c7l2-sB"><option value="p">permanente</option><option value="v">solo la próxima vez</option></select></label>
+  </div>
+</div>
+<label class="c7l2-sis"><input type="checkbox" id="c7l2-sis"><span id="c7l2-sisT"></span></label>
+<div class="btns" role="group" aria-label="Regla de resolución">
+  <button type="button" data-r="azar" aria-pressed="false">Sin regla</button>
+  <button type="button" data-r="rec" aria-pressed="false">Gana el más reciente</button>
+  <button type="button" data-r="cinco" aria-pressed="true">Las cinco reglas</button>
+</div>
+<div class="btns"><button type="button" id="c7l2-otra">Preguntar otra vez al asistente</button></div>
+<div class="c7l2-resp" id="c7l2-resp" aria-live="polite"></div>
+<pre class="c7l2-aud" id="c7l2-aud"></pre>
+<div class="readout texto" id="c7l2-out" aria-live="polite"></div></div></section>
+<section><h2>Retención y consentimiento</h2><div class="prose"><p>La memoria de largo plazo es, casi siempre, un tratamiento de <b>datos personales</b> (<i>personal data</i>). Eso la somete a reglas que no dependen del gusto del equipo:</p><ul><li><b>Retención por capa.</b> Cada capa tiene un plazo escrito: la sesión, horas; los episodios, los meses que pida la política; las preferencias, mientras se confirmen. Al vencer se borran solas, con un proceso que corre todos los días.</li><li><b>Consentimiento y transparencia.</b> Las personas saben qué se guarda. El asistente tiene una vista «lo que recuerdo de ti», donde cada recuerdo se puede corregir o borrar.</li><li><b>Borrado completo.</b> Pedir que se olvide algo borra el recuerdo, su embedding, los resúmenes que lo mencionan y las copias en cachés. Lo que se queda en el registro de auditoría por obligación legal se enmascara.</li><li><b>Minimización.</b> No se guarda lo que no se va a usar. Un asistente interno de atención no necesita recordar la vida personal de los agentes ni de los clientes.</li></ul><p>La privacidad a fondo (bases legales, derechos de las personas, evaluaciones de impacto) está en <a href="https://aaramirez.github.io/proteccion-de-datos/temario.html" target="_blank" rel="noopener">Protección de datos</a>. La memoria del lado del chatbot de cara al cliente, con su sesión y lo que nunca debe recordar, está en <a href="https://aaramirez.github.io/chatbots-empresariales/temario.html" target="_blank" rel="noopener">Chatbots empresariales</a>.</p></div><div class="caso"><b>Un caso real</b><p>Un equipo de atención de una empresa de servicios de la región activó la memoria de largo plazo de su asistente interno sin una política de escritura: el modelo guardaba todo lo que le parecía importante. A las pocas semanas, el asistente empezó a saludar a un cliente con «veo que la última vez estaba molesto por su situación económica», una inferencia que el modelo había anotado de una conversación anterior y que nadie había revisado. El cliente se quejó con razón. La corrección fue doble: una política que descarta las inferencias sobre personas y los temas sensibles antes de escribir, y la vista «lo que recuerdo» para que los agentes vean y borren. La lección: el modelo puede proponer recuerdos, pero la decisión de guardarlos es del código y de una regla escrita.</p></div><div class="ml"><b>En la práctica</b><p><b>El asistente, versión 0.5.</b> Lucía y Mateo agregaron las cuatro capas: la de trabajo en el proceso, la de sesión en el almacén clave-valor con un resumen cada ocho turnos, la de largo plazo en PostgreSQL con pgvector y la de equipo con permisos por rol. Los recuerdos candidatos salen del modelo con esquema y pasan por una política que descarta lo sensible, lo efímero y lo inferido. El contexto se arma con un presupuesto fijo por pieza y un registro de qué entró en cada turno. Los conflictos se resuelven con las cinco reglas y nada se sobrescribe. La queja del técnico desapareció: «visitas en la tarde» quedó como hecho de la cuenta, visible para quien atiende la orden 4471.</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>Memoria por capas con políticas explícitas. El modelo no recuerda nada: la aplicación guarda, elige y reenvía. Cuatro capas (de trabajo, de sesión, de largo plazo y de equipo), cada una con lo que guarda, cuánto dura y quién la ve. El modelo propone los recuerdos y el código decide con una política. Lo que una persona no puede ver no entra al contexto. Cada turno arma su contexto con un presupuesto. Y los conflictos se resuelven con reglas, nunca al azar.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>Si la API del modelo no guarda estado, ¿cómo «recuerda» un chat lo dicho tres mensajes atrás?</summary><p>La aplicación vuelve a enviar los mensajes anteriores en cada llamada. El modelo los lee otra vez; no los recuerda.</p></details><details><summary>¿En qué capa va «Carmen prefiere visitas en la tarde» y en cuál «el saldo de Carmen es US$ 35,00»?</summary><p>La preferencia va en la memoria de largo plazo, como hecho de la cuenta. El saldo no va en la memoria: vive en facturación, que es la fuente de verdad, y se consulta cada vez.</p></details><details><summary>El modelo propone guardar «el cliente parece tener problemas económicos». ¿Qué hace la política de memoria?</summary><p>Lo descarta: es una inferencia sobre la persona, no algo que dijo, y además toca un tema sensible.</p></details><details><summary>¿Por qué el filtro de permisos se aplica antes de armar el contexto y no se confía en una instrucción al modelo?</summary><p>Porque lo que entra al contexto el modelo lo puede repetir; ninguna instrucción lo garantiza. El modelo no es una frontera de seguridad.</p></details><details><summary>El contexto no cabe en el presupuesto. Nombra dos cosas que se recortan y una que nunca se recorta.</summary><p>Se recortan los turnos más viejos (ya están en el resumen), los recuerdos de menor puntaje o los documentos menos relevantes. Nunca se recortan las instrucciones ni la pregunta.</p></details><details><summary>Una persona pide que se olvide algo. ¿Qué hay que borrar además del recuerdo?</summary><p>Su embedding, los resúmenes que lo mencionan y las copias en cachés; lo que la ley obliga a conservar en la auditoría se enmascara.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué es la búsqueda por similitud del coseno y por qué se usa para recuperar recuerdos parecidos a un mensaje?<small>Pista: el capítulo 8 la usa; busca «cosine similarity embeddings».</small></li><li>¿Qué es una base de datos bitemporal y en qué se diferencian el tiempo de validez y el tiempo de transacción?</li><li>¿Qué es la seguridad a nivel de fila (<i>row-level security</i>) en PostgreSQL y cómo se escribe una política?<small>Pista: mira «CREATE POLICY» en la documentación oficial.</small></li><li>¿Qué problema describe el estudio «Lost in the Middle» sobre dónde ubicar la información dentro de un contexto largo?</li><li>¿Cómo se borra un dato de un respaldo de base de datos cuando una persona ejerce su derecho a la supresión?</li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://docs.ollama.com/api" target="_blank" rel="noopener">Documentación de la API de Ollama: el chat y la lista de mensajes <small>referencia, en inglés</small></a><a class="vid" href="https://github.com/pgvector/pgvector" target="_blank" rel="noopener">pgvector: búsqueda vectorial en PostgreSQL <small>repositorio oficial, en inglés</small></a><a class="vid" href="https://aaramirez.github.io/proteccion-de-datos/temario.html" target="_blank" rel="noopener">Protección de datos <small>curso del sitio</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const G=[
+    {u:'Buenos días. Hoy trabajo solo cobros; respóndeme corto.',a:'Entendido. Tienes 3 tickets de cobros que vencen hoy.',f:['corto','tareas'],
+     w:[{c:2,t:'La agente 07 prefiere respuestas cortas',m:'dicho · la agente · vence en 6 meses'},{c:2,t:'Tareas: 3 tickets de cobros vencen hoy',m:'leído de tickets · no se copia'}]},
+    {u:'Abre el caso de Carmen Rojas, cuenta 20417.',a:'Ticket T-55190: cobro duplicado de US$ 30,00, abierto hace 2 días.',f:['caso'],
+     w:[{c:1,t:'Entidades: cuenta 20417, ticket T-55190',m:'sesión · 8 h'}]},
+    {u:'Facturación confirmó el doble cobro.',a:'Anotado. El reembolso de US$ 30,00 supera US$ 10,00: necesita aprobación.',f:['doble','aprob'],
+     w:[{c:1,t:'Decisión: doble cobro confirmado por facturación',m:'sesión · 8 h'},{c:1,t:'Pendiente: pedir aprobación del reembolso',m:'sesión · 8 h'}]},
+    {u:'Es la segunda vez que llama por esto; hay que atenderla con prioridad.',a:'Dejo una nota en el caso para el equipo de reclamos.',f:['prioridad'],
+     w:[{c:3,t:'T-55190: segunda llamada por el mismo cobro; prioridad',m:'la agente 07 · visible para reclamos'}]},
+    {u:'Prefiere que la llamen en la tarde.',a:'Guardado como preferencia de la cuenta 20417.',f:['tarde'],
+     w:[{c:2,t:'Cuenta 20417: prefiere contacto en la tarde',m:'dicho por la agente · quien atienda la cuenta'}]},
+    {u:'Creo que está pasando apuros de dinero.',a:'No guardo inferencias sobre personas ni temas sensibles: queda fuera de la memoria.',f:[],w:[],rech:'«Carmen tiene problemas económicos»: inferencia sobre una persona y tema sensible. La política lo descarta antes de escribir.'},
+    {u:'Mandé el reembolso a aprobar a las 16:00.',a:'Pendiente actualizado: aprobación de la supervisora desde las 16:00.',f:['enviado'],
+     w:[{c:1,t:'Pendiente: aprobación de la supervisora desde las 16:00',m:'sesión · reemplaza al anterior'},{c:2,t:'Episodio: reembolso US$ 30,00 de T-55190 enviado a aprobar',m:'sistema de tickets · vence en 12 meses'}]},
+    {u:'¿Cómo va lo de Carmen y qué me falta hoy?',final:true}
+  ];
+  // Cada hecho: de qué turno sale y en qué capa persiste
+  let turno=0,manana=false;
+  function piezas(t){
+    // t = número de turnos ya enviados (incluido el actual)
+    const P=[{n:'Instrucciones',tk:800,fijo:true,col:'var(--muted)'},{n:'Mensaje actual',tk:40,fijo:true,col:'var(--ink)'},{n:'Reserva para la respuesta',tk:700,fijo:true,col:'var(--grid)'}];
+    const prev=t-1; // turnos anteriores
+    if(!manana){
+      const ini=Math.max(0,prev-3);
+      if(ini>0)P.push({n:'Resumen de la sesión (turnos 1 a '+ini+')',tk:120+40*ini,prio:1,col:'var(--c-enl)',f:[].concat(...G.slice(0,ini).map(g=>g.f)).filter(x=>x!=='corto'&&x!=='tareas'&&x!=='tarde'&&x!=='prioridad')});
+      for(let i=ini;i<prev;i++)P.push({n:'Turno '+(i+1)+' completo',tk:180,prio:i===prev-1?2:5+(prev-i)*0.1,col:'var(--c-enl-s)',f:G[i].f.filter(x=>x!=='corto'&&x!=='tareas'&&x!=='tarde'&&x!=='prioridad'),turno:true});
+    }
+    if(prev>=1)P.push({n:'Preferencias de la agente',tk:120,prio:1.5,col:'var(--c-fis)',f:['corto']});
+    if(prev>=1)P.push({n:'Tareas pendientes',tk:300,prio:4,col:'var(--d-casa)',f:['tareas']});
+    if(prev>=4)P.push({n:'Nota del equipo sobre T-55190',tk:120,prio:3,col:'var(--c-red)',f:['prioridad']});
+    if(prev>=5)P.push({n:'Recuerdo: cuenta 20417, tarde',tk:90,prio:3.2,col:'var(--c-tra)',f:['tarde']});
+    if(prev>=7)P.push({n:'Episodio: reembolso enviado',tk:110,prio:manana?1.2:4.5,col:'var(--warm)',f:manana?['caso','doble','enviado']:['enviado']});
+    return P;
+  }
+  function asignar(P,pres){
+    let usado=P.filter(p=>p.fijo).reduce((a,p)=>a+p.tk,0);
+    const resto=P.filter(p=>!p.fijo).sort((a,b)=>a.prio-b.prio);
+    resto.forEach(p=>{if(usado+p.tk<=pres){p.dentro=true;usado+=p.tk;}else p.dentro=false;});
+    P.filter(p=>p.fijo).forEach(p=>p.dentro=true);
+    return usado;
+  }
+  function capas(){
+    const L=[[],[],[],[]];
+    const n=manana?7:turno;
+    for(let i=0;i<n&&i<G.length;i++)(G[i].w||[]).forEach(w=>{
+      if(manana&&w.c===1)return;
+      L[w.c].push({t:w.t,m:w.m,nuevo:!manana&&i===turno-1});
+    });
+    // la sesión: el pendiente nuevo reemplaza al anterior
+    if(n>=7&&!manana)L[1]=L[1].filter(x=>x.t!=='Pendiente: pedir aprobación del reembolso');
+    return L;
+  }
+  function respuesta(f){
+    const tiene=k=>f.includes(k);let r=[];
+    if(tiene('caso'))r.push('T-55190'+(tiene('doble')?': doble cobro de US$ 30,00 confirmado':': cobro duplicado de US$ 30,00'));
+    else r.push('No tengo a mano el caso de Carmen; ¿me das el número de ticket?');
+    if(tiene('enviado'))r.push('el reembolso espera la aprobación de la supervisora desde las 16:00');
+    else if(tiene('aprob'))r.push('falta mandar el reembolso a aprobar');
+    if(tiene('prioridad'))r.push('atiéndela con prioridad, es su segunda llamada');
+    if(tiene('tarde'))r.push('llámala en la tarde');
+    if(tiene('tareas'))r.push('te quedan otros 2 tickets de cobros que vencen hoy');
+    let s=r.join('; ')+'.';s=s.charAt(0).toUpperCase()+s.slice(1);
+    if(!tiene('corto'))s='¡Claro! Con gusto te cuento todo con detalle. '+s+' Si quieres, también puedo explicarte el procedimiento completo de reembolsos paso a paso.';
+    return s;
+  }
+  const NOMBRE={caso:'el caso T-55190',doble:'el doble cobro confirmado',aprob:'que el reembolso necesita aprobación',enviado:'que ya se mandó a aprobar a las 16:00',prioridad:'la prioridad (segunda llamada)',tarde:'la preferencia de la tarde',tareas:'los otros tickets de hoy',corto:'«responde corto»'};
+  function dibujar(){
+    const pres=+$('#c7l1-p').value;$('#c7l1-p-o').textContent=pres.toLocaleString('es')+' tokens';
+    // chat
+    let h='';const n=manana?8:turno;
+    for(let i=0;i<n;i++){
+      if(manana&&i<7)continue;
+      const g=G[i];h+='<div class="c7l1-m u"><b>Agente 07</b>'+g.u+'</div>';
+      if(g.final){const P=piezas(8);asignar(P,pres);const f=[].concat(...P.filter(p=>p.dentro&&p.f).map(p=>p.f));h+='<div class="c7l1-m a"><b>Asistente</b>'+respuesta(f)+'</div>';}
+      else h+='<div class="c7l1-m a"><b>Asistente</b>'+g.a+'</div>';
+    }
+    if(manana)h='<div class="c7l1-m a"><b>Al día siguiente</b>La sesión de ayer venció: la memoria de trabajo y la de sesión están vacías.</div>'+h;
+    $('#c7l1-chat').innerHTML=h||'<div class="c7l1-m a"><b>Asistente</b>Pulsa «Siguiente turno» para empezar la conversación.</div>';
+    $('#c7l1-chat').scrollTop=1e6;
+    // capas
+    const L=capas();
+    const P=n?piezas(n):[];const usado=n?asignar(P,pres):0;
+    L[0]=n?P.filter(p=>p.turno&&p.dentro).map(p=>({t:p.n,m:p.tk+' tokens'})):[];
+    for(let i=0;i<4;i++)$('#c7l1-L'+i).innerHTML=L[i].length?L[i].map(x=>'<li'+(x.nuevo?' class="nuevo"':'')+'>'+x.t+'<small>'+x.m+'</small></li>').join(''):'<li class="vacio">vacía</li>';
+    // presupuesto
+    $('#c7l1-pres').innerHTML=P.filter(p=>p.dentro).map(p=>'<i title="'+p.n+'" style="width:'+(p.tk/pres*100).toFixed(2)+'%;background:'+p.col+'"></i>').join('');
+    $('#c7l1-ley').innerHTML=P.map(p=>'<span class="'+(p.dentro?'':'fuera')+'"><i style="background:'+p.col+'"></i>'+p.n+'<b>'+p.tk+'</b></span>').join('');
+    // lectura
+    let o='';
+    if(!n)o='<span>La conversación tiene 8 turnos. Cada turno, el asistente arma el contexto con lo que cabe en el presupuesto.</span>';
+    else{
+      const fuera=P.filter(p=>!p.dentro);
+      o+='<span>Contexto de este turno: '+usado.toLocaleString('es')+' de '+pres.toLocaleString('es')+' tokens.</span>';
+      const g=G[n-1];
+      if(g.rech)o+='<span class="warn">Descartado por la política: '+g.rech+'</span>';
+      if(fuera.length)o+='<span class="warn">Quedó afuera por presupuesto: '+fuera.map(p=>p.n.toLowerCase()).join(', ')+'.</span>';
+      if(n>4&&!manana)o+='<span>Los turnos más viejos ya no viajan completos: entraron al resumen de la sesión, que ocupa menos.</span>';
+      if(g.final){
+        const f=[].concat(...P.filter(p=>p.dentro&&p.f).map(p=>p.f));
+        const falta=['caso','enviado','prioridad','tarde','tareas','corto'].filter(k=>!f.includes(k));
+        if(!falta.length)o+='<span class="ok">La respuesta tiene todo: el caso, la aprobación pendiente, la prioridad, el horario, los otros tickets y el estilo corto.</span>';
+        else o+='<span class="warn">A la respuesta le falta: '+falta.map(k=>NOMBRE[k]).join(', ')+'.</span>';
+        if(!f.includes('enviado')&&f.includes('aprob'))o+='<span class="warn">Peor que olvidar: sin el último pendiente, el asistente dice que falta mandar a aprobar algo que ya se mandó.</span>';
+        if(manana)o+='<span>Al día siguiente sobrevive lo que estaba en las capas largas: la preferencia de la agente, el horario de Carmen, la nota del equipo, las tareas y el episodio del reembolso. El detalle de la conversación de ayer se fue con la sesión, como debe ser.</span>';
+      }
+    }
+    $('#c7l1-out').innerHTML=o;
+    $('#c7l1-sig').disabled=manana||turno>=G.length;
+  }
+  $('#c7l1-sig').addEventListener('click',()=>{if(turno<G.length)turno++;dibujar();});
+  $('#c7l1-man').addEventListener('click',()=>{manana=true;turno=G.length;dibujar();});
+  $('#c7l1-rei').addEventListener('click',()=>{manana=false;turno=0;dibujar();});
+  $('#c7l1-p').addEventListener('input',dibujar);
+  dibujar();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const raiz=document.querySelector('[id="07-lab-2"]');
+  const ESC=[
+    {A:'Mándame los avisos por correo.',B:'Avísame por el chat interno.',va:'correo',vb:'chat interno',
+     autores:[['ella','la agente 07, ella misma',3,'dicho'],['sup','la supervisora',1,'dicho'],['mod','el modelo, deducido',0,'inferido']],
+     defA:'ella',defB:'ella',sis:'El canal de avisos está configurado en el perfil del sistema de identidad: chat interno',vsis:'chat interno',
+     preg:'¿Por dónde te aviso cuando se apruebe el reembolso?',
+     resp:v=>'Te aviso por '+v+' cuando la supervisora apruebe el reembolso de T-55190.',
+     ask:'El lunes me pediste avisos por correo y el jueves dijiste chat interno: ¿cuál uso desde ahora?'},
+    {A:'Carmen prefiere que la visiten en la tarde.',B:'Esta vez Carmen necesita la visita en la mañana.',va:'la tarde',vb:'la mañana',
+     autores:[['cli','Carmen, por escrito',3,'dicho'],['tec','el técnico, por voz',2,'dicho'],['mod','el modelo, deducido',0,'inferido']],
+     defA:'tec',defB:'cli',sis:'La orden 4471 ya tiene una franja guardada en el sistema de órdenes: tarde',vsis:'la tarde',
+     preg:'¿En qué horario propongo la visita de la orden 4471?',
+     resp:v=>'Propongo la visita de la orden 4471 en '+v+'.',
+     ask:'Tengo dos datos distintos sobre el horario de Carmen: ¿confirmamos con ella antes de agendar?'}
+  ];
+  const DIA={1:'lunes',3:'miércoles',4:'jueves'};
+  let regla='cinco',vuelta=0,escAnt=-1;
+  function llenar(e){
+    ['A','B'].forEach(k=>{const s=$('#c7l2-a'+k);s.innerHTML=e.autores.map(a=>'<option value="'+a[0]+'">'+a[1]+'</option>').join('');s.value=k==='A'?e.defA:e.defB;});
+    $('#c7l2-sB').value=$('#c7l2-esc').value==='1'?'v':'p';$('#c7l2-sA').value='p';
+  }
+  function leer(e,k){const a=e.autores.find(x=>x[0]===$('#c7l2-a'+k).value);return {k,txt:e[k],v:k==='A'?e.va:e.vb,autor:a[1],aut:a[2],tipo:a[3],dia:+$('#c7l2-d'+k).value,alc:$('#c7l2-s'+k).value};}
+  function resolver(e,A,B,sis){
+    if(regla==='azar'){const g=vuelta%2?B:A;return {g,motivo:'sin regla: ganó el que la búsqueda recuperó primero esta vez',paso:0};}
+    if(regla==='rec'){if(A.dia===B.dia)return {g:null,motivo:'mismo día: la regla no decide',paso:0};const g=A.dia>B.dia?A:B;return {g,motivo:'regla única: gana el más reciente ('+DIA[g.dia]+')',paso:0};}
+    if(sis)return {g:'sis',motivo:'regla 1: el sistema de registro gana siempre',paso:1};
+    if(A.tipo!==B.tipo){const g=A.tipo==='dicho'?A:B;return {g,motivo:'regla 2: lo dicho gana a lo inferido',paso:2};}
+    if(A.aut!==B.aut){const g=A.aut>B.aut?A:B,o2=g===A?B:A;if(g.alc==='v'&&o2.alc==='p')return {g,base:o2,motivo:'regla 3: gana la fuente con más autoridad ('+g.autor+'), pero solo para la próxima vez: la preferencia permanente sigue',paso:3};return {g,motivo:'regla 3: gana la fuente con más autoridad para este dato ('+g.autor+')',paso:3};}
+    if(A.dia!==B.dia){const nuevo=A.dia>B.dia?A:B,viejo=nuevo===A?B:A;
+      if(nuevo.alc==='v'&&viejo.alc==='p')return {g:nuevo,base:viejo,motivo:'regla 4: el más reciente gana para la próxima vez, pero la preferencia permanente sigue',paso:4};
+      return {g:nuevo,motivo:'regla 4: gana el más reciente ('+DIA[nuevo.dia]+')',paso:4};}
+    return {g:null,motivo:'regla 5: misma fuente, mismo tipo y mismo día: se pregunta',paso:5};
+  }
+  function dibujar(){
+    const ei=+$('#c7l2-esc').value,e=ESC[ei];
+    if(ei!==escAnt){llenar(e);escAnt=ei;}
+    $('#c7l2-tA').textContent='«'+e.A+'»';$('#c7l2-tB').textContent='«'+e.B+'»';$('#c7l2-sisT').textContent=e.sis;
+    raiz.querySelectorAll('[data-r]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.r===regla)));
+    const A=leer(e,'A'),B=leer(e,'B'),sis=$('#c7l2-sis').checked,r=resolver(e,A,B,sis);
+    $('#c7l2-mA').className='c7l2-mem'+(r.g===A?' gana':r.g&&r.g!==A?' pierde':'');
+    $('#c7l2-mB').className='c7l2-mem'+(r.g===B?' gana':r.g&&r.g!==B?' pierde':'');
+    let resp;
+    if(r.g==='sis')resp=e.resp(e.vsis)+' (dato del sistema de registro).';
+    else if(!r.g)resp=e.ask;
+    else{resp=e.resp(r.g.v);if(r.base)resp+=' Para las siguientes visitas sigue valiendo '+r.base.v+'.';}
+    $('#c7l2-resp').innerHTML='<b>Agente: '+e.preg+'</b>Asistente: '+resp;
+    // auditoría
+    const ln=[];const fecha=m=>DIA[m.dia];
+    ln.push('A  «'+A.txt+'»  autor: '+A.autor+' ('+A.tipo+')  desde: '+fecha(A)+'  alcance: '+(A.alc==='p'?'permanente':'próxima vez'));
+    ln.push('B  «'+B.txt+'»  autor: '+B.autor+' ('+B.tipo+')  desde: '+fecha(B)+'  alcance: '+(B.alc==='p'?'permanente':'próxima vez'));
+    if(r.g==='sis'){ln.push('→ A y B quedan como contexto; el valor sale del sistema: '+e.vsis);if(A.v!==e.vsis)ln.push('→ A contradice al sistema: se marca como viejo (no se borra)');if(B.v!==e.vsis)ln.push('→ B contradice al sistema: se marca como viejo (no se borra)');}
+    else if(r.g&&r.base)ln.push('→ '+r.g.k+' vale para la próxima vez; '+r.base.k+' sigue vigente como preferencia');
+    else if(r.g){const p=r.g===A?B:A;ln.push(regla==='azar'?'→ nada queda registrado: mañana puede ganar el otro':'→ '+p.k+' vigente hasta: '+fecha(r.g)+'; reemplazado por: '+r.g.k+' ('+r.motivo.split(':')[0]+')');}
+    else ln.push('→ ninguno se marca como vigente hasta que la persona confirme');
+    $('#c7l2-aud').textContent=ln.join('\n');
+    let o='<span>'+r.motivo.charAt(0).toUpperCase()+r.motivo.slice(1)+'.</span>';
+    if(regla==='azar')o+='<span class="warn">Pulsa «Preguntar otra vez»: sin una regla, la respuesta cambia según qué recuerdo se recuperó primero. Es la falla detrás de la queja «a veces me dice una cosa y a veces otra».</span>';
+    if(regla==='rec'&&(A.tipo!==B.tipo||A.aut!==B.aut))o+='<span class="warn">«Gana el más reciente» ignora quién lo dijo: una deducción del modelo o un dato de menor autoridad puede pisar algo que la persona dijo.</span>';
+    if(regla==='rec'&&sis)o+='<span class="warn">Esta regla no mira el sistema de registro: la memoria compite con el dato oficial, y puede ganarle.</span>';
+    if(regla==='cinco'&&r.paso===1)o+='<span class="ok">El dato existe en un sistema: la memoria no compite. Los recuerdos que lo contradicen quedan marcados como viejos, con su historia.</span>';
+    if(regla==='cinco'&&r.base)o+='<span class="ok">«Solo la próxima vez» no reemplaza la preferencia: las dos conviven con vigencias distintas.</span>';
+    if(regla==='cinco'&&r.paso===5)o+='<span class="ok">Cuando las reglas no deciden, preguntar es más barato que equivocarse.</span>';
+    $('#c7l2-out').innerHTML=o;
+  }
+  raiz.querySelectorAll('select,input').forEach(c=>c.addEventListener('change',dibujar));
+  raiz.querySelectorAll('[data-r]').forEach(b=>b.addEventListener('click',()=>{regla=b.dataset.r;dibujar();}));
+  $('#c7l2-otra').addEventListener('click',()=>{vuelta++;dibujar();});
+  dibujar();
+})();
+</script>
+</body>
+</html>

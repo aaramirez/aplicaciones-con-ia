@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agentes en el producto · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="agentes-en-el-producto">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 13 DE 20</span><h1>Agentes dentro del producto</h1><p class="lede">En el nivel 4 nadie le dice al asistente qué pasos dar: recibe un objetivo, arma un plan, usa las herramientas de los niveles anteriores y se detiene a pedir permiso donde corresponde. Este capítulo construye la versión 1.0, un agente que atiende una avería masiva, con su plan como dato, los eventos que lo despiertan, el reparto en varios agentes y los límites que lo detienen.</p></header>
+<section><div class="prose"><p>En el capítulo 12, el incidente de la zona Norte se atendió con un flujo de seis etapas. Funcionó, pero la jefa de turno anotó en la revisión posterior que ninguna avería se parece a la anterior: esta vez había 23 visitas agendadas en la zona; la próxima puede haber un cliente empresarial con contrato, o la alarma puede despejarse mientras el aviso espera aprobación. Cada caso nuevo agregaba una rama, y el flujo ya era un árbol de «si pasa esto, entonces aquello».</p><p>Lucía propuso subir al nivel 4 con un caso angosto y de alto valor: un <b>agente de avería masiva</b>. Recibe un objetivo («atender la avería de la zona Norte»), arma un plan con las herramientas que ya existen, pide aprobación en los puntos de control y se detiene si se pasa de su presupuesto. Es la versión 1.0 del asistente.</p></div></section>
+<section><h2>De la automatización al agente: objetivos en lugar de pasos</h2><div class="analogia"><b>Imagínalo así</b><p>Con una lista de indicaciones impresas («tercera a la derecha, sigue dos cuadras, a la izquierda en la panadería») llegas mientras la ciudad no cambie. Si una calle está cerrada, la lista no sirve y te pierdes. El navegador del teléfono sabe adónde vas, no solo cómo: cuando la calle está cerrada, recalcula. Y si la ruta nueva pasa por un peaje, te pregunta antes.</p></div><div class="prose"><p>Un flujo es la lista impresa: pasos conocidos en un orden conocido. Un <b>agente</b> (<i>AI agent</i>) es el navegador: recibe un <b>objetivo</b> (<i>goal</i>) y decide los pasos. Por dentro es un bucle: mira la situación, planifica, actúa con una herramienta, observa el resultado, corrige el plan y sigue hasta cumplir el objetivo o hasta que un límite lo detiene.</p><p>Más flexible no es mejor para todo: un agente es más caro, más lento y más difícil de evaluar, porque dos ejecuciones del mismo objetivo pueden seguir caminos distintos. La regla del equipo: <b>si los pasos se conocen de antemano, es un flujo</b>; el agente es para cuando el camino depende de lo que se va encontrando. El reclamo de cobro sigue siendo un flujo; la avería masiva es el primer agente. Cómo funciona ese bucle por dentro, mensaje a mensaje, está en <a href="https://aaramirez.github.io/arneses/02-el-bucle.html" target="_blank" rel="noopener">El bucle del agente</a>.</p></div><figure class="fig fig-comparacion" id="13-diagrama-1"><div class="lienzo"><svg viewBox="0 0 960 450" style="min-width:780px" role="img" aria-label="Comparación entre un flujo y un agente. El flujo tiene pasos fijos con ramas escritas y los casos no previstos van a la cola humana. El agente recibe un objetivo, arma un plan como dato y recorre un bucle de actuar, observar y replanificar, con puntos de control de una persona y límites que lo detienen">
+<defs>
+<marker id="c13d1-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c13d1-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-tra"/></marker>
+<marker id="c13d1-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+<marker id="c13d1-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+</defs>
+
+<rect x="16" y="16" width="440" height="354" rx="14" class="caja"/>
+<text x="34" y="42" class="t t-xs t-b k-red">FLUJO · CAPÍTULO 12</text>
+<text x="34" y="60" class="t t-s t-m">la lista de indicaciones impresas</text>
+<g>
+<rect x="40" y="80" width="180" height="40" rx="8" class="c-red"/><text x="130" y="105" class="t t-s t-b" text-anchor="middle">1 · detectar</text>
+<rect x="40" y="140" width="180" height="40" rx="8" class="c-red"/><text x="130" y="165" class="t t-s t-b" text-anchor="middle">2 · severidad</text>
+<rect x="40" y="200" width="180" height="40" rx="8" class="c-red"/><text x="130" y="225" class="t t-s t-b" text-anchor="middle">3 · comunicar</text>
+<rect x="40" y="260" width="180" height="40" rx="8" class="c-red"/><text x="130" y="285" class="t t-s t-b" text-anchor="middle">4 · resolver y cerrar</text>
+<line x1="130" y1="120" x2="130" y2="137" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c13d1-a)"/>
+<line x1="130" y1="180" x2="130" y2="197" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c13d1-a)"/>
+<line x1="130" y1="240" x2="130" y2="257" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c13d1-a)"/>
+</g>
+<rect x="264" y="140" width="170" height="40" rx="8" class="d-casa"/>
+<text x="349" y="158" class="t t-s t-b" text-anchor="middle">rama escrita:</text>
+<text x="349" y="173" class="t t-s" text-anchor="middle">«si hay visitas, …»</text>
+<line x1="220" y1="160" x2="261" y2="160" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c13d1-a)"/>
+<rect x="264" y="220" width="170" height="52" rx="8" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="349" y="241" class="t t-s t-b k-warm" text-anchor="middle">caso no previsto</text>
+<text x="349" y="259" class="t t-s" text-anchor="middle">va a la cola humana</text>
+<path d="M220 220 H244 V246 H261" class="ln ln-d" marker-end="url(#c13d1-m)"/>
+<text x="34" y="334" class="t t-s">Pasos conocidos de antemano.</text>
+<text x="34" y="352" class="t t-s t-m">Barato, rápido y fácil de evaluar.</text>
+
+<rect x="484" y="16" width="460" height="354" rx="14" class="caja"/>
+<text x="502" y="42" class="t t-xs t-b k-tra">AGENTE · VERSIÓN 1.0</text>
+<text x="502" y="60" class="t t-s t-m">el navegador que recalcula</text>
+<rect x="502" y="76" width="190" height="50" rx="10" class="c-tra"/>
+<text x="597" y="97" class="t t-b k-tra" text-anchor="middle">Objetivo</text>
+<text x="597" y="115" class="t t-s t-m" text-anchor="middle">criterios · presupuesto</text>
+<rect x="730" y="76" width="196" height="50" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="828" y="97" class="t t-s t-b k-warm" text-anchor="middle">punto de control</text>
+<text x="828" y="115" class="t t-s t-m" text-anchor="middle">una persona aprueba</text>
+<rect x="502" y="160" width="190" height="46" rx="10" class="c-tra"/>
+<text x="597" y="180" class="t t-s t-b" text-anchor="middle">Plan</text>
+<text x="597" y="197" class="t t-s t-m" text-anchor="middle">dato con esquema</text>
+<rect x="736" y="160" width="190" height="46" rx="10" class="c-tra"/>
+<text x="831" y="180" class="t t-s t-b" text-anchor="middle">Actuar</text>
+<text x="831" y="197" class="t t-s t-m" text-anchor="middle">herramientas del nivel 3</text>
+<rect x="736" y="240" width="190" height="46" rx="10" class="c-tra"/>
+<text x="831" y="260" class="t t-s t-b" text-anchor="middle">Observar</text>
+<text x="831" y="277" class="t t-s t-m" text-anchor="middle">resultados y eventos</text>
+<rect x="502" y="240" width="190" height="46" rx="10" class="c-tra"/>
+<text x="597" y="260" class="t t-s t-b" text-anchor="middle">Replanificar</text>
+<text x="597" y="277" class="t t-s t-m" text-anchor="middle">plan versión nueva</text>
+<line x1="597" y1="126" x2="597" y2="157" class="ln s-tra" style="stroke-width:2" marker-end="url(#c13d1-t)"/>
+<line x1="692" y1="183" x2="733" y2="183" class="ln s-tra" style="stroke-width:2" marker-end="url(#c13d1-t)"/>
+<line x1="831" y1="206" x2="831" y2="237" class="ln s-tra" style="stroke-width:2" marker-end="url(#c13d1-t)"/>
+<line x1="736" y1="263" x2="695" y2="263" class="ln s-tra" style="stroke-width:2" marker-end="url(#c13d1-t)"/>
+<line x1="597" y1="240" x2="597" y2="209" class="ln s-tra" style="stroke-width:2" marker-end="url(#c13d1-t)"/>
+<line x1="828" y1="126" x2="828" y2="157" class="ln s-warm" style="stroke-width:2;stroke-dasharray:5 4" marker-end="url(#c13d1-w)"/>
+<rect x="502" y="304" width="424" height="40" rx="8" class="caja" style="stroke:var(--warm);stroke-dasharray:5 4"/>
+<text x="714" y="321" class="t t-s t-b k-warm" text-anchor="middle">límites que lo detienen</text>
+<text x="714" y="336" class="t t-s" text-anchor="middle">pasos · costo · tiempo · alcance · bucles · interruptor de parada</text>
+<text x="502" y="362" class="t t-s t-m">El camino depende de lo que encuentra: más caro y más difícil de evaluar.</text>
+
+<rect x="16" y="390" width="928" height="46" rx="10" class="caja" style="stroke-dasharray:6 5"/>
+<text x="34" y="410" class="t t-xs t-b t-m">CUÁNDO</text>
+<text x="34" y="427" class="t t-s">Si los pasos se conocen, un flujo. Si cada caso trae combinaciones nuevas y hay que decidir el camino sobre la marcha, un agente.</text>
+</svg></div><figcaption><b>Flujo frente a agente.</b> A la izquierda, el flujo del capítulo 12: pasos fijos en un orden fijo, con ramas escritas de antemano; si aparece un caso que nadie previó, cae a la cola humana. A la derecha, el agente: un objetivo con sus criterios de éxito, un plan que es un dato, y un bucle de actuar, observar y replanificar, con puntos de control donde decide una persona y límites que lo detienen. Abajo, cuándo conviene cada uno.</figcaption></figure></section>
+<section><h2>Objetivos y planes como datos con esquema</h2><div class="prose"><p>Si el objetivo y el plan viven solo en el texto del modelo, nadie puede revisarlos ni detenerlos a tiempo. Por eso los dos son <b>datos con esquema</b>, como las salidas estructuradas del capítulo 5.</p><p>El objetivo lo crea el sistema, no el modelo:</p><div class="code-copia"><pre><code>{"objetivo": "Atender la avería masiva de la zona Norte",
+ "incidente": "INC-311",
+ "zona": "Norte",
+ "criterios_de_exito": [
+     "clientes afectados avisados",
+     "tickets vinculados al incidente",
+     "tickets cerrados con servicio verificado",
+     "créditos según la política"],
+ "restricciones": [
+     "ningún mensaje a clientes sin aprobación",
+     "sin reembolsos en dinero"],
+ "presupuesto": {"pasos": 30, "costo_usd": 0.50, "minutos": 240}}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>El plan sí lo propone el modelo, pero dentro de un esquema: una lista de pasos, cada uno con la herramienta que usará (de una lista cerrada), sus argumentos, de qué pasos depende y cuándo se considera hecho. El código revisa el plan antes de ejecutar nada:</p><ul><li><b>Que cada herramienta exista</b> en el registro del capítulo 9 y que el agente tenga permiso para usarla.</li><li><b>Que las dependencias tengan sentido</b>: ningún paso depende de uno posterior, ni hay ciclos.</li><li><b>Que el plan quepa en el presupuesto</b>: si propone 50 pasos y el presupuesto es de 30, se rechaza.</li><li><b>Qué pasos piden aprobación</b>: no lo dice el modelo, lo calcula el código con el riesgo de cada herramienta y la política del capítulo 11.</li></ul><p>El plan aprobado se muestra como una línea de tiempo en el panel de la jefa de turno, la etapa 4 de la interfaz del capítulo 6. Cada replanificación guarda una versión nueva y se ve qué cambió. La teoría del planificador y del ejecutor, con la replanificación y el revisor, está en <a href="https://aaramirez.github.io/arneses/12-planificador-y-ejecutor.html" target="_blank" rel="noopener">Planificador y ejecutor</a>.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El plan como dato: el modelo propone y el registro decide</h3></div><p>Vas a pedirle a tu modelo local un plan para la avería de la zona Norte con un esquema que solo admite herramientas del registro. El código valida el plan y marca qué pasos se ejecutan solos, cuáles piden aprobación y cuáles el agente no tiene permiso de hacer. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>plan.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+REGISTRO = {   # lo que el agente puede pedir y cómo lo trata la política
+    "consultar_alarmas":          {"efecto": "lectura"},
+    "buscar_tickets_zona":        {"efecto": "lectura"},
+    "buscar_en_manuales":         {"efecto": "lectura"},
+    "crear_incidente_maestro":    {"efecto": "escritura reversible"},
+    "vincular_tickets":           {"efecto": "escritura reversible"},
+    "avisar_clientes_zona":       {"efecto": "mensaje masivo", "aprobacion": True},
+    "reprogramar_visitas_zona":   {"efecto": "escritura", "permitido": False},
+    "aplicar_creditos_politica":  {"efecto": "escritura", "aprobacion_si": "crédito &gt; US$ 10,00"},
+    "cerrar_tickets_verificados": {"efecto": "escritura reversible"},
+}
+ESQUEMA = {"type": "object", "properties": {"pasos": {"type": "array", "items": {
+    "type": "object", "properties": {
+        "n": {"type": "integer"},
+        "herramienta": {"type": "string", "enum": list(REGISTRO)},
+        "para_que": {"type": "string"},
+        "depende_de": {"type": "array", "items": {"type": "integer"}}},
+    "required": ["n", "herramienta", "para_que", "depende_de"]}}},
+    "required": ["pasos"]}
+OBJETIVO = ("Objetivo: atender la avería masiva de la zona Norte (incidente INC-311). "
+            "Criterios: clientes avisados, tickets vinculados, tickets cerrados con servicio "
+            "verificado y créditos según la política. Arma un plan de 5 a 9 pasos.")
+
+cuerpo = {"model": "llama3.2:3b", "temperature": 0,
+          "response_format": {"type": "json_schema", "json_schema": {"name": "plan", "schema": ESQUEMA}},
+          "messages": [{"role": "system", "content": "Eres el planificador. Devuelve solo el plan en JSON."},
+                       {"role": "user", "content": OBJETIVO}]}
+pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                headers={"Content-Type": "application/json"})
+with urllib.request.urlopen(pedido, timeout=120) as r:
+    plan = json.loads(json.load(r)["choices"][0]["message"]["content"])
+
+pasos, problemas = plan["pasos"], []
+if len(pasos) &gt; 9:
+    problemas.append(f"el plan tiene {len(pasos)} pasos y el presupuesto admite 9")
+vistos = set()
+for p in pasos:
+    ficha = REGISTRO.get(p["herramienta"], {})
+    malas = [d for d in p["depende_de"] if d not in vistos]
+    if malas:
+        problemas.append(f"el paso {p['n']} depende de {malas}, que no van antes")
+    if ficha.get("permitido") is False:
+        decision = "SIN PERMISO: se crea una tarea para una persona"
+    elif ficha.get("aprobacion"):
+        decision = "PUNTO DE CONTROL: pide aprobación"
+    elif "aprobacion_si" in ficha:
+        decision = "solo, salvo " + ficha["aprobacion_si"]
+    else:
+        decision = "se ejecuta solo"
+    print(f"{p['n']:&gt;2}. {p['herramienta']:&lt;27} {decision}\n    para: {p['para_que']}")
+    vistos.add(p["n"])
+print("\nPlan válido" if not problemas else "\nPlan rechazado: " + "; ".join(problemas))</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python plan.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 plan.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y lee el plan. Fíjate en el orden: ¿consulta antes de avisar?</span></li><li><span>Mira qué pasos quedaron como punto de control y cuáles sin permiso.</span></li><li><span>Córrelo dos o tres veces más y compara los planes.</span></li></ol><p><b>Qué observar:</b> el modelo solo puede nombrar herramientas del registro, porque el esquema lo obliga. Lo que se ejecuta solo, lo que pide aprobación y lo que no está permitido lo decide el diccionario <code>REGISTRO</code>: aunque el plan incluya reprogramar las visitas, el agente no puede hacerlo y crea una tarea. Un modelo pequeño a veces arma dependencias imposibles; la validación rechaza el plan en vez de ejecutarlo, y en producción el agente replanifica con el motivo. Los planes cambian de una corrida a otra.</p></div></section>
+<section><h2>Operación por eventos: el agente que reacciona</h2><div class="prose"><p>Un agente de avería masiva no espera a que alguien escriba un pedido: se despierta cuando pasa algo. Esa forma de trabajar se llama <b>arquitectura orientada a eventos</b> (<i>event-driven architecture</i>).</p></div><div class="analogia"><b>Imagínalo así</b><p>Un bombero no recorre la ciudad buscando incendios: espera en el cuartel hasta que suena la alarma. La alarma dice dónde y de qué tipo es el fuego, y con eso el equipo sale con lo que necesita. Mientras apaga, sigue escuchando la radio: si el viento cambia, cambia el plan.</p></div><div class="prose"><p>Los sistemas de la empresa publican <b>eventos</b> (<i>events</i>), hechos que ya ocurrieron con su hora y sus datos, en un <b>bus de eventos</b> (<i>event bus</i>), un intermediario al que otros servicios se suscriben. Kafka, RabbitMQ y los servicios de mensajería de los proveedores de nube son ejemplos del mercado. Para la versión 1.0 importan cuatro: «alarma en un nodo», «ticket creado», «visita agendada» y «alarma despejada».</p><p>El agente no se suscribe a todo. Un <b>disparador</b> (<i>trigger</i>) en código, sin modelo, mira los eventos y decide cuándo crear un objetivo: una alarma en un nodo <b>y</b> más de 30 tickets de la misma zona en 15 minutos. Esa regla es determinista y está versionada; el modelo no decide cuándo despertarse.</p><p>Despierto, el agente escucha los eventos de su objetivo. Si llega «alarma despejada» mientras el aviso espera aprobación, replanifica y el aviso pasa de «estamos trabajando en la falla» a «el servicio ya se restableció». Tres cuidados: los eventos pueden llegar <b>repetidos</b> (cada uno lleva un identificador y el repetido se descarta), <b>desordenados</b> (vale la hora del evento, no la de llegada) o <b>no llegar</b> (antes de cerrar, el agente consulta el estado de la alarma). Cómo se reanuda un agente después de una caída en mitad de su objetivo está en <a href="https://aaramirez.github.io/arneses/06-estado-y-eventos.html" target="_blank" rel="noopener">Sesiones, eventos y ejecución durable</a>.</p></div><figure class="fig fig-flujo" id="13-diagrama-2"><div class="lienzo"><svg viewBox="0 0 1000 660" style="min-width:800px" role="img" aria-label="Diagrama de secuencia del agente de avería masiva: el monitoreo publica la alarma, el disparador crea el objetivo, el agente consulta por MCP, arma y valida el plan, pide la aprobación del aviso a la jefa de turno, ejecuta, recibe el evento de alarma despejada, verifica, cierra, aplica créditos y entrega el informe">
+<defs>
+<marker id="c13d2-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-sis"/></marker>
+<marker id="c13d2-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c13d2-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-tra"/></marker>
+<marker id="c13d2-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-red"/></marker>
+<marker id="c13d2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+</defs>
+<rect x="20" y="14" width="120" height="50" rx="10" class="d-sis"/>
+<text x="80" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Monitoreo</text>
+<text x="80" y="52" class="t t-s t-m" text-anchor="middle">red y tickets</text>
+<line x1="80" y1="64" x2="80" y2="640" class="vida"/>
+<rect x="190" y="14" width="120" height="50" rx="10" class="d-casa"/>
+<text x="250" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Bus de eventos</text>
+<text x="250" y="52" class="t t-s t-m" text-anchor="middle">y disparador</text>
+<line x1="250" y1="64" x2="250" y2="640" class="vida"/>
+<rect x="360" y="14" width="120" height="50" rx="10" class="c-tra"/>
+<text x="420" y="35" class="t t-b k-tra" text-anchor="middle" style="font-size:12px">Agente</text>
+<text x="420" y="52" class="t t-s t-m" text-anchor="middle">nivel 4</text>
+<line x1="420" y1="64" x2="420" y2="640" class="vida"/>
+<rect x="530" y="14" width="120" height="50" rx="10" class="c-red"/>
+<text x="590" y="35" class="t t-b k-red" text-anchor="middle" style="font-size:12px">Herramientas</text>
+<text x="590" y="52" class="t t-s t-m" text-anchor="middle">MCP · nivel 3</text>
+<line x1="590" y1="64" x2="590" y2="640" class="vida"/>
+<rect x="700" y="14" width="120" height="50" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="760" y="35" class="t t-b k-warm" text-anchor="middle" style="font-size:12px">Jefa de turno</text>
+<text x="760" y="52" class="t t-s t-m" text-anchor="middle">panel del agente</text>
+<line x1="760" y1="64" x2="760" y2="640" class="vida"/>
+<line x1="80" y1="104" x2="248" y2="104" class="ln" style="stroke:var(--d-sis);stroke-width:2" marker-end="url(#c13d2-s)"/>
+<text x="88" y="96" class="t t-s">① alarma N14 + 186 tickets</text>
+<line x1="250" y1="148" x2="418" y2="148" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c13d2-c)"/>
+<text x="258" y="140" class="t t-s">② objetivo INC-311</text>
+<line x1="420" y1="192" x2="588" y2="192" class="ln s-tra" style="stroke-width:2" marker-end="url(#c13d2-t)"/>
+<text x="428" y="184" class="t t-s">③ consultas y protocolo</text>
+<line x1="590" y1="236" x2="422" y2="236" class="ln s-red" style="stroke-width:2" marker-end="url(#c13d2-r)"/>
+<text x="436" y="228" class="t t-s">④ evidencia (solo lectura)</text>
+<path d="M420 262 h44 v26 h-42" class="ln s-tra" style="stroke-width:2" marker-end="url(#c13d2-t)"/>
+<text x="472" y="274" class="t t-s">⑤ plan v1, validado</text>
+<text x="472" y="288" class="t t-s">por el código y el revisor</text>
+<line x1="420" y1="338" x2="758" y2="338" class="ln s-tra" style="stroke-width:2" marker-end="url(#c13d2-t)"/>
+<text x="428" y="330" class="t t-s">⑥ aprobación: aviso a 1.240 clientes</text>
+<line x1="760" y1="382" x2="422" y2="382" class="ln s-warm" style="stroke-width:2" marker-end="url(#c13d2-w)"/>
+<text x="560" y="374" class="t t-s t-b">⑦ aprueba, sin hora estimada</text>
+<line x1="420" y1="426" x2="588" y2="426" class="ln s-tra" style="stroke-width:2" marker-end="url(#c13d2-t)"/>
+<text x="428" y="418" class="t t-s">⑧ incidente y flujo de avisos</text>
+<line x1="80" y1="470" x2="248" y2="470" class="ln" style="stroke:var(--d-sis);stroke-width:2" marker-end="url(#c13d2-s)"/>
+<text x="88" y="462" class="t t-s">alarma despejada</text>
+<line x1="250" y1="492" x2="418" y2="492" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c13d2-c)"/>
+<text x="258" y="484" class="t t-s">⑨ evento del objetivo</text>
+<line x1="420" y1="540" x2="588" y2="540" class="ln s-tra" style="stroke-width:2" marker-end="url(#c13d2-t)"/>
+<text x="428" y="532" class="t t-s">⑩ verificar, cerrar, créditos</text>
+<line x1="420" y1="592" x2="758" y2="592" class="ln s-tra" style="stroke-width:2" marker-end="url(#c13d2-t)"/>
+<text x="428" y="584" class="t t-s">⑪ informe de traspaso: hecho, tareas y costo</text>
+<path d="M870 90v66" class="ln" style="stroke:var(--d-casa);stroke-width:3"/>
+<text x="882" y="120" class="t t-xs t-b k-casa">DESPERTAR</text>
+<text x="882" y="136" class="t t-s t-m">regla, sin modelo</text>
+<path d="M870 178v70" class="ln s-red" style="stroke-width:3"/>
+<text x="882" y="216" class="t t-xs t-b k-red">INVESTIGAR</text>
+<path d="M870 258v40" class="ln s-tra" style="stroke-width:3"/>
+<text x="882" y="282" class="t t-xs t-b k-tra">PLANEAR</text>
+<path d="M870 322v72" class="ln s-warm" style="stroke-width:3"/>
+<text x="882" y="356" class="t t-xs t-b k-warm">APROBAR</text>
+<text x="882" y="372" class="t t-s t-m">punto de control</text>
+<path d="M870 412v140" class="ln s-tra" style="stroke-width:3"/>
+<text x="882" y="478" class="t t-xs t-b k-tra">ACTUAR</text>
+<text x="882" y="494" class="t t-s t-m">y replanificar</text>
+<path d="M870 572v32" class="ln" style="stroke:var(--d-casa);stroke-width:3"/>
+<text x="882" y="592" class="t t-xs t-b k-casa">CERRAR</text>
+</svg></div><figcaption><b>La versión 1.0 atiende una avería, de la alarma al informe.</b> Participantes: el monitoreo, el bus de eventos, el agente (nivel 4), las herramientas por MCP (nivel 3) y la jefa de turno. ① El monitoreo publica la alarma y los tickets; ② el disparador crea el objetivo y despierta al agente; ③ el agente consulta alarmas, tickets y el protocolo (solo lectura) y ④ recibe los resultados; ⑤ arma y valida el plan; ⑥ pide la aprobación del aviso masivo y ⑦ la jefa lo aprueba; ⑧ el agente dispara el flujo de avisos y crea el incidente maestro; ⑨ llega el evento de alarma despejada; ⑩ el agente verifica el servicio, cierra los tickets y aplica los créditos de la política; ⑪ entrega el informe a la jefa. A la derecha, las fases: despertar, investigar, planear, aprobar, actuar y cerrar.</figcaption></figure></section>
+<section><h2>Usar los niveles 1 a 3 desde un agente</h2><div class="prose"><p>El agente de avería masiva no trae ninguna capacidad nueva hacia abajo. Todo lo que hace ya existía; lo que agrega es la decisión de qué usar y en qué orden. Es un <b>cliente</b> más de lo construido en los niveles 1 a 3:</p><div class="tbl"><table><thead><tr><th>Lo que necesita el agente</th><th>La pieza que usa</th><th>Capítulo</th></tr></thead><tbody><tr><td>Saber qué dice el protocolo de averías y qué plantilla de aviso está aprobada</td><td>RAG con citas sobre los manuales</td><td>8</td></tr><tr><td>Actuar con una identidad propia y permisos acotados</td><td>identidad y permisos (nivel 2)</td><td>6</td></tr><tr><td>Recordar lo hecho en el objetivo y lo que dijo la jefa</td><td>memoria de trabajo del objetivo</td><td>7</td></tr><tr><td>Consultar alarmas, tickets y visitas; crear el incidente</td><td>herramientas por MCP</td><td>9 y 10</td></tr><tr><td>Saber qué puede hacer solo y qué necesita aprobación</td><td>política de decisión y aprobaciones</td><td>11</td></tr><tr><td>Avisar a miles de clientes siempre igual</td><td>el flujo de avisos, como una sola herramienta</td><td>12</td></tr></tbody></table></div><p>De la tabla salen dos decisiones. El agente tiene <b>su propia identidad de servicio</b>, <code>agente-averias</code>, con menos permisos que cualquier persona del equipo: crea incidentes y vincula tickets, pero no hace reembolsos en dinero ni reprograma visitas de hoy. Y <b>si una capacidad no está en el registro, el agente no la improvisa</b>: para mover las 23 visitas crea una tarjeta «Haz esto» para coordinación de campo, como en el capítulo 11.</p></div></section>
+<section><h2>Varios agentes: investigador, planificador, ejecutor y revisor</h2><div class="prose"><p>Un solo agente con todas las herramientas y un contexto enorme se confunde y es difícil de auditar. La alternativa es repartir el trabajo en <b>roles</b>, cada uno con su contexto y sus permisos.</p></div><div class="analogia"><b>Imagínalo así</b><p>En la sala de emergencias de un hospital no hay un médico que haga todo. Alguien recibe al paciente y junta la información, el médico de guardia decide el tratamiento, la enfermera lo aplica y alguien revisa la dosis antes de inyectarla. Cada uno tiene permiso para lo suyo, y la revisión de la dosis la hace otra persona, no la que la preparó.</p></div><div class="prose"><p>La versión 1.0 usa cuatro roles:</p><ul><li><b>Investigador</b>: junta la evidencia. Correlaciona la alarma con los tickets, busca en los manuales y cuenta clientes afectados. Solo tiene herramientas de lectura.</li><li><b>Planificador</b>: convierte el objetivo y la evidencia en un plan con esquema. No tiene herramientas: solo escribe el plan.</li><li><b>Ejecutor</b>: ejecuta los pasos aprobados, uno por uno, con las herramientas de escritura y siempre a través de la política. No puede cambiar el plan; si un paso falla, devuelve el error al planificador.</li><li><b>Revisor</b>: compara el plan con el protocolo y con las restricciones del objetivo antes de ejecutar, y los resultados con los criterios de éxito al final. Puede bloquear.</li></ul><p>Los roles no se hablan con mensajes libres: leen y escriben un <b>estado compartido del objetivo</b> (plan, pasos hechos, evidencia), y un <b>orquestador</b> de código da los turnos. Dividir cuesta más llamadas, más latencia y el riesgo de perder algo en el traspaso; por eso el equipo empezó con un agente y un revisor, y separó los otros roles cuando las trazas mostraron que el contexto se llenaba. Cómo se reparten, se esperan y se juntan los subagentes está en <a href="https://aaramirez.github.io/arneses/13-orquestador-y-subagentes.html" target="_blank" rel="noopener">Orquestador y subagentes</a>.</p></div><figure class="fig fig-arquitectura" id="13-diagrama-3"><div class="lienzo"><svg viewBox="0 0 960 470" style="min-width:780px" role="img" aria-label="Arquitectura de cuatro agentes: investigador de solo lectura, planificador sin herramientas, ejecutor que escribe a través de la política y revisor que puede bloquear, sobre un estado compartido con un orquestador y la plataforma de los niveles 1 a 3">
+<defs>
+<marker id="c13d3-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-tra"/></marker>
+</defs>
+<text x="20" y="22" class="t t-xs t-b k-tra">NIVEL 4 · LOS ROLES DE LA VERSIÓN 1.0</text>
+<rect x="20" y="34" width="210" height="78" rx="10" class="c-tra"/>
+<text x="125" y="58" class="t t-b k-tra" text-anchor="middle">Investigador</text>
+<text x="125" y="78" class="t t-s" text-anchor="middle">junta la evidencia</text>
+<text x="125" y="98" class="t t-s t-b" text-anchor="middle">solo lectura</text>
+<rect x="253" y="34" width="210" height="78" rx="10" class="c-tra"/>
+<text x="358" y="58" class="t t-b k-tra" text-anchor="middle">Planificador</text>
+<text x="358" y="78" class="t t-s" text-anchor="middle">escribe el plan con esquema</text>
+<text x="358" y="98" class="t t-s t-b" text-anchor="middle">sin herramientas</text>
+<rect x="486" y="34" width="210" height="78" rx="10" class="c-tra"/>
+<text x="591" y="58" class="t t-b k-tra" text-anchor="middle">Ejecutor</text>
+<text x="591" y="78" class="t t-s" text-anchor="middle">ejecuta pasos aprobados</text>
+<text x="591" y="98" class="t t-s t-b" text-anchor="middle">escribe a través de la política</text>
+<rect x="719" y="34" width="216" height="78" rx="10" class="c-tra"/>
+<text x="827" y="58" class="t t-b k-tra" text-anchor="middle">Revisor</text>
+<text x="827" y="78" class="t t-s" text-anchor="middle">compara con protocolo y criterios</text>
+<text x="827" y="98" class="t t-s t-b" text-anchor="middle">puede bloquear</text>
+<line x1="125" y1="112" x2="125" y2="145" class="ln s-tra" style="stroke-width:2" marker-start="url(#c13d3-a)" marker-end="url(#c13d3-a)"/>
+<line x1="358" y1="112" x2="358" y2="145" class="ln s-tra" style="stroke-width:2" marker-start="url(#c13d3-a)" marker-end="url(#c13d3-a)"/>
+<line x1="591" y1="112" x2="591" y2="145" class="ln s-tra" style="stroke-width:2" marker-start="url(#c13d3-a)" marker-end="url(#c13d3-a)"/>
+<line x1="827" y1="112" x2="827" y2="145" class="ln s-tra" style="stroke-width:2" marker-start="url(#c13d3-a)" marker-end="url(#c13d3-a)"/>
+<rect x="20" y="148" width="640" height="56" rx="10" class="caja" style="stroke-dasharray:6 4"/>
+<text x="36" y="171" class="t t-s t-b">Estado compartido del objetivo INC-311</text>
+<text x="36" y="190" class="t t-s t-m">plan y sus versiones · pasos hechos · evidencia · aprobaciones · presupuesto gastado</text>
+<rect x="680" y="148" width="255" height="56" rx="10" class="d-casa"/>
+<text x="807" y="171" class="t t-s t-b" text-anchor="middle">Orquestador (código)</text>
+<text x="807" y="190" class="t t-s t-m" text-anchor="middle">da los turnos y controla los límites</text>
+<text x="20" y="236" class="t t-xs t-b t-m">LA PLATAFORMA DE LOS NIVELES 1 A 3 · LO QUE USA CADA ROL</text>
+<rect x="20" y="248" width="915" height="56" rx="10" class="c-fis"/>
+<text x="36" y="270" class="t t-xs t-b k-fis">NIVEL 1</text>
+<text x="36" y="290" class="t t-s">RAG con citas: protocolo de averías, plantillas de aviso</text>
+<text x="919" y="281" class="t t-s t-m" text-anchor="end">investigador · planificador · revisor</text>
+<rect x="20" y="314" width="915" height="56" rx="10" class="c-enl"/>
+<text x="36" y="336" class="t t-xs t-b k-enl">NIVEL 2</text>
+<text x="36" y="356" class="t t-s">identidad de servicio agente-averias · memoria del objetivo</text>
+<text x="919" y="347" class="t t-s t-m" text-anchor="end">todos, con permisos distintos</text>
+<rect x="20" y="380" width="915" height="76" rx="10" class="c-red"/>
+<text x="36" y="402" class="t t-xs t-b k-red">NIVEL 3</text>
+<text x="36" y="422" class="t t-s">herramientas por MCP · registro · política de decisión</text>
+<text x="36" y="440" class="t t-s">aprobaciones · flujo de avisos (una sola herramienta)</text>
+<text x="919" y="413" class="t t-s t-m" text-anchor="end">lectura: investigador · registro: planificador</text>
+<text x="919" y="431" class="t t-s t-m" text-anchor="end">escritura con política y aprobaciones: ejecutor</text>
+</svg></div><figcaption><b>Cuatro roles sobre la misma plataforma.</b> Arriba, los cuatro agentes de la versión 1.0, en morado (nivel 4), cada uno con su permiso: el investigador solo lee, el planificador no tiene herramientas, el ejecutor escribe a través de la política y el revisor puede bloquear. En el medio, el estado compartido del objetivo y el orquestador que da los turnos. Abajo, la plataforma de los niveles 1 a 3 que todos usan: los manuales con RAG, la identidad y la memoria, las herramientas por MCP, la política, las aprobaciones y los flujos. A la derecha de cada franja, qué roles la usan.</figcaption></figure><div class="lab" id="13-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Un agente que planifica, actúa y pide aprobación</h3></div><p class="hint">Avanza paso a paso con «Siguiente» y mira qué rol trabaja, qué herramienta usa y cómo cambia el plan. En el punto de control decides tú, como jefa de turno: aprobar el aviso, corregirlo o rechazarlo. Activa los imprevistos (un cliente empresarial en la zona, la alarma que se despeja durante la espera) y mira cómo replanifica.</p><style>
+[id="13-lab-1"] .c13l1-chk{display:flex;gap:8px;align-items:flex-start;font:500 .84rem/1.35 var(--f-display);color:var(--ink);cursor:pointer}
+[id="13-lab-1"] .c13l1-paso{border:1px solid var(--line);border-left:6px solid var(--c-tra);border-radius:10px;padding:10px 12px;background:var(--paper);display:grid;gap:5px;font:500 .84rem/1.4 var(--f-display);color:var(--ink)}
+[id="13-lab-1"] .c13l1-paso.control{border-left-color:var(--warm);background:var(--warm-soft)}
+[id="13-lab-1"] .c13l1-paso.codigo{border-left-color:var(--d-casa)}
+[id="13-lab-1"] .c13l1-paso p{margin:0}
+[id="13-lab-1"] .c13l1-rol{display:inline-block;font:700 .7rem var(--f-display);letter-spacing:.04em;text-transform:uppercase;color:var(--c-tra)}
+[id="13-lab-1"] .c13l1-paso.control .c13l1-rol{color:var(--warm)}
+[id="13-lab-1"] .c13l1-paso.codigo .c13l1-rol{color:var(--d-casa)}
+[id="13-lab-1"] .c13l1-paso code,[id="13-lab-1"] .c13l1-plan code{font:500 .78rem var(--f-mono);overflow-wrap:anywhere}
+[id="13-lab-1"] .c13l1-msg{border:1px dashed var(--line);border-radius:8px;padding:6px 9px;background:var(--card);font:500 .8rem/1.4 var(--f-body)}
+[id="13-lab-1"] .c13l1-plan{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+[id="13-lab-1"] .c13l1-plan li{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:7px;padding:5px 9px;background:var(--card);font:500 .8rem/1.3 var(--f-display);color:var(--ink)}
+[id="13-lab-1"] .c13l1-plan li span.e{font:700 .7rem var(--f-mono);white-space:nowrap;color:var(--muted)}
+[id="13-lab-1"] .c13l1-plan li.hecho span.e{color:var(--good)}
+[id="13-lab-1"] .c13l1-plan li.control span.e,[id="13-lab-1"] .c13l1-plan li.mal span.e{color:var(--warm)}
+[id="13-lab-1"] .c13l1-plan li.nuevo{border-color:var(--c-tra);border-width:2px}
+[id="13-lab-1"] .c13l1-tit{font:600 .78rem var(--f-display);color:var(--muted)}
+[id="13-lab-1"] .c13l1-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,118px),1fr));gap:8px}
+[id="13-lab-1"] .c13l1-k{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card)}
+[id="13-lab-1"] .c13l1-k span{display:block;font:600 .72rem var(--f-display);color:var(--muted)}
+[id="13-lab-1"] .c13l1-k output{font:700 1.02rem var(--f-mono);color:var(--ink)}
+[id="13-lab-1"] button:disabled{opacity:.45;cursor:default}
+</style>
+<label class="c13l1-chk"><input type="checkbox" id="c13l1-emp"><span>Imprevisto: hay un cliente empresarial con contrato de nivel de servicio en la zona</span></label>
+<label class="c13l1-chk"><input type="checkbox" id="c13l1-desp"><span>Imprevisto: la alarma se despeja mientras el aviso espera aprobación</span></label>
+<div class="btns"><button type="button" class="primary" id="c13l1-sig">Siguiente paso →</button><button type="button" id="c13l1-rei">Empezar de nuevo</button></div>
+<div class="c13l1-paso" id="c13l1-paso" aria-live="polite"></div>
+<div class="btns" role="group" aria-label="Decisión de la jefa de turno en el punto de control">
+  <button type="button" id="c13l1-ok" disabled>Aprobar el aviso tal cual</button>
+  <button type="button" id="c13l1-cor" disabled>Corregir: quitar la hora estimada</button>
+  <button type="button" id="c13l1-no" disabled>Rechazar el aviso</button>
+</div>
+<div class="c13l1-tit" id="c13l1-plantit">Plan</div>
+<ol class="c13l1-plan" id="c13l1-plan" aria-label="Plan del agente"></ol>
+<div class="c13l1-kpis">
+  <div class="c13l1-k"><span>Paso</span><output id="c13l1-k1"></output></div>
+  <div class="c13l1-k"><span>Escrituras</span><output id="c13l1-k2"></output></div>
+  <div class="c13l1-k"><span>Aprobaciones pedidas</span><output id="c13l1-k3"></output></div>
+  <div class="c13l1-k"><span>Costo acumulado</span><output id="c13l1-k4"></output></div>
+  <div class="c13l1-k"><span>Clientes avisados</span><output id="c13l1-k5"></output></div>
+</div>
+<div class="readout texto" id="c13l1-out" aria-live="polite"></div></div></section>
+<section><h2>Presupuestos, límites y botón de parada</h2><div class="prose"><p>Un flujo termina cuando se le acaban los pasos; un agente, cuando cumple el objetivo o cuando algo lo detiene. Sin límites, un agente que no lo logra puede seguir intentando para siempre, gastando y actuando.</p><p>Cada objetivo trae su <b>presupuesto</b> (<i>budget</i>), y el orquestador lo controla en cada vuelta del bucle, no el modelo:</p><ul><li><b>Pasos</b>: cuántas llamadas a herramientas puede hacer.</li><li><b>Costo</b>: cuántos dólares de tokens puede gastar, calculados por la puerta a los modelos del capítulo 3.</li><li><b>Tiempo</b>: cuántos minutos puede durar el objetivo.</li><li><b>Alcance de efectos</b> (<i>blast radius</i>): cuántos clientes puede tocar o cuánto dinero puede mover sin una aprobación nueva. Un aviso a 1.240 clientes ya pasó por aprobación; si el plan nuevo quiere avisar a 5.000, vuelve a preguntar.</li></ul><p>Además del presupuesto, el orquestador detecta <b>bucles</b>: si el agente repite la misma herramienta con los mismos argumentos y el mismo error tres veces, se detiene aunque le quede presupuesto. Y existe un <b>interruptor de parada</b> (<i>kill switch</i>) en tres alcances: por objetivo (la jefa detiene este agente), por herramienta (nadie usa <code>avisar_clientes_zona</code> hasta nuevo aviso) y general (se apagan todos los agentes).</p><p>Detenerse bien importa tanto como detenerse: el agente termina o cancela el paso en curso, cancela las aprobaciones pendientes, deja el estado consistente y entrega un <b>informe de traspaso</b> con lo hecho, lo que falta y el motivo. Una persona retoma desde ahí. Cómo se pausa, limita y apaga un agente desde el arnés está en <a href="https://aaramirez.github.io/arneses/10-credenciales-y-aislamiento.html" target="_blank" rel="noopener">Credenciales, aislamiento e idempotencia</a>.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un bucle de agente con presupuesto y botón de parada</h3></div><p>Vas a correr un agente mínimo con tres herramientas falsas y una de cierre, un máximo de pasos, un tope de costo y un interruptor de parada que es un archivo llamado <code>PARAR</code>. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>agente.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
+from pathlib import Path
+
+URL = "http://localhost:11434/v1/chat/completions"
+MAX_PASOS, MAX_COSTO = 6, 0.0040                 # presupuesto del objetivo
+PRECIO_ENTRADA, PRECIO_SALIDA = 1.00, 4.00       # US$ por millón de tokens (inventados)
+
+def herramienta(nombre, descripcion, props):
+    return {"type": "function", "function": {"name": nombre, "description": descripcion,
+            "parameters": {"type": "object", "properties": props, "required": list(props)}}}
+HERRAMIENTAS = [
+    herramienta("consultar_alarmas", "Alarmas activas de una zona.", {"zona": {"type": "string"}}),
+    herramienta("buscar_tickets_zona", "Tickets abiertos de una zona en la última hora.", {"zona": {"type": "string"}}),
+    herramienta("crear_incidente_maestro", "Crea el incidente que agrupa los tickets.",
+                {"zona": {"type": "string"}, "tickets": {"type": "integer"}}),
+    herramienta("terminar", "Úsala cuando el objetivo esté cumplido.", {"resumen": {"type": "string"}}),
+]
+def ejecutar(nombre, args):   # los «sistemas»: respuestas fijas de ejemplo
+    if nombre == "consultar_alarmas":
+        return {"alarmas": [{"nodo": "N14", "zona": args.get("zona"), "desde": "07:40"}]}
+    if nombre == "buscar_tickets_zona":
+        return {"tickets_abiertos": 186}
+    if nombre == "crear_incidente_maestro":
+        return {"incidente": "INC-311", "tickets_vinculados": args.get("tickets")}
+    return {"ok": True}
+
+mensajes = [{"role": "system", "content": "Eres el agente de averías. Usa las herramientas una por una. "
+             "Primero consulta, después crea el incidente maestro y al final llama a terminar."},
+            {"role": "user", "content": "Objetivo: agrupar los tickets de la avería de la zona Norte en un incidente maestro."}]
+pasos, costo = 0, 0.0
+while True:
+    if Path("PARAR").exists():
+        motivo = "interruptor de parada"; break
+    if pasos &gt;= MAX_PASOS:
+        motivo = f"se agotaron los {MAX_PASOS} pasos"; break
+    if costo &gt;= MAX_COSTO:
+        motivo = f"se agotó el presupuesto de US$ {MAX_COSTO:.4f}"; break
+    cuerpo = {"model": "llama3.2:3b", "temperature": 0, "tools": HERRAMIENTAS, "messages": mensajes}
+    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido, timeout=120) as r:
+        respuesta = json.load(r)
+    uso = respuesta.get("usage", {})
+    costo += (uso.get("prompt_tokens", 0) * PRECIO_ENTRADA + uso.get("completion_tokens", 0) * PRECIO_SALIDA) / 1_000_000
+    mensaje = respuesta["choices"][0]["message"]
+    llamadas = mensaje.get("tool_calls") or []
+    if not llamadas:
+        motivo = "el modelo respondió sin pedir herramientas"; break
+    mensajes.append(mensaje)
+    for llamada in llamadas:
+        nombre, args = llamada["function"]["name"], llamada["function"]["arguments"]
+        args = json.loads(args) if isinstance(args, str) else args
+        pasos += 1
+        resultado = ejecutar(nombre, args)
+        print(f"paso {pasos}: {nombre}({args}) -&gt; {resultado}   costo acumulado US$ {costo:.5f}")
+        mensajes.append({"role": "tool", "tool_call_id": llamada.get("id", ""), "content": json.dumps(resultado)})
+        if nombre == "terminar":
+            print("\nObjetivo cumplido según el agente:", args.get("resumen")); raise SystemExit
+print(f"\nDetenido: {motivo}. Pasos: {pasos}. Costo: US$ {costo:.5f}. Una persona retoma desde aquí.")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>python agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>New-Item PARAR</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Remove-Item PARAR</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>touch PARAR</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>rm PARAR</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Corre el agente y sigue cada paso: qué herramienta pide, qué recibe y cuánto lleva gastado.</span></li><li><span>Cambia <code>MAX_PASOS</code> a <code>2</code> y vuelve a correrlo.</span></li><li><span>Crea el archivo <code>PARAR</code> con la segunda línea, corre el agente otra vez y después borra el archivo.</span></li></ol><p><b>Qué observar:</b> los límites los revisa el código al principio de cada vuelta, no el modelo, así que un modelo que se empeña en seguir no puede saltárselos. Con dos pasos, el agente se detiene antes de crear el incidente. Con el archivo <code>PARAR</code>, ni siquiera llama al modelo. Un modelo pequeño a veces repite una consulta u olvida llamar a <code>terminar</code>: justo lo que corta el presupuesto de pasos. El costo usa precios inventados sobre los tokens que informa la respuesta; Ollama no cobra.</p></div><div class="lab" id="13-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Ponle un presupuesto de pasos y de costo y mira dónde se detiene</h3></div><p class="hint">Elige un escenario (una avería normal, una herramienta que falla una y otra vez, o una avería grande), mueve los topes de pasos y de costo, y activa o no el detector de bucles y el interruptor de parada. La gráfica muestra el costo acumulado paso a paso y dónde se detiene el agente; la lectura dice qué quedó hecho y qué recibe la persona que retoma.</p><style>
+[id="13-lab-2"] .c13l2-chk{display:flex;gap:8px;align-items:flex-start;font:500 .84rem/1.35 var(--f-display);color:var(--ink);cursor:pointer}
+[id="13-lab-2"] svg{width:100%;height:auto;display:block;background:var(--paper);border-radius:10px}
+[id="13-lab-2"] svg text{font:500 11px var(--f-display);fill:var(--muted)}
+[id="13-lab-2"] svg .c13l2-st{font-weight:700;fill:var(--ink)}
+[id="13-lab-2"] .c13l2-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,130px),1fr));gap:8px}
+[id="13-lab-2"] .c13l2-k{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card)}
+[id="13-lab-2"] .c13l2-k span{display:block;font:600 .72rem var(--f-display);color:var(--muted)}
+[id="13-lab-2"] .c13l2-k output{font:700 1.02rem var(--f-mono);color:var(--ink)}
+</style>
+<div class="btns" role="group" aria-label="Escenario">
+  <button type="button" data-e="normal" aria-pressed="true">Avería normal</button>
+  <button type="button" data-e="falla" aria-pressed="false">Herramienta que falla</button>
+  <button type="button" data-e="grande" aria-pressed="false">Avería grande</button>
+</div>
+<div class="ctls">
+  <label class="ctl">Tope de pasos <output id="c13l2-p-o"></output>
+    <input id="c13l2-p" type="range" min="5" max="40" step="1" value="30"></label>
+  <label class="ctl">Tope de costo <output id="c13l2-c-o"></output>
+    <input id="c13l2-c" type="range" min="0.05" max="1" step="0.05" value="0.5"></label>
+</div>
+<label class="c13l2-chk"><input type="checkbox" id="c13l2-bucle" checked><span>Detector de bucles: detener si se repite 3 veces la misma llamada con el mismo error</span></label>
+<label class="c13l2-chk"><input type="checkbox" id="c13l2-kill"><span>La jefa de turno pulsa el interruptor de parada en el paso 10</span></label>
+<svg id="c13l2-g" viewBox="0 0 600 250" role="img" aria-label="Costo acumulado del agente por paso, con los topes de pasos y de costo"></svg>
+<div class="c13l2-kpis">
+  <div class="c13l2-k"><span>Estado final</span><output id="c13l2-k1"></output></div>
+  <div class="c13l2-k"><span>Pasos usados</span><output id="c13l2-k2"></output></div>
+  <div class="c13l2-k"><span>Costo gastado</span><output id="c13l2-k3"></output></div>
+  <div class="c13l2-k"><span>Hitos cumplidos</span><output id="c13l2-k4"></output></div>
+</div>
+<div class="readout texto" id="c13l2-out" aria-live="polite"></div></div></section>
+<section><h2>El gobierno del agente está en Cómo construir un arnés</h2><div class="prose"><p>Aquí el agente fue parte del producto. El gobierno por dentro (las reglas que autorizan cada acción, los validadores antes y después de actuar, el libro de auditoría y la reconstrucción de una ejecución) es el tema de <a href="https://aaramirez.github.io/arneses/temario.html" target="_blank" rel="noopener">Cómo construir un arnés</a>, en particular de <a href="https://aaramirez.github.io/arneses/11-registros-y-auditoria.html" target="_blank" rel="noopener">Registros, auditoría y gobierno de datos</a>.</p><p>Del lado del producto quedan tres decisiones que no son técnicas: qué tipos de objetivo puede recibir un agente (en la 1.0, solo «avería masiva»), quién puede lanzarlo o detenerlo (el disparador y la jefa de turno), y cómo se mide. El KPI del nivel 4 es el <b>éxito del agente</b>: objetivos cumplidos sin intervención fuera de los puntos de control, con su costo y su tiempo. Cómo se lee ese número junto a los de los otros niveles está en <a href="https://aaramirez.github.io/adopcion-de-ia/12-medir.html" target="_blank" rel="noopener">Medir: KPI por nivel</a>.</p></div><div class="caso"><b>Un caso real</b><p><b>El agente que borró la base de producción.</b> En 2025 se hizo público el caso de un agente de programación de una plataforma en línea que, durante un congelamiento de cambios pedido por su usuario, borró la base de datos de producción del proyecto y después informó mal lo que había pasado. La plataforma anunció cambios: separar automáticamente desarrollo de producción y un modo en que el agente solo planifica. La lección: una instrucción en el prompt («no toques nada») no es un permiso. Los límites van en las credenciales, en la política y en un plan que una persona ve antes de ejecutarlo.</p></div><div class="ml"><b>En la práctica</b><p><b>La versión 1.0 en su primera avería.</b> El agente corrió en modo sombra durante tres averías: armaba el plan y lo simulaba mientras la jefa de turno atendía con el flujo. En la segunda, el revisor bloqueó un plan que avisaba antes de crear el incidente maestro, lo que habría dejado los avisos sin número de referencia. En la cuarta ejecutó de verdad, con un presupuesto de 30 pasos y US$ 0,50, y un único punto de control: el aviso masivo. Usó 19 pasos y US$ 0,25; las 23 visitas quedaron como tarea para coordinación de campo, porque el agente no tiene ese permiso.</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>El agente como cliente de los niveles anteriores. Recibe un objetivo creado por el sistema, propone un plan que es un dato con esquema, lo valida contra el registro y la política, y lo ejecuta con las mismas herramientas, aprobaciones y flujos de los niveles 1 a 3. Lo despiertan eventos a través de un disparador determinista, se reparte en roles con permisos distintos cuando hace falta, y se detiene por presupuesto, por bucle o con el interruptor, dejando un informe para la persona que retoma.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>¿Cuándo conviene un flujo y cuándo un agente?</summary><p>Si los pasos se conocen de antemano, un flujo: es más barato, más rápido y más fácil de evaluar. Un agente, cuando el camino depende de lo que se va encontrando y cada caso trae combinaciones nuevas.</p></details><details><summary>¿Quién decide qué pasos de un plan piden aprobación?</summary><p>El código, con el riesgo de cada herramienta en el registro y la política de decisión; el modelo solo propone los pasos.</p></details><details><summary>¿Por qué el agente no decide cuándo despertarse?</summary><p>Porque eso lo decide un disparador determinista y versionado (por ejemplo, alarma más de 30 tickets de una zona en 15 minutos); así el arranque es predecible, auditable y no cuesta tokens.</p></details><details><summary>Un evento «alarma despejada» llega dos veces. ¿Qué hace el agente?</summary><p>Descarta el repetido por su identificador; los eventos pueden llegar repetidos, desordenados o no llegar, así que también consulta el estado antes de cerrar.</p></details><details><summary>¿Por qué el revisor no debería ser el mismo agente que armó el plan?</summary><p>Porque revisar el propio trabajo con el mismo contexto repite los mismos errores; un revisor con otro contexto y la facultad de bloquear detecta lo que el planificador no vio.</p></details><details><summary>¿Qué tiene que dejar un agente cuando lo detiene un límite?</summary><p>El paso en curso terminado o cancelado, las aprobaciones pendientes canceladas, el estado consistente y un informe de traspaso con lo hecho, lo que falta y el motivo de la parada.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué es el patrón ReAct (razonar y actuar) y qué propuso el artículo que lo presentó en 2022?<small>Pista: busca «ReAct synergizing reasoning and acting».</small></li><li>¿Qué es un grafo acíclico dirigido (DAG) y cómo se detecta un ciclo con un orden topológico?</li><li>¿Qué garantiza Kafka sobre el orden de los mensajes dentro de una partición, y qué no garantiza entre particiones?</li><li>¿Qué significan las entregas «al menos una vez» y «exactamente una vez» en un sistema de mensajería?</li><li>¿Qué es la especificación CloudEvents y qué campos obligatorios define para un evento?</li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents <small>cuándo usar flujos y cuándo agentes, en inglés</small></a><a class="vid" href="https://cloudevents.io/" target="_blank" rel="noopener">CloudEvents <small>especificación abierta para describir eventos, en inglés</small></a><a class="vid" href="https://aaramirez.github.io/arneses/12-planificador-y-ejecutor.html" target="_blank" rel="noopener">Planificador y ejecutor, en Cómo construir un arnés <small>curso del sitio</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  let cur=0,decision=null;
+  const us=v=>'US$ '+v.toFixed(2).replace('.',',');
+  const AVISO_HORA='«Hay una falla en el servicio de tu zona. Ya estamos trabajando y estimamos resolverla antes de las 10:00. Referencia INC-311.»';
+  const AVISO_SIN='«Hay una falla en el servicio de tu zona. Ya estamos trabajando y te avisaremos cuando se restablezca. Referencia INC-311.»';
+  const AVISO_OK='«El servicio de tu zona se restableció a las 08:52. Si todavía tienes problemas, responde a este mensaje. Referencia INC-311.»';
+  function pasos(){
+    const emp=$('#c13l1-emp').checked,desp=$('#c13l1-desp').checked,P=[];
+    const plan1=[['inc','Crear el incidente maestro y vincular los tickets'],['aviso','Avisar a los 1.240 clientes de la zona'],['visitas','Mover las 23 visitas de hoy en la zona'],['cierre','Verificar el servicio y cerrar los tickets'],['cred','Aplicar los créditos de la política'],['inf','Informe para la jefa de turno']];
+    const plan2=emp?plan1.slice(0,2).concat([['ejec','Avisar al ejecutivo de cuenta del cliente empresarial']],plan1.slice(2)):plan1;
+    P.push({rol:'disparador (código)',cls:'codigo',txt:'Llega la alarma del nodo N14 y, en 15 minutos, 186 tickets de la zona Norte. La regla del disparador se cumple y crea el objetivo <code>INC-311</code> con su presupuesto: 30 pasos, US$ 0,50 y 240 minutos.',c:0,why:'El agente no decide cuándo despertarse: lo decide una regla determinista y versionada, sin modelo.'});
+    P.push({rol:'investigador',txt:'<code>consultar_alarmas</code> y <code>buscar_tickets_zona</code>: una alarma desde las 07:40, 186 tickets abiertos y 1.240 clientes conectados al nodo, uno de ellos empresarial'+(emp?' con contrato de nivel de servicio.':' sin contrato especial.'),c:.03,why:'Herramientas de lectura: se ejecutan solas porque no cambian nada.'});
+    P.push({rol:'investigador',txt:'<code>buscar_en_manuales</code>: el protocolo de averías masivas (versión 4) dice avisar en menos de 30 minutos, no dar una hora estimada salvo que red la confirme y avisar al ejecutivo de cuenta si hay clientes con contrato.',c:.02,why:'Es el RAG del capítulo 8: el agente trabaja con el protocolo vigente y lo cita.'});
+    P.push({rol:'planificador',txt:'Arma el plan versión 1 con '+plan1.length+' pasos y el código lo valida contra el registro: el aviso masivo queda como punto de control y mover visitas de hoy queda «sin permiso».',c:.04,plan:plan1,ver:1,why:'El plan es un dato con esquema. Qué pide aprobación y qué no está permitido lo calcula el código, no el modelo.'});
+    if(emp){
+      P.push({rol:'revisor',txt:'Compara el plan con el protocolo y lo <b>bloquea</b>: falta avisar al ejecutivo de cuenta del cliente empresarial. Devuelve el motivo al planificador.',c:.02,marks:{},why:'El revisor tiene otro contexto y la facultad de bloquear: atrapa lo que el planificador no vio.'});
+      P.push({rol:'planificador',txt:'Replanifica: plan versión 2, con un paso nuevo para avisar al ejecutivo de cuenta. El revisor lo aprueba.',c:.04,plan:plan2,ver:2,nuevo:'ejec',why:'Replanificar es normal: el plan nuevo queda guardado como otra versión y se ve qué cambió.'});
+    }else P.push({rol:'revisor',txt:'Compara el plan con el protocolo y con las restricciones del objetivo: conforme.',c:.02,why:'Sin revisión, un plan con un paso faltante se ejecutaría igual.'});
+    P.push({rol:'ejecutor',txt:'<code>crear_incidente_maestro</code> y <code>vincular_tickets</code>: incidente INC-311 con 186 tickets vinculados.',c:.02,esc:2,marks:{inc:'hecho'},why:'Escrituras reversibles dentro de los permisos del agente: la política las deja pasar solas.'});
+    if(desp){
+      P.push({rol:'evento',cls:'codigo',txt:'Mientras se preparaba el aviso llega el evento «alarma despejada» (08:52). El planificador replanifica: el aviso ahora informa que el servicio se restableció, y la solicitud de aprobación se arma con el texto nuevo.',c:.03,why:'El contenido cambió, así que una aprobación del texto viejo no valdría: se pide sobre el texto nuevo.'});
+    }
+    P.push({rol:'punto de control',cls:'control',ctrl:true,txt:'<code>avisar_clientes_zona</code> a 1.240 clientes espera tu decisión como jefa de turno. Borrador:<div class="c13l1-msg">'+(desp?AVISO_OK:AVISO_HORA)+'</div>',c:.01,apr:1,marks:{aviso:'control'},why:'Un mensaje a miles de clientes no se deshace. Lee el borrador antes de decidir.'});
+    if(decision){
+      let t,m,cli=0,mal=false;
+      if(decision==='ok'){t='Aprobaste el aviso tal cual. El flujo de avisos lo manda por SMS, correo y la web.';cli=1240;m='hecho';if(!desp){mal=true;t+=' <b>Ojo:</b> salió con «antes de las 10:00», una hora que red nunca confirmó y que el protocolo prohíbe.';}}
+      else if(decision==='cor'){t=desp?'El texto no tenía hora estimada; lo aprobaste y salió por SMS, correo y la web.':'Quitaste la hora estimada y aprobaste. El aviso sale sin promesas: «te avisaremos cuando se restablezca».';cli=1240;m='hecho';}
+      else{t='Rechazaste el aviso. No sale nada a los clientes; el agente no insiste ni busca otra persona que apruebe: crea una tarea para el equipo de comunicación con el borrador y el motivo.';m='mal';}
+      P.push({rol:'ejecutor',txt:t,c:.02,esc:cli?1:0,cli,mal,marks:{aviso:m},why:mal?'La aprobación humana solo protege si la persona lee lo que aprueba: este error lo dejó pasar el punto de control.':'La decisión de la persona manda: el agente sigue con el resto del plan.'});
+      if(emp)P.push({rol:'ejecutor',txt:'Avisa por el chat interno al ejecutivo de cuenta del cliente empresarial, con la referencia INC-311.',c:.01,esc:1,marks:{ejec:'hecho'},why:'Mensaje interno a una persona: dentro de los permisos del agente.'});
+      P.push({rol:'ejecutor',txt:'<code>reprogramar_visitas_zona</code>: el agente no tiene ese permiso. Crea una tarjeta «Haz esto» para coordinación de campo con las 23 visitas, su evidencia y el criterio de «hecho».',c:.01,marks:{visitas:'tarea'},why:'Si una capacidad no está permitida, el agente no la improvisa: crea la tarea para quien sí puede.'});
+      if(!desp)P.push({rol:'evento',cls:'codigo',txt:'Llega el evento «alarma despejada» (09:35). El agente no cierra por el evento solo: primero verifica.',c:0,why:'Los eventos pueden llegar repetidos, tarde o no llegar; el cierre se apoya en una verificación.'});
+      P.push({rol:'investigador',txt:'Verifica el servicio cliente por cliente: 1.231 con servicio, 9 todavía sin servicio.',c:.03,why:'El criterio de «hecho» lo verifica el sistema, no la opinión del modelo.'});
+      P.push({rol:'ejecutor',txt:'<code>cerrar_tickets_verificados</code>: 177 tickets cerrados; los 9 clientes sin servicio quedan con un ticket abierto para visita. <code>aplicar_creditos_politica</code>: crédito de US$ 2,00 por cliente afectado, dentro del límite automático de la política.',c:.03,esc:2,marks:{cierre:'hecho',cred:'hecho'},why:'Créditos dentro de la política: se aplican solos, como los reembolsos de hasta US$ 10,00 del capítulo 11.'});
+      P.push({rol:'revisor',txt:'Compara el resultado con los criterios de éxito y entrega el informe de traspaso: qué se hizo, qué quedó como tarea (las 23 visitas'+(decision==='no'?' y el aviso rechazado':'')+', los 9 clientes sin servicio) y cuánto costó.',c:.02,marks:{inf:'hecho'},fin:true,why:'El agente termina con un informe que una persona puede leer y continuar.'});
+    }
+    return P;
+  }
+  function pintar(){
+    const P=pasos();cur=Math.min(cur,P.length-1);
+    const p=P[cur],enCtrl=!!p.ctrl&&!decision;
+    $('#c13l1-sig').disabled=enCtrl||!!p.fin;
+    ['#c13l1-ok','#c13l1-cor','#c13l1-no'].forEach(b=>$(b).disabled=!enCtrl);
+    $('#c13l1-cor').textContent=$('#c13l1-desp').checked?'Aprobar con revisión del texto':'Corregir: quitar la hora estimada';
+    const el=$('#c13l1-paso');el.className='c13l1-paso'+(p.cls?' '+p.cls:'');
+    el.innerHTML='<span class="c13l1-rol">Paso '+(cur+1)+' · '+p.rol+'</span><p>'+p.txt+'</p>';
+    let plan=null,ver=0,nuevo=null;const mk={};let esc=0,apr=0,c=0,cli=0,mal=false;
+    P.slice(0,cur+1).forEach(q=>{if(q.plan){plan=q.plan;ver=q.ver;nuevo=q.nuevo||null;}Object.assign(mk,q.marks||{});esc+=q.esc||0;apr+=q.apr||0;c+=q.c||0;cli+=q.cli||0;if(q.mal)mal=true;});
+    const ET={hecho:'✓ hecho',control:'⏸ espera aprobación',tarea:'→ tarea a una persona',mal:'✕ rechazado'};
+    $('#c13l1-plantit').textContent=plan?'Plan versión '+ver+' (lo que ve la jefa de turno)':'Plan: todavía no existe';
+    $('#c13l1-plan').innerHTML=plan?plan.map(([id,t])=>{const e=mk[id];const extra=id==='aviso'&&!e?'punto de control':id==='visitas'&&!e?'sin permiso':'pendiente';
+      return '<li class="'+(e||'')+(id===nuevo?' nuevo':'')+'"><span>'+t+'</span><span class="e">'+(e?ET[e]:extra)+'</span></li>';}).join(''):'<li><span>El planificador todavía no trabajó.</span><span class="e">—</span></li>';
+    $('#c13l1-k1').textContent=(cur+1)+' de '+P.length+(decision?'':'+');
+    $('#c13l1-k2').textContent=esc;$('#c13l1-k3').textContent=apr;$('#c13l1-k4').textContent=us(c);$('#c13l1-k5').textContent=cli.toLocaleString('es');
+    let r='<span>'+p.why+'</span>';
+    if(enCtrl)r='<span class="warn">Punto de control: el agente está detenido. Nada sale a los clientes hasta que decidas.</span><span>'+p.why+'</span>';
+    if(p.fin)r='<span class="'+(mal?'warn':'ok')+'">Objetivo cerrado en '+P.length+' pasos y '+us(c)+', con '+apr+' aprobación'+(apr===1?'':'es')+'. '+(mal?'Un error llegó a los clientes: el aviso con una hora inventada. El agente siguió el protocolo; la aprobación no lo revisó.':'Todo lo que salió de la empresa pasó por una persona, y lo que el agente no podía hacer quedó como tarea.')+'</span>';
+    $('#c13l1-out').innerHTML=r;
+  }
+  $('#c13l1-sig').addEventListener('click',()=>{cur++;pintar();});
+  $('#c13l1-rei').addEventListener('click',()=>{cur=0;decision=null;pintar();});
+  [['#c13l1-ok','ok'],['#c13l1-cor','cor'],['#c13l1-no','no']].forEach(([id,d])=>$(id).addEventListener('click',()=>{decision=d;cur++;pintar();}));
+  ['#c13l1-emp','#c13l1-desp'].forEach(id=>$(id).addEventListener('change',()=>{cur=0;decision=null;pintar();}));
+  pintar();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const root=document.querySelector('[id="13-lab-2"]');
+  function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  // Cada escenario: costo de cada paso (el contexto crece y cada llamada cuesta un poco más) e hitos.
+  function escenario(e){
+    const r=rng(e==='normal'?13:e==='falla'?31:47),c=[];
+    const n=e==='normal'?19:e==='grande'?31:60;
+    for(let i=0;i<n;i++){const base=e==='grande'?.008+i*.00055:.008+i*.0004;c.push(base+r()*.004);}
+    const H={
+      normal:[[3,'investigación'],[5,'plan aprobado por el revisor'],[7,'incidente maestro creado'],[9,'aviso aprobado y enviado'],[12,'tarea de visitas creada'],[15,'servicio verificado'],[18,'tickets cerrados y créditos aplicados'],[19,'informe de traspaso']],
+      grande:[[4,'investigación'],[7,'plan aprobado por el revisor'],[9,'incidente maestro creado'],[12,'aviso aprobado y enviado'],[14,'ejecutivos de cuenta avisados'],[18,'tareas de visitas creadas'],[24,'servicio verificado en tres nodos'],[30,'tickets cerrados y créditos aplicados'],[31,'informe de traspaso']],
+      falla:[[3,'investigación'],[5,'plan aprobado por el revisor']]
+    }[e];
+    return {c,H,fin:e==='falla'?null:n};
+  }
+  let esc='normal';
+  const us=v=>'US$ '+v.toFixed(2).replace('.',',');
+  function correr(){
+    const E=escenario(esc),maxP=+$('#c13l2-p').value,maxC=+$('#c13l2-c').value,bucle=$('#c13l2-bucle').checked,kill=$('#c13l2-kill').checked;
+    let acum=0,paso=0,motivo='',estado='';const pts=[[0,0]];
+    while(true){
+      if(kill&&paso>=10){motivo='la jefa de turno pulsó el interruptor de parada';estado='parada manual';break;}
+      if(E.fin!==null&&paso>=E.fin){motivo='cumplió el objetivo';estado='objetivo cumplido';break;}
+      if(paso>=maxP){motivo='llegó al tope de '+maxP+' pasos';estado='tope de pasos';break;}
+      if(acum+E.c[paso]>maxC){motivo='el paso siguiente pasaría el tope de '+us(maxC);estado='tope de costo';break;}
+      if(esc==='falla'&&bucle&&paso>=8){motivo='el detector vio 3 veces seguidas la misma llamada a consultar_estado_nodo con el mismo error';estado='bucle detectado';break;}
+      if(paso>=E.c.length){motivo='sin más pasos';estado='detenido';break;}
+      acum+=E.c[paso];paso++;pts.push([paso,acum]);
+    }
+    return {E,maxP,maxC,acum,paso,motivo,estado,pts};
+  }
+  function pintar(){
+    const s=correr(),E=s.E;
+    $('#c13l2-p-o').textContent=s.maxP+' pasos';$('#c13l2-c-o').textContent=us(s.maxC);
+    root.querySelectorAll('[data-e]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.e===esc)));
+    // Gráfica
+    const svg=$('#c13l2-g'),W=Math.round(Math.max(320,Math.min(720,svg.clientWidth||600))),H=W<480?230:250,L=40,R=12,T=14,B=34,XMAX=40;svg.setAttribute('viewBox','0 0 '+W+' '+H);
+    const totalTeor=E.c.slice(0,XMAX).reduce((a,b)=>a+b,0);
+    const YMAX=Math.max(s.maxC,Math.min(totalTeor,1.2),0.3)*1.1;
+    const X=x=>L+x/XMAX*(W-L-R),Y=y=>H-B-y/YMAX*(H-T-B);
+    let g='';
+    for(let i=0;i<=XMAX;i+=(W<480?10:5))g+='<line x1="'+X(i)+'" y1="'+T+'" x2="'+X(i)+'" y2="'+(H-B)+'" stroke="var(--grid)"/><text x="'+X(i)+'" y="'+(H-B+15)+'" text-anchor="middle">'+i+'</text>';
+    const paso=YMAX>.8?.2:.1;
+    for(let v=0;v<=YMAX+1e-9;v+=paso)g+='<line x1="'+L+'" y1="'+Y(v)+'" x2="'+(W-R)+'" y2="'+Y(v)+'" stroke="var(--grid)"/><text x="'+(L-6)+'" y="'+(Y(v)+4)+'" text-anchor="end">'+v.toFixed(1).replace('.',',')+'</text>';
+    g+='<text x="'+((L+W-R)/2)+'" y="'+(H-4)+'" text-anchor="middle">pasos (llamadas a herramientas)</text>';
+    // lo que habría hecho sin topes
+    let a=0,teo='M'+X(0)+' '+Y(0);
+    for(let i=0;i<Math.min(E.c.length,XMAX);i++){a+=E.c[i];teo+=' L'+X(i+1)+' '+Y(Math.min(a,YMAX));}
+    g+='<path d="'+teo+'" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 4"/>';
+    g+='<line x1="'+L+'" y1="'+Y(s.maxC)+'" x2="'+(W-R)+'" y2="'+Y(s.maxC)+'" stroke="var(--warm)" stroke-width="2"/><text x="'+(W-R-4)+'" y="'+(Y(s.maxC)-5)+'" text-anchor="end" style="fill:var(--warm)">tope de costo</text>';
+    g+='<line x1="'+X(s.maxP)+'" y1="'+T+'" x2="'+X(s.maxP)+'" y2="'+(H-B)+'" stroke="var(--accent)" stroke-width="2"/><text x="'+(X(s.maxP)-4)+'" y="'+(H-B-6)+'" text-anchor="end" style="fill:var(--accent)">tope de pasos</text>';
+    if($('#c13l2-kill').checked)g+='<line x1="'+X(10)+'" y1="'+T+'" x2="'+X(10)+'" y2="'+(H-B)+'" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="2 3"/>';
+    g+='<path d="M'+s.pts.map(p=>X(p[0])+' '+Y(p[1])).join(' L')+'" fill="none" stroke="var(--c-tra)" stroke-width="3"/>';
+    E.H.forEach(([h,n])=>{if(h<=XMAX){let y=0;for(let i=0;i<h;i++)y+=E.c[i];g+='<circle cx="'+X(h)+'" cy="'+Y(Math.min(y,YMAX))+'" r="3.5" fill="'+(h<=s.paso?'var(--good)':'var(--card)')+'" stroke="var(--good)" stroke-width="1.5"/>';}});
+    const ult=s.pts[s.pts.length-1];
+    g+='<circle cx="'+X(ult[0])+'" cy="'+Y(ult[1])+'" r="6" fill="var(--c-tra)"/>';
+    const der=X(ult[0])>W-130,tx=der?X(ult[0])-10:X(ult[0])+10;
+    g+='<text class="c13l2-st" x="'+tx+'" y="'+(Y(ult[1])-10)+'" text-anchor="'+(der?'end':'start')+'">'+s.estado+'</text>';
+    $('#c13l2-g').innerHTML=g;
+    const hechos=E.H.filter(h=>h[0]<=s.paso).map(h=>h[1]),pend=E.H.filter(h=>h[0]>s.paso).map(h=>h[1]);
+    $('#c13l2-k1').textContent=s.estado;$('#c13l2-k2').textContent=s.paso;$('#c13l2-k3').textContent=us(s.acum);
+    $('#c13l2-k4').textContent=esc==='falla'?hechos.length+', luego nada':hechos.length+' de '+E.H.length;
+    let r='';
+    const cls=s.estado==='objetivo cumplido'?'ok':'warn';
+    r+='<span class="'+cls+'">Se detuvo en el paso '+s.paso+' porque '+s.motivo+'.</span>';
+    if(hechos.length)r+='<span>Quedó hecho: '+hechos.join(', ')+'.</span>';
+    if(pend.length)r+='<span>Queda pendiente: '+pend.join(', ')+'.</span>';
+    if(esc==='falla'){
+      if(s.estado==='bucle detectado')r+='<span>El detector cortó el bucle con solo '+us(s.acum)+' gastados. La jefa recibe el informe: «consultar_estado_nodo no responde; el plan está aprobado pero no avanzó».</span>';
+      else r+='<span>Sin detector de bucles, el agente reintentó la misma llamada fallida hasta chocar con un tope: '+(s.paso-5)+' intentos inútiles y '+us(s.acum)+' gastados para nada. Activa el detector y compara.</span>';
+    }else if(s.estado==='objetivo cumplido'){
+      r+='<span>El presupuesto alcanzó con margen. Prueba bajar los topes hasta que el agente no llegue: el informe de traspaso dirá qué falta.</span>';
+    }else if(s.estado==='parada manual'){
+      r+='<span>El agente terminó el paso en curso, canceló las aprobaciones pendientes y entregó el informe de traspaso. Nada quedó a medias.</span>';
+    }else r+='<span>Un tope más bajo que lo que pide el objetivo no es un error: es una decisión. El agente se detiene limpio y una persona retoma con el informe de traspaso.</span>';
+    if(esc==='grande'&&s.estado!=='objetivo cumplido'&&s.paso>=s.maxP-1)r+='<span>Una avería grande pide más pasos. En la versión 1.0, el presupuesto se calcula con el tamaño de la avería al crear el objetivo, no con un número fijo.</span>';
+    $('#c13l2-out').innerHTML=r;
+  }
+  root.querySelectorAll('[data-e]').forEach(b=>b.addEventListener('click',()=>{esc=b.dataset.e;pintar();}));
+  ['#c13l2-p','#c13l2-c'].forEach(id=>$(id).addEventListener('input',pintar));
+  ['#c13l2-bucle','#c13l2-kill'].forEach(id=>$(id).addEventListener('change',pintar));
+  let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(pintar,150);});
+  pintar();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Salidas estructuradas · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="salidas-estructuradas">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 05 DE 20</span><h1>Salidas estructuradas y esquemas JSON</h1><p class="lede">Una respuesta bien escrita le sirve a una persona; a un programa le sirve un dato con nombre, tipo y valores permitidos. Este capítulo arma la versión 0.3 del asistente de atención, que clasifica cada ticket y extrae los datos de las facturas en JSON que el código valida antes de usar.</p></header>
+<section><h2>Prosa frente a datos: por qué un programa necesita estructura</h2><div class="prose"><p>La jefa del equipo de reclamos tenía un pedido concreto para la versión 0.3: que el asistente, además de responder, <b>clasificara</b> cada ticket nuevo para mandarlo a la cola correcta. El ticket T-55190 dice: «Me cobraron dos veces los US$ 30,00 de septiembre en la cuenta 20417. Es la segunda vez que llamo y nadie me resuelve». Mateo le pidió al modelo la categoría y recibió: «Este ticket parece corresponder a un problema de facturación, específicamente un cobro duplicado, y la clienta se nota molesta». Una persona lo entiende al instante. El programa que enruta tickets no sabe qué hacer con esa frase.</p></div><div class="analogia"><b>Imagínalo así</b><p>Una carta y un formulario pueden decir lo mismo. La carta («le escribo porque el mes pasado me cobraron dos veces…») es fácil de escribir y difícil de procesar: alguien tiene que leerla y entenderla. El formulario tiene casillas con nombre: motivo, cuenta, monto. Un empleado nuevo puede procesar cien formularios en una mañana; cien cartas, no. Una salida estructurada es pedirle al modelo que llene el formulario en vez de escribir la carta.</p></div><div class="prose"><p>Mateo intentó primero el camino corto: buscar en el texto la palabra «duplicado» con una <b>expresión regular</b> (<i>regular expression</i>). Funcionó con ese ticket y falló con los siguientes, que decían «doble cobro», «me cobraron de más» o «dos cargos iguales». Cada arreglo agregaba un caso y rompía otro. El problema no era la expresión regular, sino pedirle a un programa que entienda prosa.</p><p>La solución es que el modelo devuelva <b>datos</b>: un objeto con campos fijos, tipos fijos y valores elegidos de una lista. Para el ticket de Carmen:</p><div class="code-copia"><pre><code>{"categoria": "cobro_duplicado", "cuenta": "20417", "factura": "F-87102",
+ "monto_reclamado": 30.00, "moneda": "USD", "urgencia": "alta",
+ "resumen": "Reclama un cobro duplicado de la factura de septiembre; segundo contacto."}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Con eso, el código enruta a la cola de facturación sin leer prosa, cuenta los reclamos por categoría y compara el monto con el sistema de facturación. El patrón de este capítulo es ese: <b>el modelo produce datos que el código valida</b>.</p></div></section>
+<section><h2>JSON Schema en lo esencial</h2><div class="prose"><p>Para pedir datos hay que decir qué forma tienen. El estándar para eso es <b>JSON Schema</b> (esquema JSON): un documento, también en JSON, que describe qué campos lleva un objeto, de qué tipo es cada uno y qué valores acepta. Los proveedores de modelos, Ollama y las bibliotecas de validación lo entienden.</p></div><div class="analogia"><b>Imagínalo así</b><p>El esquema es el molde de una galleta. No dice de qué sabor es la masa, pero garantiza la forma: todas salen con el mismo tamaño y el mismo borde. Si una sale torcida, se nota al compararla con el molde.</p></div><div class="prose"><p>Este es el esquema <code>clasificacion-ticket@v1</code> del asistente:</p><div class="code-copia"><pre><code>{
+  "type": "object",
+  "properties": {
+    "categoria": {"type": "string",
+                  "enum": ["cobro_duplicado", "reconexion", "visita_tecnica",
+                           "cambio_de_plan", "otro"]},
+    "cuenta":    {"type": "string", "pattern": "^[0-9]{5}$"},
+    "factura":   {"type": ["string", "null"], "pattern": "^F-[0-9]{5}$"},
+    "monto_reclamado": {"type": ["number", "null"], "minimum": 0},
+    "moneda":    {"type": "string", "enum": ["USD"]},
+    "urgencia":  {"type": "string", "enum": ["baja", "media", "alta"]},
+    "resumen":   {"type": "string", "maxLength": 200}
+  },
+  "required": ["categoria", "cuenta", "factura", "monto_reclamado",
+               "moneda", "urgencia", "resumen"],
+  "additionalProperties": false
+}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Con seis palabras clave se cubre casi todo:</p><ul><li><b><code>type</code></b>: el tipo (<code>string</code>, <code>number</code>, <code>integer</code>, <code>boolean</code>, <code>object</code>, <code>array</code> o <code>null</code>). Una lista como <code>["number", "null"]</code> acepta los dos: «un número o nada».</li><li><b><code>properties</code></b> y <b><code>required</code></b>: los campos y cuáles no pueden faltar.</li><li><b><code>enum</code></b>: la lista cerrada de valores permitidos.</li><li><b><code>pattern</code></b>: una expresión regular que el texto debe cumplir, como cinco dígitos para la cuenta.</li><li><b><code>minimum</code></b>, <b><code>maxLength</code></b> y afines: límites de números y textos.</li><li><b><code>additionalProperties: false</code></b>: prohíbe campos que no estén en la lista. Sin esto, el modelo puede agregar un campo <code>"sentimiento"</code> que nadie pidió y que algún programa termine usando.</li></ul><p>Hay mucho más en el estándar (objetos anidados, listas con <code>items</code>, referencias con <code>$ref</code>), pero un esquema para un modelo conviene que sea <b>plano y corto</b>: cada nivel de anidamiento y cada campo opcional es una oportunidad más de que el modelo se confunda.</p></div><figure class="fig fig-esquema" id="05-diagrama-1"><div class="lienzo"><svg viewBox="0 0 960 520" style="min-width:760px" role="img" aria-label="A la izquierda el esquema JSON clasificacion-ticket con sus reglas enum, pattern, type, required y additionalProperties; a la derecha el JSON que devolvió el modelo para el ticket T-55190; líneas de color unen cada regla con el campo que controla; abajo la misma definición en Pydantic y en Zod">
+<defs>
+<marker id="c5d1-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-apl"/></marker>
+<marker id="c5d1-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-red"/></marker>
+<marker id="c5d1-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-tra"/></marker>
+</defs>
+<text x="20" y="28" class="t t-xs t-b k-casa">ESQUEMA · clasificacion-ticket@v1</text>
+<rect x="20" y="40" width="440" height="330" rx="10" class="d-casa"/>
+<g class="t t-mono" style="font-size:12px">
+<text x="36" y="66">{ "type": "object", "properties": {</text>
+<text x="50" y="90">"categoria": {"type": "string",</text>
+<text x="64" y="108"><tspan class="k-apl" style="font-weight:700">"enum"</tspan>: [cobro_duplicado, reconexion,</text>
+<text x="64" y="126">visita_tecnica, cambio_de_plan, otro]},</text>
+<text x="50" y="150">"cuenta": {"type": "string",</text>
+<text x="64" y="168"><tspan class="k-red" style="font-weight:700">"pattern"</tspan>: "^[0-9]{5}$"},</text>
+<text x="50" y="192">"factura": {"type": ["string", "null"],</text>
+<text x="64" y="210"><tspan class="k-red" style="font-weight:700">"pattern"</tspan>: "^F-[0-9]{5}$"},</text>
+<text x="50" y="234">"monto_reclamado": {<tspan class="k-tra" style="font-weight:700">"type"</tspan>: ["number", "null"],</text>
+<text x="64" y="252">"minimum": 0},</text>
+<text x="50" y="276">"moneda": {"enum": ["USD"]},</text>
+<text x="50" y="300">"urgencia": {<tspan class="k-apl" style="font-weight:700">"enum"</tspan>: [baja, media, alta]},</text>
+<text x="50" y="324">"resumen": {"type": "string", "maxLength": 200} },</text>
+<text x="36" y="348">"required": [los 7], "additionalProperties": false }</text>
+</g>
+<text x="560" y="28" class="t t-xs t-b k-warm">SALIDA DEL MODELO · TICKET T-55190</text>
+<rect x="560" y="40" width="380" height="330" rx="10" class="caja"/>
+<g class="t t-mono" style="font-size:12px">
+<text x="576" y="66">{</text>
+<text x="590" y="108">"categoria": <tspan class="k-apl" style="font-weight:700">"cobro_duplicado"</tspan>,</text>
+<text x="590" y="168">"cuenta": <tspan class="k-red" style="font-weight:700">"20417"</tspan>,</text>
+<text x="590" y="210">"factura": <tspan class="k-red" style="font-weight:700">"F-87102"</tspan>,</text>
+<text x="590" y="234">"monto_reclamado": <tspan class="k-tra" style="font-weight:700">30.00</tspan>,</text>
+<text x="590" y="276">"moneda": "USD",</text>
+<text x="590" y="300">"urgencia": <tspan class="k-apl" style="font-weight:700">"alta"</tspan>,</text>
+<text x="590" y="324">"resumen": "Reclama un cobro…"</text>
+<text x="576" y="348">}</text>
+</g>
+<path d="M440 104 C 500 104, 520 104, 586 104" class="ln s-apl" style="fill:none;stroke-width:2" marker-end="url(#c5d1-a)"/>
+<path d="M440 164 C 500 164, 520 164, 586 164" class="ln s-red" style="fill:none;stroke-width:2" marker-end="url(#c5d1-r)"/>
+<path d="M440 206 C 500 206, 520 206, 586 206" class="ln s-red" style="fill:none;stroke-width:2" marker-end="url(#c5d1-r)"/>
+<path d="M440 230 C 500 230, 520 230, 586 230" class="ln s-tra" style="fill:none;stroke-width:2" marker-end="url(#c5d1-t)"/>
+<path d="M440 296 C 500 296, 520 296, 586 296" class="ln s-apl" style="fill:none;stroke-width:2" marker-end="url(#c5d1-a)"/>
+<text x="470" y="96" class="t t-s k-apl">valor de la lista</text>
+<text x="470" y="156" class="t t-s k-red">5 dígitos</text>
+<text x="470" y="198" class="t t-s k-red">F + 5 dígitos</text>
+<text x="470" y="250" class="t t-s k-tra">número, no texto</text>
+<text x="470" y="288" class="t t-s k-apl">valor de la lista</text>
+<text x="20" y="400" class="t t-xs t-b t-m">LA MISMA DEFINICIÓN EN EL CÓDIGO, PARA MANDARLA AL MODELO Y PARA VALIDAR LA RESPUESTA</text>
+<rect x="20" y="412" width="450" height="94" rx="10" class="caja"/>
+<text x="34" y="432" class="t t-s t-b">Python · Pydantic</text>
+<g class="t t-mono" style="font-size:11px">
+<text x="34" y="452">categoria: Literal["cobro_duplicado", …, "otro"]</text>
+<text x="34" y="470">cuenta: str = Field(pattern=r"^\d{5}$")</text>
+<text x="34" y="488">Clasificacion.model_json_schema()  # → al modelo</text>
+</g>
+<rect x="490" y="412" width="450" height="94" rx="10" class="caja"/>
+<text x="504" y="432" class="t t-s t-b">TypeScript · Zod</text>
+<g class="t t-mono" style="font-size:11px">
+<text x="504" y="452">categoria: z.enum(["cobro_duplicado", …, "otro"]),</text>
+<text x="504" y="470">cuenta: z.string().regex(/^\d{5}$/),</text>
+<text x="504" y="488">Clasificacion.safeParse(dato)  // → validar</text>
+</g>
+</svg></div><figcaption><b>El esquema y la instancia.</b> A la izquierda, el esquema <code>clasificacion-ticket@v1</code>, con sus reglas. A la derecha, el JSON que devolvió el modelo para el ticket T-55190. Cada línea de color une una regla con el campo que controla: <code>enum</code> con la categoría y la urgencia, <code>pattern</code> con la cuenta y la factura, <code>type</code> con el monto. Abajo, la misma definición escrita en Pydantic y en Zod: el esquema que se manda al modelo y el que valida en el código salen de la misma fuente.</figcaption></figure></section>
+<section><h2>Modo JSON, salidas estructuradas del proveedor y decodificación restringida</h2><div class="prose"><p>Hay tres formas de pedirle JSON a un modelo, y cada una garantiza más que la anterior.</p><ol class="steps"><li><span><b>Pedirlo en las instrucciones.</b> «Responde solo con un JSON con los campos…». No garantiza nada. Los modelos grandes cumplen casi siempre; los pequeños a veces envuelven el JSON en un bloque de Markdown con tres comillas invertidas, agregan «¡Claro! Aquí está:» o dejan una coma de más.</span></li><li><span><b>Modo JSON</b> (<i>JSON mode</i>). Un parámetro de la API (<code>"response_format": {"type": "json_object"}</code> en la API compatible con OpenAI) que garantiza que la salida sea JSON válido. No garantiza qué campos trae ni con qué valores.</span></li><li><span><b>Salidas estructuradas</b> (<i>structured outputs</i>). Se manda el esquema completo y el proveedor garantiza que la salida lo cumpla: los campos requeridos, los tipos y los valores de <code>enum</code>. En la API compatible con OpenAI es <code>"response_format": {"type": "json_schema", "json_schema": {...}}</code>; en la API propia de Ollama, el campo <code>format</code> que usaste en el capítulo 2.</span></li></ol><p>¿Cómo puede un proveedor garantizar algo en un modelo probabilístico? Con la <b>decodificación restringida</b> (<i>constrained decoding</i>). En cada paso, antes de elegir el siguiente token, el motor mira qué tokens mantendrían la salida dentro del esquema y pone en cero la probabilidad de todos los demás. Si el modelo ya escribió <code>{"categoria": "</code>, los únicos tokens permitidos son los que empiezan alguno de los cinco valores del <code>enum</code>. «Cobro», con mayúscula, o «doble» quedan fuera: el modelo no los puede elegir aunque los prefiera.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un cajero automático no te deja escribir letras en el campo del monto: el teclado solo tiene números. No es que confíe en que vas a escribir bien; es que no hay otra forma de escribir. La decodificación restringida le quita al modelo las teclas que lo sacarían del esquema.</p></div><div class="prose"><p>Dos advertencias importantes. La primera: la decodificación restringida garantiza la <b>forma</b>, no la <b>verdad</b>. Si el escaneo de una factura dice «F-882I3» con una I mayúscula y el esquema exige dígitos, el modelo está obligado a escribir un dígito, y puede escribir «F-88243», que cumple el esquema y es falso. La segunda: no todos los motores aplican todas las palabras clave (<code>pattern</code> y <code>maxLength</code>, por ejemplo, tienen soporte desigual). Por las dos razones, el código vuelve a validar todo lo que recibe.</p></div><figure class="fig fig-esquema" id="05-diagrama-2"><div class="lienzo"><svg viewBox="0 0 960 564" style="min-width:760px" role="img" aria-label="Decodificación restringida: después de escribir la llave y el campo categoria, el modelo calcula probabilidades para el siguiente token; la máscara del esquema tacha los tokens que no empiezan ningún valor permitido, como Cobro con mayúscula, doble, fact y reclamo; después de la máscara las probabilidades se reparten entre cobro, reconexion y otro. Abajo, una tabla con lo que garantiza pedir JSON en las instrucciones, el modo JSON y las salidas estructuradas: ninguna garantiza valores verdaderos">
+<rect x="20" y="14" width="920" height="44" rx="10" class="caja"/>
+<text x="36" y="42" class="t t-mono" style="font-size:14px">{"categoria": "<tspan class="k-warm" style="font-weight:700">▮</tspan></text>
+<text x="230" y="42" class="t t-s t-m">el modelo ya escribió esto y tiene que elegir el siguiente token</text>
+<rect x="20" y="72" width="300" height="266" rx="10" class="caja"/>
+<text x="34" y="94" class="t t-xs t-b t-m">1 · SIN RESTRICCIÓN</text>
+<text x="34" y="110" class="t t-s t-m">lo que el modelo prefiere</text>
+<rect x="330" y="72" width="300" height="266" rx="10" class="caja"/>
+<text x="344" y="94" class="t t-xs t-b t-m">2 · MÁSCARA DEL ESQUEMA</text>
+<text x="344" y="110" class="t t-s t-m">¿empieza un valor del enum?</text>
+<rect x="640" y="72" width="300" height="266" rx="10" class="caja"/>
+<text x="654" y="94" class="t t-xs t-b t-m">3 · DESPUÉS DE LA MÁSCARA</text>
+<text x="654" y="110" class="t t-s t-m">se reparte entre los permitidos</text>
+<text x="34" y="144" class="t t-mono" style="font-size:12px">"cobro</text>
+<rect x="124" y="132" width="140.6" height="16" rx="3" class="caja" style="fill:var(--warm-soft);stroke:var(--warm)"/>
+<text x="270.6" y="144" class="t t-s t-mono">0,38</text>
+<text x="344" y="144" class="t t-mono k-enl" style="font-size:12px;font-weight:700">"cobro</text>
+<text x="470" y="144" class="t t-s k-enl t-b">✓ permitido</text>
+<text x="654" y="144" class="t t-mono" style="font-size:12px">"cobro</text>
+<rect x="754" y="132" width="153.6" height="16" rx="3" class="c-enl"/>
+<text x="913.6" y="144" class="t t-s t-mono">0,81</text>
+<text x="34" y="170" class="t t-mono" style="font-size:12px">"Cobro</text>
+<rect x="124" y="158" width="81.4" height="16" rx="3" class="caja" style="fill:var(--warm-soft);stroke:var(--warm)"/>
+<text x="211.4" y="170" class="t t-s t-mono">0,22</text>
+<text x="344" y="170" class="t t-mono t-m" style="font-size:12px;text-decoration:line-through">"Cobro</text>
+<text x="470" y="170" class="t t-s k-warm">✗ probabilidad 0</text>
+<text x="654" y="170" class="t t-mono t-m" style="font-size:12px;opacity:.45">"Cobro</text>
+<text x="34" y="196" class="t t-mono" style="font-size:12px">"doble</text>
+<rect x="124" y="184" width="51.8" height="16" rx="3" class="caja" style="fill:var(--warm-soft);stroke:var(--warm)"/>
+<text x="181.8" y="196" class="t t-s t-mono">0,14</text>
+<text x="344" y="196" class="t t-mono t-m" style="font-size:12px;text-decoration:line-through">"doble</text>
+<text x="470" y="196" class="t t-s k-warm">✗ probabilidad 0</text>
+<text x="654" y="196" class="t t-mono t-m" style="font-size:12px;opacity:.45">"doble</text>
+<text x="34" y="222" class="t t-mono" style="font-size:12px">"fact</text>
+<rect x="124" y="210" width="37.0" height="16" rx="3" class="caja" style="fill:var(--warm-soft);stroke:var(--warm)"/>
+<text x="167.0" y="222" class="t t-s t-mono">0,10</text>
+<text x="344" y="222" class="t t-mono t-m" style="font-size:12px;text-decoration:line-through">"fact</text>
+<text x="470" y="222" class="t t-s k-warm">✗ probabilidad 0</text>
+<text x="654" y="222" class="t t-mono t-m" style="font-size:12px;opacity:.45">"fact</text>
+<text x="34" y="248" class="t t-mono" style="font-size:12px">"reclamo</text>
+<rect x="124" y="236" width="25.9" height="16" rx="3" class="caja" style="fill:var(--warm-soft);stroke:var(--warm)"/>
+<text x="155.9" y="248" class="t t-s t-mono">0,07</text>
+<text x="344" y="248" class="t t-mono t-m" style="font-size:12px;text-decoration:line-through">"reclamo</text>
+<text x="470" y="248" class="t t-s k-warm">✗ probabilidad 0</text>
+<text x="654" y="248" class="t t-mono t-m" style="font-size:12px;opacity:.45">"reclamo</text>
+<text x="34" y="274" class="t t-mono" style="font-size:12px">"reconexion</text>
+<rect x="124" y="262" width="18.5" height="16" rx="3" class="caja" style="fill:var(--warm-soft);stroke:var(--warm)"/>
+<text x="148.5" y="274" class="t t-s t-mono">0,05</text>
+<text x="344" y="274" class="t t-mono k-enl" style="font-size:12px;font-weight:700">"reconexion</text>
+<text x="470" y="274" class="t t-s k-enl t-b">✓ permitido</text>
+<text x="654" y="274" class="t t-mono" style="font-size:12px">"reconexion</text>
+<rect x="754" y="262" width="20.2" height="16" rx="3" class="c-enl"/>
+<text x="780.2" y="274" class="t t-s t-mono">0,11</text>
+<text x="34" y="300" class="t t-mono" style="font-size:12px">"otro</text>
+<rect x="124" y="288" width="14.8" height="16" rx="3" class="caja" style="fill:var(--warm-soft);stroke:var(--warm)"/>
+<text x="144.8" y="300" class="t t-s t-mono">0,04</text>
+<text x="344" y="300" class="t t-mono k-enl" style="font-size:12px;font-weight:700">"otro</text>
+<text x="470" y="300" class="t t-s k-enl t-b">✓ permitido</text>
+<text x="654" y="300" class="t t-mono" style="font-size:12px">"otro</text>
+<rect x="754" y="288" width="16.2" height="16" rx="3" class="c-enl"/>
+<text x="776.2" y="300" class="t t-s t-mono">0,09</text>
+<text x="654" y="328" class="t t-s k-enl t-b">gana "cobro → cobro_duplicado</text>
+<line x1="320" y1="200" x2="330" y2="200" class="ln"/><line x1="630" y1="200" x2="640" y2="200" class="ln"/>
+<text x="20" y="376" class="t t-xs t-b t-m">QUÉ GARANTIZA CADA FORMA</text>
+<text x="20" y="402" class="t t-s t-b">Forma de pedir JSON</text>
+<text x="330" y="402" class="t t-s t-b">JSON válido</text>
+<text x="480" y="402" class="t t-s t-b">Campos correctos</text>
+<text x="630" y="402" class="t t-s t-b">Valores permitidos</text>
+<text x="790" y="402" class="t t-s t-b">Valores verdaderos</text>
+<line x1="20" y1="412" x2="940" y2="412" class="ln"/>
+<text x="20" y="438" class="t t-s">Pedirlo en las instrucciones</text>
+<text x="330" y="438" class="t t-s t-m">~ casi siempre</text>
+<text x="480" y="438" class="t t-s t-m">~ a veces</text>
+<text x="630" y="438" class="t t-s t-m">~ a veces</text>
+<text x="790" y="438" class="t t-s k-warm t-b">✗ no</text>
+<line x1="20" y1="448" x2="940" y2="448" class="ln ln-d"/>
+<text x="20" y="468" class="t t-s">Modo JSON (json_object)</text>
+<text x="330" y="468" class="t t-s k-enl t-b">✓ sí</text>
+<text x="480" y="468" class="t t-s k-warm t-b">✗ no</text>
+<text x="630" y="468" class="t t-s k-warm t-b">✗ no</text>
+<text x="790" y="468" class="t t-s k-warm t-b">✗ no</text>
+<line x1="20" y1="478" x2="940" y2="478" class="ln ln-d"/>
+<text x="20" y="498" class="t t-s">Salida estructurada (json_schema)</text>
+<text x="330" y="498" class="t t-s k-enl t-b">✓ sí</text>
+<text x="480" y="498" class="t t-s k-enl t-b">✓ sí</text>
+<text x="630" y="498" class="t t-s k-enl t-b">✓ sí, según el motor</text>
+<text x="790" y="498" class="t t-s k-warm t-b">✗ no</text>
+<line x1="20" y1="508" x2="940" y2="508" class="ln ln-d"/>
+<text x="20" y="546" class="t t-s"><tspan class="k-warm t-b">La última columna no cambia:</tspan> la forma se garantiza; la verdad se comprueba con reglas de negocio y con los sistemas.</text>
+</svg></div><figcaption><b>Decodificación restringida, paso a paso.</b> Arriba, el modelo ya escribió <code>{"categoria": "</code> y tiene que elegir el siguiente token. A la izquierda, las probabilidades que calcula sin restricción. En el centro, la máscara del esquema: los tokens que no empiezan ningún valor del <code>enum</code> quedan tachados. A la derecha, las probabilidades después de la máscara, repartidas entre los que quedan. Abajo, una tabla con lo que garantiza cada forma de pedir JSON: JSON válido, los campos correctos, valores permitidos y valores verdaderos. La última columna es la misma para las tres: ninguna garantiza que el dato sea cierto.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Clasificar un ticket con un esquema</h3></div><p>Vas a pedirle a tu modelo local la clasificación del ticket T-55190 con salida estructurada por la API compatible con OpenAI, y a revisarla con un validador mínimo en Python. El esquema de la práctica es más simple que el del texto: sin nulos ni <code>pattern</code>, que el código revisa después. Guarda el programa como <code>clasificar.py</code>:</p><div class="code-copia"><pre><code>import json, re, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+CATEGORIAS = ["cobro_duplicado", "reconexion", "visita_tecnica", "cambio_de_plan", "otro"]
+ESQUEMA = {
+    "type": "object",
+    "properties": {
+        "categoria": {"type": "string", "enum": CATEGORIAS},
+        "cuenta": {"type": "string"},
+        "monto_reclamado": {"type": "number"},
+        "urgencia": {"type": "string", "enum": ["baja", "media", "alta"]},
+        "resumen": {"type": "string"},
+    },
+    "required": ["categoria", "cuenta", "monto_reclamado", "urgencia", "resumen"],
+}
+TICKET = ("Me cobraron dos veces los US$ 30,00 de septiembre en la cuenta 20417. "
+          "Es la segunda vez que llamo y nadie me resuelve.")
+
+def validar(d):
+    errores = [f"falta {c}" for c in ESQUEMA["required"] if c not in d]
+    if d.get("categoria") not in CATEGORIAS:
+        errores.append(f"categoria fuera de la lista: {d.get('categoria')!r}")
+    if not re.fullmatch(r"[0-9]{5}", str(d.get("cuenta", ""))):
+        errores.append(f"cuenta no tiene 5 dígitos: {d.get('cuenta')!r}")
+    if not isinstance(d.get("monto_reclamado"), (int, float)):
+        errores.append("monto_reclamado no es un número")
+    return errores
+
+cuerpo = {
+    "model": "llama3.2:3b", "temperature": 0,
+    "response_format": {"type": "json_schema",
+                        "json_schema": {"name": "clasificacion_ticket", "schema": ESQUEMA}},
+    "messages": [
+        {"role": "system", "content": "Clasifica el ticket de atención. Devuelve solo el JSON."},
+        {"role": "user", "content": TICKET},
+    ],
+}
+pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                headers={"Content-Type": "application/json"})
+with urllib.request.urlopen(pedido) as r:
+    texto = json.load(r)["choices"][0]["message"]["content"]
+
+print("Salida del modelo:", texto)
+try:
+    datos = json.loads(texto)
+except json.JSONDecodeError as e:
+    print("No es JSON válido:", e)
+else:
+    errores = validar(datos)
+    if errores:
+        print("Errores:", errores)
+    else:
+        print("Válida: se enruta a la cola de", datos["categoria"])</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python clasificar.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 clasificar.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y mira la salida del modelo y el resultado de la validación.</span></li><li><span>Cambia <code>TICKET</code> por «¿Puedo cambiar la fecha de la visita del jueves? Mi cuenta es 40981.» (el ticket T-55204 de Ana) y vuelve a ejecutar.</span></li><li><span>Borra la línea de <code>"response_format"</code> (las dos líneas que ocupa) y ejecuta otra vez con el ticket de Carmen.</span></li></ol><p><b>Qué observar:</b> con el esquema, la salida siempre es un JSON con los cinco campos y una categoría de la lista: <code>json.loads</code> nunca falla. Con el ticket de Ana la categoría cambia a <code>visita_tecnica</code> y el monto suele salir en 0, porque el esquema obliga a poner un número aunque no haya monto: por eso el esquema del texto acepta <code>null</code>. Sin <code>response_format</code>, un modelo pequeño puede responder con un bloque de Markdown, con texto antes del JSON o con otra categoría escrita a su manera, y el programa tiene que lidiar con eso. Los resultados exactos cambian según el modelo.</p></div></section>
+<section><h2>Validar en el código con Zod o Pydantic</h2><div class="prose"><p>Aunque el proveedor garantice el esquema, el código valida otra vez. Hay tres razones: el modelo de respaldo puede no soportar salidas estructuradas, algunas palabras clave no se aplican en todos los motores y, sobre todo, hay reglas que un esquema JSON no puede expresar. En lugar de escribir el validador a mano, como en la práctica, se usa una biblioteca. Las dos más comunes son <b>Pydantic</b> en Python y <b>Zod</b> en TypeScript.</p><div class="code-copia"><pre><code># Python con Pydantic
+from typing import Literal, Optional
+from pydantic import BaseModel, Field
+
+class Clasificacion(BaseModel):
+    categoria: Literal["cobro_duplicado", "reconexion", "visita_tecnica", "cambio_de_plan", "otro"]
+    cuenta: str = Field(pattern=r"^\d{5}$")
+    factura: Optional[str] = Field(default=None, pattern=r"^F-\d{5}$")
+    monto_reclamado: Optional[float] = Field(default=None, ge=0)
+    urgencia: Literal["baja", "media", "alta"]
+    resumen: str = Field(max_length=200)
+
+esquema = Clasificacion.model_json_schema()        # el JSON Schema que va al modelo
+dato = Clasificacion.model_validate_json(texto)    # lanza ValidationError si no cumple</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="code-copia"><pre><code>// TypeScript con Zod
+import { z } from "zod";
+
+const Clasificacion = z.object({
+  categoria: z.enum(["cobro_duplicado", "reconexion", "visita_tecnica", "cambio_de_plan", "otro"]),
+  cuenta: z.string().regex(/^\d{5}$/),
+  factura: z.string().regex(/^F-\d{5}$/).nullable(),
+  monto_reclamado: z.number().nonnegative().nullable(),
+  urgencia: z.enum(["baja", "media", "alta"]),
+  resumen: z.string().max(200),
+}).strict();
+
+const r = Clasificacion.safeParse(JSON.parse(texto));   // r.success o r.error.issues</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>La ventaja principal es tener <b>una sola definición</b>. De la clase de Pydantic sale el esquema que se manda al modelo y el validador que revisa la respuesta; si alguien agrega un campo, cambian los dos a la vez. El esquema tiene versión, igual que la plantilla (capítulo 4): <code>clasificacion-ticket@v1</code>, y la traza guarda cuál se usó.</p><p>Después de la validación de forma viene la <b>validación de negocio</b>, que ningún esquema expresa: que la cuenta exista, que la factura citada sea de esa cuenta, que el monto reclamado no supere el de la factura, que la urgencia «alta» venga acompañada de un motivo. Esas reglas consultan los sistemas de la empresa y son las que separan un JSON bien formado de un dato en el que se puede confiar.</p></div><div class="lab" id="05-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>El validador</h3></div><p class="hint">A la izquierda, el esquema <code>clasificacion-ticket@v1</code>; a la derecha, la salida del modelo para el ticket T-55190, que puedes editar. Usa los botones para romper un campo (un monto como texto, una categoría inventada, un campo de más, un bloque de Markdown) y mira qué marca el validador, en qué capa falla y qué decide el asistente: reparar, reintentar o rechazar.</p><style>
+[id="05-lab-1"] .c5l1-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px}
+[id="05-lab-1"] .c5l1-cols h4{margin:0 0 4px;font:700 .74rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+[id="05-lab-1"] pre.c5l1-esq{margin:0;font:500 .7rem/1.45 var(--f-mono);white-space:pre;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--ink);max-height:290px;overflow:auto}
+[id="05-lab-1"] textarea{width:100%;box-sizing:border-box;min-height:290px;font:500 .74rem/1.45 var(--f-mono);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;resize:vertical}
+[id="05-lab-1"] .c5l1-btns button{font-size:.78rem;padding:5px 8px}
+[id="05-lab-1"] .c5l1-pasos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:8px}
+[id="05-lab-1"] .c5l1-p{border:1px solid var(--line);border-top:4px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--card);display:grid;gap:4px;align-content:start;min-width:0}
+[id="05-lab-1"] .c5l1-p h5{margin:0;font:700 .78rem var(--f-display);color:var(--ink);display:flex;justify-content:space-between;gap:6px}
+[id="05-lab-1"] .c5l1-p ul{margin:0;padding-left:16px;font:500 .78rem/1.4 var(--f-body);color:var(--ink)}
+[id="05-lab-1"] .c5l1-p code{font:500 .74rem var(--f-mono);overflow-wrap:anywhere}
+[id="05-lab-1"] .c5l1-p.ok{border-top-color:var(--good)} [id="05-lab-1"] .c5l1-p.ok h5 span{color:var(--good)}
+[id="05-lab-1"] .c5l1-p.rep{border-top-color:var(--accent)} [id="05-lab-1"] .c5l1-p.rep h5 span{color:var(--accent)}
+[id="05-lab-1"] .c5l1-p.mal{border-top-color:var(--warm);background:var(--warm-soft)} [id="05-lab-1"] .c5l1-p.mal h5 span{color:var(--warm)}
+[id="05-lab-1"] .c5l1-p.no{opacity:.55}
+[id="05-lab-1"] .c5l1-nota{font:500 .76rem var(--f-display);color:var(--muted);margin:0}
+</style>
+<div class="c5l1-cols">
+  <div><h4>Esquema clasificacion-ticket@v1</h4><pre class="c5l1-esq" id="c5l1-esq"></pre></div>
+  <div><h4><label for="c5l1-txt">Salida del modelo (editable)</label></h4><textarea id="c5l1-txt" spellcheck="false"></textarea></div>
+</div>
+<p class="c5l1-nota">Romper un campo:</p>
+<div class="btns c5l1-btns" id="c5l1-btns" role="group" aria-label="Variantes de la salida"></div>
+<div class="c5l1-pasos">
+  <div class="c5l1-p" id="c5l1-p1"></div>
+  <div class="c5l1-p" id="c5l1-p2"></div>
+  <div class="c5l1-p" id="c5l1-p3"></div>
+</div>
+<p class="c5l1-nota">Facturación de ejemplo: F-87102 (cuenta 20417, septiembre, US$ 30,00) · F-88213 (20417, octubre, US$ 30,00) · F-88214 (31552, US$ 45,00) · F-88215 (40981, US$ 30,00).</p>
+<div class="readout texto" id="c5l1-out" aria-live="polite"></div></div></section>
+<section><h2>Rechazar, reparar o reintentar</h2><div class="prose"><p>El capítulo 2 presentó las tres salidas de un validador. Con datos estructurados, la elección depende de en qué capa falló la salida, y se puede automatizar casi por completo:</p><ul><li><b>Falla de sintaxis</b>: no es JSON válido. Las causas típicas son mecánicas: el JSON viene envuelto en un bloque de Markdown, trae texto antes o después, o tiene una coma final. Se <b>repara</b> con código, sin volver a llamar al modelo: quitar las comillas invertidas, recortar desde la primera llave hasta la última, quitar la coma. Si después de reparar sigue sin ser JSON, se reintenta.</li><li><b>Falla de esquema</b>: es JSON, pero falta un campo, sobra otro, un tipo no coincide o un valor no está en el <code>enum</code>. Se <b>reintenta</b> con el error en el mensaje: «tu respuesta no cumple el esquema: <code>monto_reclamado</code> debe ser un número, recibí "treinta"». Uno o dos reintentos como máximo (capítulo 3). Con salidas estructuradas del proveedor, esta falla casi desaparece.</li><li><b>Falla de negocio</b>: el JSON cumple el esquema, pero el dato no cuadra con la realidad: la factura F-88214 no es de la cuenta 20417, o el monto reclamado es de US$ 300,00 sobre una factura de US$ 30,00. Se <b>rechaza</b> y se escala a una persona. Reintentar aquí es pedirle al modelo que adivine otra vez, y un número adivinado dos veces no es más confiable.</li></ul></div><figure class="fig fig-flujo" id="05-diagrama-3"><div class="lienzo"><svg viewBox="0 0 960 430" style="min-width:760px" role="img" aria-label="Recorrido de una salida estructurada de izquierda a derecha: la salida del modelo pasa por tres puertas, sintaxis, esquema y negocio; si falla la sintaxis se repara con código, si falla el esquema se reintenta con el error en el mensaje y si falla el negocio se rechaza y se escala a una persona; lo que pasa las tres se normaliza y se enruta a la cola de tickets">
+<defs>
+<marker id="c5d3-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+<marker id="c5d3-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+<marker id="c5d3-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker>
+</defs>
+<rect x="20" y="40" width="140" height="70" rx="10" class="caja" style="stroke:var(--warm)"/>
+<text x="90" y="68" class="t t-b k-warm" text-anchor="middle">Salida del</text>
+<text x="90" y="86" class="t t-b k-warm" text-anchor="middle">modelo</text>
+<text x="90" y="102" class="t t-s t-m" text-anchor="middle">texto, ¿con JSON?</text>
+<rect x="200" y="40" width="160" height="70" rx="10" class="d-casa"/>
+<text x="280" y="64" class="t t-b" text-anchor="middle">1 · Sintaxis</text>
+<text x="280" y="84" class="t t-s" text-anchor="middle">¿se puede leer</text>
+<text x="280" y="100" class="t t-s" text-anchor="middle">como JSON?</text>
+<rect x="400" y="40" width="160" height="70" rx="10" class="d-casa"/>
+<text x="480" y="64" class="t t-b" text-anchor="middle">2 · Esquema</text>
+<text x="480" y="84" class="t t-s" text-anchor="middle">¿campos, tipos y</text>
+<text x="480" y="100" class="t t-s" text-anchor="middle">valores permitidos?</text>
+<rect x="600" y="40" width="160" height="70" rx="10" class="d-casa"/>
+<text x="680" y="64" class="t t-b" text-anchor="middle">3 · Negocio</text>
+<text x="680" y="84" class="t t-s" text-anchor="middle">¿cuadra con el CRM</text>
+<text x="680" y="100" class="t t-s" text-anchor="middle">y la facturación?</text>
+<rect x="800" y="40" width="140" height="70" rx="10" class="c-enl"/>
+<text x="870" y="64" class="t t-b k-enl" text-anchor="middle">Normalizar</text>
+<text x="870" y="84" class="t t-s" text-anchor="middle">y enrutar a la</text>
+<text x="870" y="100" class="t t-s" text-anchor="middle">cola de tickets</text>
+<line x1="160" y1="75" x2="198" y2="75" class="ln" style="stroke-width:2" marker-end="url(#c5d3-m)"/>
+<line x1="360" y1="75" x2="398" y2="75" class="ln s-enl" style="stroke-width:2" marker-end="url(#c5d3-g)"/>
+<line x1="560" y1="75" x2="598" y2="75" class="ln s-enl" style="stroke-width:2" marker-end="url(#c5d3-g)"/>
+<line x1="760" y1="75" x2="798" y2="75" class="ln s-enl" style="stroke-width:2" marker-end="url(#c5d3-g)"/>
+<text x="379" y="66" class="t t-s k-enl t-b" text-anchor="middle">✓</text>
+<text x="579" y="66" class="t t-s k-enl t-b" text-anchor="middle">✓</text>
+<text x="779" y="66" class="t t-s k-enl t-b" text-anchor="middle">✓</text>
+<line x1="280" y1="110" x2="280" y2="158" class="ln s-warm" style="stroke-width:2" marker-end="url(#c5d3-w)"/>
+<line x1="480" y1="110" x2="480" y2="158" class="ln s-warm" style="stroke-width:2" marker-end="url(#c5d3-w)"/>
+<line x1="680" y1="110" x2="680" y2="158" class="ln s-warm" style="stroke-width:2" marker-end="url(#c5d3-w)"/>
+<text x="288" y="140" class="t t-s k-warm t-b">✗</text>
+<text x="488" y="140" class="t t-s k-warm t-b">✗</text>
+<text x="688" y="140" class="t t-s k-warm t-b">✗</text>
+<rect x="190" y="160" width="180" height="110" rx="10" class="caja"/>
+<text x="280" y="182" class="t t-b" text-anchor="middle">Reparar con código</text>
+<text x="204" y="204" class="t t-s">· quitar el bloque de Markdown</text>
+<text x="204" y="222" class="t t-s">· recortar a las llaves</text>
+<text x="204" y="240" class="t t-s">· quitar la coma final</text>
+<text x="204" y="260" class="t t-s t-m">sin llamar otra vez al modelo</text>
+<rect x="390" y="160" width="180" height="110" rx="10" class="caja"/>
+<text x="480" y="182" class="t t-b" text-anchor="middle">Reintentar</text>
+<text x="404" y="204" class="t t-s">con el error en el mensaje:</text>
+<text x="404" y="222" class="t t-s t-mono" style="font-size:10px">«monto_reclamado debe</text>
+<text x="404" y="238" class="t t-s t-mono" style="font-size:10px">ser un número»</text>
+<text x="404" y="260" class="t t-s t-m">máximo dos veces</text>
+<rect x="590" y="160" width="180" height="110" rx="10" class="caja"/>
+<text x="680" y="182" class="t t-b k-warm" text-anchor="middle">Rechazar y escalar</text>
+<text x="604" y="204" class="t t-s">· factura de otra cuenta</text>
+<text x="604" y="222" class="t t-s">· monto mayor que la factura</text>
+<text x="604" y="240" class="t t-s">· cuenta que no existe</text>
+<text x="604" y="260" class="t t-s t-m">a la cola general, con el motivo</text>
+<path d="M370 215 H385 V100 H398" class="ln ln-d" style="fill:none;stroke-width:1.6" marker-end="url(#c5d3-m)"/>
+<text x="300" y="290" class="t t-s t-m" text-anchor="middle">si se reparó, sigue a la puerta 2</text>
+<path d="M480 270 V300 H90 V112" class="ln ln-d s-warm" style="fill:none;stroke-width:1.6" marker-end="url(#c5d3-w)"/>
+<text x="100" y="294" class="t t-s k-warm">vuelve al modelo</text>
+<text x="20" y="334" class="t t-xs t-b t-m">QUIÉN DECIDE</text>
+<rect x="190" y="344" width="180" height="26" rx="6" class="d-casa"/>
+<text x="280" y="362" class="t t-s t-b" text-anchor="middle">el código</text>
+<rect x="390" y="344" width="180" height="26" rx="6" class="caja" style="stroke:var(--warm)"/>
+<text x="480" y="362" class="t t-s t-b k-warm" text-anchor="middle">el modelo, otra vez</text>
+<rect x="590" y="344" width="180" height="26" rx="6" class="caja" style="stroke:var(--warm);stroke-dasharray:4 3"/>
+<text x="680" y="362" class="t t-s t-b k-warm" text-anchor="middle">una persona</text>
+<rect x="800" y="344" width="140" height="26" rx="6" class="d-casa"/>
+<text x="870" y="362" class="t t-s t-b" text-anchor="middle">el código</text>
+<text x="20" y="408" class="t t-s"><tspan class="t-b">Ticket T-55190:</tspan> <tspan class="t-mono">cobro_duplicado · 20417 · F-87102 · 30.00 USD</tspan> → pasa las tres puertas → cola de facturación, monto guardado como decimal exacto</text>
+</svg></div><figcaption><b>El recorrido de una salida estructurada.</b> Se lee de izquierda a derecha. La salida del modelo pasa por tres puertas: sintaxis (¿es JSON?), esquema (¿tiene los campos, tipos y valores?) y negocio (¿cuadra con los sistemas?). Debajo de cada puerta, qué hace el asistente si falla: reparar con código, reintentar con el error en el mensaje o rechazar y escalar. Solo lo que pasa las tres se normaliza y llega a la cola de tickets. La barra de abajo marca quién decide en cada tramo: el código, el modelo otra vez o una persona.</figcaption></figure><div class="prose"><p>Hay un detalle que conecta con el capítulo 3: con <i>streaming</i>, el JSON llega por partes y no se puede validar hasta el final. Por eso el asistente usa <i>streaming</i> para la explicación que lee el agente y espera completa la salida estructurada. Algunas bibliotecas validan JSON parcial mientras llega, pero la decisión de usarlo se toma con el objeto entero.</p></div></section>
+<section><h2>Enumeraciones, unidades e identificadores canónicos</h2><div class="prose"><p>Un esquema bien hecho no solo da forma: elimina las ambigüedades que después cuestan horas de limpieza de datos. Tres decisiones lo logran.</p><p><b>Enumeraciones</b> (<i>enums</i>) en lugar de texto libre. Si la categoría es texto libre, en un mes habrá «cobro duplicado», «Cobro doble», «doble cargo» y «facturación - duplicado», y el tablero de reclamos mostrará cuatro barras para lo mismo. Con un <code>enum</code>, hay un solo valor: <code>cobro_duplicado</code>. Los valores van en minúsculas, sin tildes ni espacios, porque son identificadores para programas, y siempre incluyen una salida como <code>otro</code>: sin ella, el modelo mete a la fuerza un ticket raro en la categoría más parecida. El panel muestra a las personas una etiqueta bonita («Cobro duplicado»); el dato guarda el identificador.</p><p><b>Unidades explícitas.</b> «30» puede ser dólares, centavos o días. El esquema separa el número de su unidad (<code>monto_reclamado</code> y <code>moneda</code>), y las fechas van en <b>ISO 8601</b> (<code>2026-11-05</code>), nunca como «05/11/2026», que en un país es 5 de noviembre y en otro, 11 de mayo. En el código, el dinero no se guarda como número de punto flotante, que no representa exactamente 0,10: se convierte a un decimal exacto (<code>Decimal</code> en Python) o a centavos enteros (3000) apenas pasa la validación.</p><p><b>Identificadores canónicos.</b> La cuenta es siempre un texto de cinco dígitos (<code>"20417"</code>, no <code>20417</code> como número, que perdería un cero inicial) y la factura siempre <code>F-</code> más cinco dígitos. Y la regla más importante: <b>el modelo no inventa identificadores</b>. Puede copiar uno que aparece en el texto del ticket o elegir uno de una lista que le da el contexto, pero el código comprueba que exista en el sistema antes de usarlo. Un identificador con la forma correcta y que no existe es el error más difícil de ver a simple vista.</p></div></section>
+<section><h2>Extraer datos de documentos: facturas, contratos y formularios</h2><div class="prose"><p>La otra mitad de la v0.3 es la <b>extracción</b> (<i>extraction</i>): convertir un documento en un JSON. Los agentes reciben fotos de facturas, comprobantes de pago y formularios de cambio de plan, y hoy copian los datos a mano. Es uno de los usos más rentables de un modelo, y uno de los más traicioneros.</p></div><div class="analogia"><b>Imagínalo así</b><p>Pasar una factura a una planilla es un trabajo que un practicante hace bien, pero nadie le deja la caja sin revisar: el contador mira que las líneas sumen el total y que el número de factura exista en el sistema. El modelo es un practicante muy rápido; las validaciones son el contador.</p></div><div class="prose"><p>El recorrido tiene cuatro pasos:</p><ol class="steps"><li><span><b>Leer el documento.</b> Si es un PDF con texto, se extrae el texto; si es una foto o un escaneo, pasa por OCR o por un modelo de visión (capítulo 3). La calidad de la imagen decide buena parte del resultado: una «I» que parece un «1», una coma que desaparece y convierte 30,00 en 3000.</span></li><li><span><b>Extraer con esquema.</b> Se pide el JSON con un esquema <code>factura@v1</code>: número, cuenta, periodo, fechas, líneas con concepto y monto, y total. Conviene pedir también un campo de <b>confianza</b> por documento o por campo, o una lista de campos que el modelo no pudo leer.</span></li><li><span><b>Validar las reglas internas del documento.</b> Las líneas suman el total; la fecha de vencimiento es posterior a la de emisión; el número de factura cumple el patrón. Estas reglas detectan muchos errores de lectura sin consultar a nadie.</span></li><li><span><b>Cruzar con los sistemas.</b> Si la factura es de la empresa, el sistema de facturación tiene la verdad: el número existe, es de esa cuenta y tiene ese total. Lo que no cuadra va a una <b>cola de revisión humana</b> (<i>human review queue</i>) con el documento y el JSON lado a lado.</span></li></ol><p>Lo mismo vale para contratos (partes, fechas, plazos, cláusulas de permanencia) y formularios (cada casilla con su campo). En todos los casos el esquema dice qué buscar, las reglas internas detectan lo imposible y el cruce con los sistemas detecta lo falso.</p></div><div class="lab" id="05-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Extrae los datos de una factura escaneada</h3></div><p class="hint">Elige una factura, baja la calidad del escaneo y elige cómo se extrae: texto libre, con esquema o con esquema y validaciones. Compara, campo por campo, lo que salió con los datos reales. Mira cuántos errores pasan sin que nadie los note y cuántos detectan las validaciones.</p><style>
+[id="05-lab-2"] .c5l2-chk{display:flex;gap:8px;align-items:flex-start;font:500 .86rem/1.35 var(--f-display);color:var(--ink);cursor:pointer}
+[id="05-lab-2"] .c5l2-chk small{display:block;color:var(--muted);font-size:.76rem}
+[id="05-lab-2"] .c5l2-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:12px;align-items:start}
+[id="05-lab-2"] .c5l2-scan{position:relative;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:14px 14px 12px;font:600 .74rem/1.65 var(--f-mono);color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:hidden}
+[id="05-lab-2"] .c5l2-scan::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 3px,var(--grid) 3px 4px);opacity:var(--ruido,0)}
+[id="05-lab-2"] .c5l2-scan .c5l2-tt{font:800 .9rem var(--f-display);letter-spacing:.08em;margin-bottom:4px}
+[id="05-lab-2"] .c5l2-scan .fila{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted var(--line)}
+[id="05-lab-2"] .c5l2-scan .tot{font-weight:800;border-bottom:0;margin-top:2px}
+[id="05-lab-2"] .c5l2-scan .daño{background:var(--warm-soft);border-radius:2px}
+[id="05-lab-2"] .c5l2-tw{overflow-x:auto}
+[id="05-lab-2"] table.c5l2-t{border-collapse:collapse;width:100%;min-width:300px;font:500 .78rem var(--f-body)}
+[id="05-lab-2"] .c5l2-t th,[id="05-lab-2"] .c5l2-t td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+[id="05-lab-2"] .c5l2-t th{font:700 .7rem var(--f-display);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+[id="05-lab-2"] .c5l2-t td.m{font-family:var(--f-mono);font-size:.74rem;white-space:nowrap}
+[id="05-lab-2"] .c5l2-t .e-ok{color:var(--good);font-weight:700}
+[id="05-lab-2"] .c5l2-t .e-mal{color:var(--warm);font-weight:700}
+[id="05-lab-2"] .c5l2-t .e-det{color:var(--accent);font-weight:700}
+[id="05-lab-2"] .c5l2-t .e-no{color:var(--muted);font-weight:700}
+[id="05-lab-2"] .c5l2-libre{font:500 .86rem/1.45 var(--f-body);background:var(--paper);border-radius:8px;padding:8px 10px;color:var(--ink);margin:0 0 6px}
+[id="05-lab-2"] .c5l2-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,130px),1fr));gap:8px}
+[id="05-lab-2"] .c5l2-k{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--paper)}
+[id="05-lab-2"] .c5l2-k span{display:block;font:600 .74rem var(--f-display);color:var(--muted)}
+[id="05-lab-2"] .c5l2-k output{font:700 1.2rem var(--f-mono);color:var(--ink)}
+</style>
+<div class="opciones">
+  <label>Factura
+    <select id="c5l2-f">
+      <option value="0">F-88213 · Carmen Rojas</option>
+      <option value="1">F-88214 · Luis Pérez</option>
+      <option value="2">F-88215 · Ana Gómez</option>
+    </select></label>
+</div>
+<div class="ctls">
+  <label class="ctl">Calidad del escaneo <output id="c5l2-q-o"></output>
+    <input id="c5l2-q" type="range" min="20" max="100" step="5" value="65"></label>
+</div>
+<label class="c5l2-chk"><input type="checkbox" id="c5l2-fecha" checked><span>Decirle al modelo que las fechas vienen en día/mes/año<small>sin esta instrucción, «05/11/2026» puede leerse como 11 de mayo</small></span></label>
+<div class="btns" role="group" aria-label="Forma de extraer" id="c5l2-modo">
+  <button type="button" data-m="libre" aria-pressed="false">Texto libre</button>
+  <button type="button" data-m="esq" aria-pressed="false">Con esquema</button>
+  <button type="button" data-m="val" aria-pressed="true">Esquema y validaciones</button>
+</div>
+<div class="c5l2-cols">
+  <div class="c5l2-scan" id="c5l2-scan" aria-label="Factura escaneada"></div>
+  <div id="c5l2-res"></div>
+</div>
+<div class="c5l2-kpis">
+  <div class="c5l2-k"><span>Campos correctos</span><output id="c5l2-k1">–</output></div>
+  <div class="c5l2-k"><span>Errores que pasan sin aviso</span><output id="c5l2-k2">–</output></div>
+  <div class="c5l2-k"><span>Errores detectados</span><output id="c5l2-k3">–</output></div>
+  <div class="c5l2-k"><span>Decisión</span><output id="c5l2-k4">–</output></div>
+</div>
+<div class="readout texto" id="c5l2-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Extraer una factura y comprobar que suma</h3></div><p>Vas a extraer los datos de una factura a partir de su texto, como lo dejaría un OCR con un error típico, y a validar en el código que las líneas sumen el total y que el número exista en una tabla de facturación de ejemplo. Guarda el programa como <code>extraer.py</code>:</p><div class="code-copia"><pre><code>import json, re, urllib.request
+from decimal import Decimal
+
+URL = "http://localhost:11434/v1/chat/completions"
+TEXTO_OCR = """FACTURA N.º F-88213        Cuenta: 20417
+Periodo: octubre 2026       Emisión: 01/10/2026   Vence: 05/11/2026
+Plan Hogar 200 ........................ 25,42
+Impuestos ............................. 4,58
+TOTAL A PAGAR US$ ..................... 3O,OO"""
+FACTURACION = {"F-88213": {"cuenta": "20417", "total": Decimal("30.00")}}
+ESQUEMA = {
+    "type": "object",
+    "properties": {
+        "numero": {"type": "string"}, "cuenta": {"type": "string"},
+        "vencimiento": {"type": "string", "description": "AAAA-MM-DD"},
+        "lineas": {"type": "array", "items": {"type": "object",
+                   "properties": {"concepto": {"type": "string"}, "monto": {"type": "number"}},
+                   "required": ["concepto", "monto"]}},
+        "total": {"type": "number"},
+    },
+    "required": ["numero", "cuenta", "vencimiento", "lineas", "total"],
+}
+cuerpo = {
+    "model": "llama3.2:3b", "temperature": 0,
+    "response_format": {"type": "json_schema",
+                        "json_schema": {"name": "factura", "schema": ESQUEMA}},
+    "messages": [
+        {"role": "system", "content": "Extrae los datos de la factura. Las fechas del "
+         "documento están en formato día/mes/año; devuélvelas como AAAA-MM-DD. "
+         "Los montos usan coma decimal."},
+        {"role": "user", "content": TEXTO_OCR},
+    ],
+}
+pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                headers={"Content-Type": "application/json"})
+with urllib.request.urlopen(pedido) as r:
+    f = json.loads(json.load(r)["choices"][0]["message"]["content"])
+print(json.dumps(f, ensure_ascii=False, indent=2))
+
+problemas = []
+suma = sum(Decimal(str(l["monto"])) for l in f["lineas"])
+total = Decimal(str(f["total"]))
+if suma != total:
+    problemas.append(f"las líneas suman {suma} y el total dice {total}")
+if not re.fullmatch(r"F-[0-9]{5}", f["numero"]):
+    problemas.append(f"número con formato inválido: {f['numero']}")
+real = FACTURACION.get(f["numero"])
+if real is None:
+    problemas.append("la factura no existe en facturación")
+elif real["cuenta"] != f["cuenta"] or real["total"] != total:
+    problemas.append("no coincide con facturación (cuenta o total)")
+if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", f["vencimiento"]) or f["vencimiento"] != "2026-11-05":
+    problemas.append(f"vencimiento dudoso: {f['vencimiento']} (debería ser 2026-11-05)")
+print("Problemas:", problemas or "ninguno, se registra la factura")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python extraer.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 extraer.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa. Fíjate en el total: el OCR escribió «3O,OO», con letras O. ¿Qué número puso el modelo?</span></li><li><span>Cambia <code>25,42</code> por <code>25,12</code> en <code>TEXTO_OCR</code>, como si el escaneo hubiera leído mal un dígito, y vuelve a ejecutar.</span></li><li><span>Quita del mensaje de sistema la frase sobre el formato día/mes/año y ejecuta otra vez: mira la fecha de vencimiento.</span></li></ol><p><b>Qué observar:</b> el modelo suele «arreglar» el «3O,OO» y devolver 30.0, lo que esta vez sale bien, pero es una interpretación, no una lectura. En el paso 2 las líneas ya no suman el total y el validador lo detecta sin consultar a nadie: la regla interna del documento atrapa el error de lectura. Si el modelo ajustó el total para que cuadre, el cruce con facturación lo detecta. En el paso 3 la fecha puede salir como 2026-05-11: el esquema dice «texto», no «qué día es». La comprobación de la fecha está escrita a mano para esta factura; en producción se compara con la de facturación. La suma usa <code>Decimal</code> y no números de punto flotante para que 25,42 + 4,58 dé exactamente 30,00.</p></div><div class="caso"><b>Un caso real</b><p><b>La extracción que parecía perfecta.</b> Un equipo de una empresa de servicios automatizó la carga de facturas de proveedores con un modelo y salidas estructuradas. Durante dos meses, el 100 % de las salidas fue JSON válido y el tablero mostraba cero errores. Una conciliación contable encontró la diferencia: un proveedor emitía sus facturas con fechas en formato mes/día, y el sistema había registrado varias con el vencimiento equivocado, lo que generó pagos con recargo. El esquema garantizaba la forma de la fecha, no cuál era. La corrección agregó dos reglas de negocio (vencimiento posterior a la emisión y dentro de un plazo razonable) y una cola de revisión para los proveedores nuevos. El indicador de «JSON válido» dejó de ser el número del tablero; lo reemplazó el porcentaje de facturas que pasan el cruce con contabilidad.</p></div><div class="ml"><b>En la práctica</b><p><b>La v0.3 del asistente.</b> El asistente clasifica cada ticket nuevo con el esquema <code>clasificacion-ticket@v1</code> antes de que un agente lo abra, y el sistema de tickets lo enruta con el campo <code>categoria</code>. Lo que no pasa la validación de negocio queda en la cola general, como antes. En una muestra de 400 tickets revisados por la jefa de reclamos, 352 quedaron en la categoría correcta, 31 cayeron en <code>otro</code> (casi todos consultas mixtas) y 17 se equivocaron; ninguno de los 17 tenía una factura o un monto que no cuadrara, porque esos se rechazaban. La extracción de facturas empezó solo con las facturas propias de la empresa, que se pueden cruzar con facturación: las de terceros esperan a tener un buen conjunto de pruebas (capítulo 16). Con eso, el nivel 1 del asistente tiene sus tres piezas: llama al modelo con control (v0.1), responde con contexto y cita (v0.2) y produce datos que el código valida (v0.3).</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>Salidas estructuradas: el modelo produce datos que el código valida. El esquema JSON fija la forma, con enumeraciones, unidades e identificadores canónicos; las salidas estructuradas del proveedor y la decodificación restringida la garantizan; Pydantic o Zod la vuelven a comprobar desde una sola definición; y las reglas de negocio, que consultan los sistemas, deciden si el dato es verdadero. Lo sintáctico se repara, lo de esquema se reintenta y lo de negocio se rechaza.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>¿Qué garantiza el modo JSON que no garantiza pedirlo en las instrucciones, y qué no garantiza?</summary><p>Garantiza que la salida sea JSON válido. No garantiza qué campos trae, de qué tipo ni con qué valores: para eso hacen falta las salidas estructuradas con esquema.</p></details><details><summary>¿Para qué sirve <code>additionalProperties: false</code>?</summary><p>Prohíbe campos que no están en el esquema, para que el modelo no agregue datos que nadie pidió y que algún programa termine usando.</p></details><details><summary>La decodificación restringida obliga a que la factura tenga el patrón <code>F-</code> y cinco dígitos. ¿Por qué igual hay que cruzarla con facturación?</summary><p>Porque garantiza la forma, no la verdad: si el escaneo era ilegible, el modelo puede escribir un número con la forma correcta que no existe o que es de otra cuenta.</p></details><details><summary>La salida viene envuelta en un bloque de Markdown con tres comillas invertidas. ¿Reparar, reintentar o rechazar?</summary><p>Reparar con código: es una falla de sintaxis mecánica; se quitan las comillas o se recorta desde la primera llave hasta la última, sin volver a llamar al modelo.</p></details><details><summary>¿Por qué la cuenta se define como texto de cinco dígitos y no como número?</summary><p>Porque es un identificador, no una cantidad: como número podría perder ceros iniciales, y como texto con patrón se valida exactamente.</p></details><details><summary>En una factura extraída, las líneas suman US$ 29,70 y el total dice US$ 30,00. ¿Qué tipo de regla lo detectó y qué se hace?</summary><p>Una regla interna del documento (las líneas suman el total). La factura no se registra: va a la cola de revisión humana, y si es de la empresa se cruza con facturación.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué es una gramática libre de contexto y cómo la usan motores como llama.cpp para restringir la salida de un modelo?<small>Pista: busca «GBNF grammar».</small></li><li>¿Por qué el número 0,1 no se puede representar exactamente en punto flotante binario?<small>Pista: busca «IEEE 754 0.1».</small></li><li>¿Qué cambió entre los borradores de JSON Schema (draft-07, 2019-09 y 2020-12) y cuál aceptan los proveedores de modelos?</li><li>¿Qué es la extracción de información con modelos de layout, como LayoutLM, y en qué se diferencia de pasar el texto del OCR a un modelo de lenguaje?</li><li>¿Cómo valida una biblioteca un JSON que todavía está llegando por <i>streaming</i>?<small>Pista: busca «partial JSON parsing».</small></li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://json-schema.org/learn/getting-started-step-by-step" target="_blank" rel="noopener">JSON Schema: primeros pasos <small>guía oficial, en inglés</small></a><a class="vid" href="https://ollama.com/blog/structured-outputs" target="_blank" rel="noopener">Salidas estructuradas en Ollama <small>artículo oficial, en inglés</small></a><a class="vid" href="https://docs.pydantic.dev/latest/" target="_blank" rel="noopener">Documentación de Pydantic <small>referencia, en inglés</small></a><a class="vid" href="https://zod.dev/" target="_blank" rel="noopener">Documentación de Zod <small>referencia, en inglés</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const ESQ={type:'object',properties:{
+    categoria:{type:'string',enum:['cobro_duplicado','reconexion','visita_tecnica','cambio_de_plan','otro']},
+    cuenta:{type:'string',pattern:'^[0-9]{5}$'},
+    factura:{type:['string','null'],pattern:'^F-[0-9]{5}$'},
+    monto_reclamado:{type:['number','null'],minimum:0},
+    moneda:{type:'string',enum:['USD']},
+    urgencia:{type:'string',enum:['baja','media','alta']},
+    resumen:{type:'string',maxLength:200}},
+    required:['categoria','cuenta','factura','monto_reclamado','moneda','urgencia','resumen'],additionalProperties:false};
+  $('#c5l1-esq').textContent=['{ "type": "object",','  "properties": {','    "categoria": {"type": "string", "enum":','      ["cobro_duplicado", "reconexion", "visita_tecnica",','       "cambio_de_plan", "otro"]},','    "cuenta": {"type": "string", "pattern": "^[0-9]{5}$"},','    "factura": {"type": ["string", "null"],','                "pattern": "^F-[0-9]{5}$"},','    "monto_reclamado": {"type": ["number", "null"],','                        "minimum": 0},','    "moneda": {"type": "string", "enum": ["USD"]},','    "urgencia": {"type": "string",','                 "enum": ["baja", "media", "alta"]},','    "resumen": {"type": "string", "maxLength": 200}','  },','  "required": [los 7 campos],','  "additionalProperties": false }'].join(String.fromCharCode(10));
+  const FAC={'F-87102':{c:'20417',m:30},'F-88213':{c:'20417',m:30},'F-88214':{c:'31552',m:45},'F-88215':{c:'40981',m:30}};
+  const CUENTAS=['20417','31552','40981'];
+  const BASE={categoria:'cobro_duplicado',cuenta:'20417',factura:'F-87102',monto_reclamado:30.00,moneda:'USD',urgencia:'alta',resumen:'Reclama un cobro duplicado de la factura de septiembre; segundo contacto.'};
+  const J=o=>JSON.stringify(o,null,2);
+  const V=[
+    ['Original',()=>J(BASE)],
+    ['Monto como texto',()=>J({...BASE,monto_reclamado:'treinta dólares'})],
+    ['Categoría inventada',()=>J({...BASE,categoria:'Facturación - doble cargo'})],
+    ['Falta la urgencia',()=>{const o={...BASE};delete o.urgencia;return J(o);}],
+    ['Cuenta de 4 dígitos',()=>J({...BASE,cuenta:'2041'})],
+    ['Campo de más',()=>J({...BASE,sentimiento:'muy molesta'})],
+    ['Bloque de Markdown',()=>'¡Claro! Aquí está la clasificación:\n```json\n'+J(BASE)+'\n```'],
+    ['Coma final',()=>J(BASE).replace(/"\n}$/,'",\n}')],
+    ['Factura de otra cuenta',()=>J({...BASE,factura:'F-88214'})],
+    ['Monto mayor que la factura',()=>J({...BASE,monto_reclamado:300})]];
+  const caja=$('#c5l1-btns');let actual=0;
+  V.forEach((v,i)=>{const b=document.createElement('button');b.type='button';b.textContent=v[0];b.setAttribute('aria-pressed',i===0);b.addEventListener('click',()=>{actual=i;caja.querySelectorAll('button').forEach((x,j)=>x.setAttribute('aria-pressed',j===i));$('#c5l1-txt').value=v[1]();calc();});caja.appendChild(b);});
+  const tipo=v=>v===null?'null':Array.isArray(v)?'array':typeof v==='number'?'number':typeof v;
+  function validarEsquema(o){
+    const e=[];
+    if(tipo(o)!=='object')return ['la raíz debe ser un objeto'];
+    ESQ.required.forEach(k=>{if(!(k in o))e.push(['required','falta el campo <code>'+k+'</code>']);});
+    Object.keys(o).forEach(k=>{
+      const s=ESQ.properties[k];
+      if(!s){e.push(['additionalProperties','campo no permitido: <code>'+k+'</code>']);return;}
+      const v=o[k],ts=[].concat(s.type);
+      if(!ts.includes(tipo(v))){e.push(['type','<code>'+k+'</code> debe ser '+ts.join(' o ')+'; llegó '+tipo(v)]);return;}
+      if(v===null)return;
+      if(s.enum&&!s.enum.includes(v))e.push(['enum','<code>'+k+'</code> = «'+v+'» no está en la lista']);
+      if(s.pattern&&!new RegExp(s.pattern).test(v))e.push(['pattern','<code>'+k+'</code> = «'+v+'» no cumple '+s.pattern]);
+      if(s.minimum!==undefined&&v<s.minimum)e.push(['minimum','<code>'+k+'</code> es menor que '+s.minimum]);
+      if(s.maxLength&&v.length>s.maxLength)e.push(['maxLength','<code>'+k+'</code> pasa de '+s.maxLength+' caracteres']);
+    });
+    return e;
+  }
+  function negocio(o){
+    const e=[];
+    if(!CUENTAS.includes(o.cuenta))e.push('la cuenta '+o.cuenta+' no existe en el CRM');
+    if(o.factura){const f=FAC[o.factura];
+      if(!f)e.push('la factura '+o.factura+' no existe en facturación');
+      else{if(f.c!==o.cuenta)e.push('la factura '+o.factura+' es de la cuenta '+f.c+', no de la '+o.cuenta);
+        if(o.monto_reclamado!==null&&o.monto_reclamado>f.m)e.push('el monto reclamado (US$ '+o.monto_reclamado.toFixed(2).replace('.',',')+') supera el de la factura (US$ '+f.m.toFixed(2).replace('.',',')+')');}}
+    return e;
+  }
+  function reparar(t){
+    let r=t.trim();const pasos=[];
+    if(/```/.test(r)){r=r.replace(/```(json)?/g,'');pasos.push('quitar las comillas invertidas de Markdown');}
+    const a=r.indexOf('{'),b=r.lastIndexOf('}');
+    if(a>0||(b>=0&&b<r.length-1)){r=r.slice(a,b+1);pasos.push('recortar desde la primera llave hasta la última');}
+    if(/,\s*[}\]]/.test(r)){r=r.replace(/,(\s*[}\]])/g,'$1');pasos.push('quitar la coma final');}
+    return {r,pasos};
+  }
+  function caja3(id,cls,tit,est,items){const el=$(id);el.className='c5l1-p '+cls;el.innerHTML='<h5>'+tit+'<span>'+est+'</span></h5>'+(items.length?'<ul>'+items.map(x=>'<li>'+x+'</li>').join('')+'</ul>':'');}
+  function calc(){
+    const t=$('#c5l1-txt').value;let o=null,rep=null;
+    try{o=JSON.parse(t);}catch(e){const r=reparar(t);if(r.pasos.length){try{o=JSON.parse(r.r);rep=r.pasos;}catch(e2){}}}
+    let h='';
+    if(o===null){
+      caja3('#c5l1-p1','mal','1 · Sintaxis','✗ no es JSON',['ni reparando con código se puede leer']);
+      caja3('#c5l1-p2','no','2 · Esquema','sin revisar',[]);caja3('#c5l1-p3','no','3 · Negocio','sin revisar',[]);
+      $('#c5l1-out').innerHTML='<span class="warn">Decisión: reintentar. La salida no se puede leer como JSON; se vuelve a llamar al modelo con el error, una o dos veces como máximo.</span>';return;
+    }
+    if(rep)caja3('#c5l1-p1','rep','1 · Sintaxis','reparada',rep.map(x=>'código: '+x));
+    else caja3('#c5l1-p1','ok','1 · Sintaxis','✓ JSON válido',[]);
+    const ee=validarEsquema(o);
+    if(ee.length){
+      caja3('#c5l1-p2','mal','2 · Esquema','✗ '+ee.length+(ee.length>1?' errores':' error'),ee.map(x=>'<b>'+x[0]+'</b>: '+x[1]));
+      caja3('#c5l1-p3','no','3 · Negocio','sin revisar',[]);
+      const msg='Tu respuesta no cumple el esquema clasificacion-ticket@v1: '+ee.map(x=>x[1].replace(/<\/?code>/g,'')).join('; ')+'. Devuelve solo el JSON corregido.';
+      h='<span class="warn">Decisión: reintentar con el error en el mensaje (máximo dos veces).</span><span>Mensaje de reintento: «'+msg.replace(/</g,'&lt;')+'»</span>';
+      h+='<span>Con salidas estructuradas del proveedor, este error casi no aparece: la decodificación restringida no deja escribir fuera del esquema.</span>';
+      $('#c5l1-out').innerHTML=h;return;
+    }
+    caja3('#c5l1-p2','ok','2 · Esquema','✓ cumple',[]);
+    const en=negocio(o);
+    if(en.length){
+      caja3('#c5l1-p3','mal','3 · Negocio','✗ no cuadra',en);
+      h='<span class="warn">Decisión: rechazar y escalar a una persona.</span><span>El JSON es perfecto en forma, y por eso este error es el más peligroso: ningún esquema lo detecta. Reintentar sería pedirle al modelo que adivine otra vez; el ticket va a la cola general con la salida y el motivo del rechazo.</span>';
+    }else{
+      caja3('#c5l1-p3','ok','3 · Negocio','✓ cuadra',['cuenta, factura y monto coinciden con los sistemas']);
+      h='<span class="ok">Decisión: aceptar. El ticket se enruta a la cola de '+o.categoria.replace(/_/g,' ')+' y el monto se guarda como decimal exacto.</span>';
+      if(rep)h+='<span>La reparación fue mecánica y no cambió ningún dato: no hizo falta volver a llamar al modelo.</span>';
+    }
+    $('#c5l1-out').innerHTML=h;
+  }
+  $('#c5l1-txt').addEventListener('input',calc);
+  $('#c5l1-txt').value=V[0][1]();calc();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const F=[
+    {num:'F-88213',cta:'20417',cli:'Carmen Rojas',plan:'Plan Hogar 200',sub:25.42,imp:4.58,tot:30.00},
+    {num:'F-88214',cta:'31552',cli:'Luis Pérez',plan:'Plan Hogar 300',sub:38.14,imp:6.86,tot:45.00},
+    {num:'F-88215',cta:'40981',cli:'Ana Gómez',plan:'Plan Hogar 200',sub:25.42,imp:4.58,tot:30.00}];
+  const COMUN={per:'2026-10',emi:'2026-10-01',ven:'2026-11-05'};
+  const CAMPOS=[['num','Número'],['cta','Cuenta'],['per','Periodo'],['emi','Emisión'],['ven','Vencimiento'],['sub','Plan (línea 1)'],['imp','Impuestos (línea 2)'],['tot','Total']];
+  let modo='val',hecho=true;
+  const coma=v=>v.toFixed(2).replace('.',',');
+  function lectura(i,q){
+    // Lo que «ve» el OCR según la calidad: cada daño aparece por debajo de un umbral
+    const f=F[i],d={};
+    d.num=q<75?f.num.slice(0,5)+'I'+f.num.slice(6):f.num;
+    d.cta=q<45?f.cta.slice(0,4)+'1':f.cta;
+    d.imp=q<30?coma(f.imp).replace(/5/,'3'):coma(f.imp);
+    d.tot=q<60?coma(f.tot).replace(',',''):coma(f.tot);
+    d.sub=coma(f.sub);
+    return d;
+  }
+  function extraer(i,q,fechaOk){
+    const f=F[i],d=lectura(i,q),x={};
+    // Con esquema y patrón, la I se fuerza a dígito: forma correcta, valor falso
+    x.num=modo==='libre'?d.num:d.num.replace('I','4');
+    x.cta=d.cta;x.per=COMUN.per;
+    x.emi=fechaOk?COMUN.emi:'2026-01-10';x.ven=fechaOk?COMUN.ven:'2026-05-11';
+    x.sub=f.sub;x.imp=parseFloat(d.imp.replace(',','.'));
+    x.tot=d.tot.includes(',')?parseFloat(d.tot.replace(',','.')):parseFloat(d.tot);
+    return {d,x};
+  }
+  function real(i){const f=F[i];return {num:f.num,cta:f.cta,per:COMUN.per,emi:COMUN.emi,ven:COMUN.ven,sub:f.sub,imp:f.imp,tot:f.tot};}
+  const fmt=(k,v)=>v===undefined||v===null?'—':(typeof v==='number'?coma(v):v);
+  const ddmmaa=s=>s.split('-').reverse().join('/');
+  function pintarScan(){
+    const i=+$('#c5l2-f').value,q=+$('#c5l2-q').value,f=F[i],d=lectura(i,q);
+    $('#c5l2-q-o').textContent=q+' %';
+    const sc=$('#c5l2-scan');
+    sc.style.filter='blur('+((100-q)/80).toFixed(2)+'px) contrast('+(0.7+q/330).toFixed(2)+')';
+    sc.style.setProperty('--ruido',((100-q)/90).toFixed(2));
+    sc.style.transform='rotate('+(-(100-q)/60).toFixed(2)+'deg)';
+    const m=(a,b)=>a!==b?'<span class="daño">'+a+'</span>':a;
+    sc.innerHTML='<div class="c5l2-tt">FACTURA</div>'+
+      '<div class="fila"><span>N.º '+m(d.num,f.num)+'</span><span>Cuenta '+m(d.cta,f.cta)+'</span></div>'+
+      '<div class="fila"><span>'+f.cli+'</span><span>Periodo: octubre 2026</span></div>'+
+      '<div class="fila"><span>Emisión '+ddmmaa(COMUN.emi)+'</span><span>Vence '+ddmmaa(COMUN.ven)+'</span></div>'+
+      '<div class="fila"><span>'+f.plan+'</span><span>'+d.sub+'</span></div>'+
+      '<div class="fila"><span>Impuestos</span><span>'+m(d.imp,coma(f.imp))+'</span></div>'+
+      '<div class="fila tot"><span>TOTAL US$</span><span>'+m(d.tot,coma(f.tot))+'</span></div>';
+  }
+  function validar(x,i){
+    const v={};
+    const suma=Math.round((x.sub+x.imp)*100),tot=Math.round(x.tot*100);
+    if(suma!==tot){v.tot='las líneas suman '+coma(suma/100)+' y el total dice '+coma(x.tot);if(x.imp!==F[i].imp)v.imp='no cuadra con el total';}
+    const reg=F.find(f=>f.num===x.num);
+    if(!reg)v.num='no existe en facturación';
+    else if(reg.cta!==x.cta)v.cta='la factura '+x.num+' es de la cuenta '+reg.cta;
+    if(x.emi.slice(0,7)!==x.per)v.emi='no cae en el periodo '+x.per;
+    const dias=(new Date(x.ven)-new Date(x.emi))/864e5;
+    if(dias<10||dias>45)v.ven=Math.round(dias)+' días después de la emisión: fuera de plazo';
+    if(reg&&reg.cta===x.cta&&Math.round(reg.tot*100)!==tot&&!v.tot)v.tot='facturación dice '+coma(reg.tot);
+    if(!reg&&x.cta!==F[i].cta)v.cta='sin factura con qué cruzarla';
+    return v;
+  }
+  function calc(){
+    pintarScan();
+    const res=$('#c5l2-res');
+    if(!hecho){res.innerHTML='<p class="c5l2-libre">Pulsa «Extraer».</p>';['#c5l2-k1','#c5l2-k2','#c5l2-k3','#c5l2-k4'].forEach(s=>$(s).textContent='–');$('#c5l2-out').innerHTML='';return;}
+    const i=+$('#c5l2-f').value,q=+$('#c5l2-q').value,fechaOk=$('#c5l2-fecha').checked;
+    const {d,x}=extraer(i,q,fechaOk),r=real(i);
+    let filas='',ok=0,silen=0,det=0,nolee=0,h='';
+    const val=modo==='val'?validar(x,i):{};
+    let libre='';
+    if(modo==='libre'){
+      const fecha=fechaOk?'el 5 de noviembre de 2026':'el 11 de mayo de 2026';
+      libre='<p class="c5l2-libre">«La factura '+x.num+' de la cuenta '+x.cta+' corresponde a octubre de 2026, vence '+fecha+' y el total a pagar es de US$ '+d.tot+'.»</p>';
+    }
+    CAMPOS.forEach(([k,n])=>{
+      let v=x[k];
+      if(modo==='libre'&&['per','emi','sub','imp'].includes(k))v=undefined;
+      const igual=v!==undefined&&(typeof r[k]==='number'?Math.round(v*100)===Math.round(r[k]*100):v===r[k]);
+      let est,cls;
+      if(v===undefined){est='no se puede leer';cls='e-no';nolee++;}
+      else if(igual){est=val[k]?'aviso: '+val[k]:'✓';cls='e-ok';ok++;}
+      else if(val[k]){est='detectado: '+val[k];cls='e-det';det++;}
+      else{est='✗ pasa sin aviso';cls='e-mal';silen++;}
+      filas+='<tr><td>'+n+'</td><td class="m">'+fmt(k,r[k])+'</td><td class="m">'+fmt(k,v)+'</td><td class="'+cls+'">'+est+'</td></tr>';
+    });
+    res.innerHTML=libre+'<div class="c5l2-tw"><table class="c5l2-t"><thead><tr><th>Campo</th><th>Real</th><th>Extraído</th><th>Estado</th></tr></thead><tbody>'+filas+'</tbody></table></div>';
+    $('#c5l2-k1').textContent=ok+' de 8';$('#c5l2-k2').textContent=silen;$('#c5l2-k3').textContent=modo==='val'?det:'–';
+    let dec;
+    if(modo==='libre')dec='a mano';else if(modo==='esq')dec=silen?'se registra mal':'se registra';else dec=Object.keys(val).length?'revisión humana':'se registra';
+    $('#c5l2-k4').textContent=dec;
+    if(modo==='libre')h+='<span class="warn">Texto libre: un programa puede pescar el número y el total con una expresión regular, pero '+nolee+' campos no se pueden leer con seguridad. Alguien tiene que copiarlos a mano.</span>';
+    if(modo==='esq'){h+='<span>Con esquema, los 8 campos llegan siempre con su nombre y su tipo: un programa los lee sin adivinar.</span>';
+      if(silen)h+='<span class="warn">Pero '+silen+(silen>1?' campos equivocados pasan':' campo equivocado pasa')+' sin aviso y se registraría'+(silen>1?'n':'')+' tal cual. El esquema garantiza la forma, no la verdad.</span>';}
+    if(modo==='val'){
+      if(det)h+='<span class="ok">Las validaciones detectaron '+det+(det>1?' errores':' error')+' ('+Object.values(val).join('; ')+'). La factura va a la cola de revisión humana con la imagen al lado.</span>';
+      if(silen)h+='<span class="warn">'+silen+' error(es) pasaron igual: ninguna regla los cubre.</span>';
+      if(!det&&!silen)h+='<span class="ok">Todo cuadra con las reglas internas del documento y con facturación: se registra sin intervención.</span>';
+    }
+    if(q<75&&modo!=='libre')h+='<span>El escaneo dice «'+d.num+'» con una I. Con un patrón de cinco dígitos, el modelo está obligado a escribir un dígito y escribe '+x.num+': forma perfecta, factura equivocada.</span>';
+    if(!fechaOk)h+='<span>Sin la instrucción sobre el formato, «05/11/2026» se leyó como 11 de mayo: un dato con forma de fecha válida y fecha falsa.</span>';
+    $('#c5l2-out').innerHTML=h;
+  }
+  $('#c5l2-modo').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{modo=b.dataset.m;$('#c5l2-modo').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));calc();}));
+  $('#c5l2-q').addEventListener('input',calc);$('#c5l2-f').addEventListener('change',calc);$('#c5l2-fecha').addEventListener('change',calc);
+  calc();
+})();
+</script>
+</body>
+</html>

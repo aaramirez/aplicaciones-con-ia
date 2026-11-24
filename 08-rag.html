@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RAG · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="rag">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 08 DE 20</span><h1>RAG: responder con los documentos de la empresa</h1><p class="lede">El asistente ya sabe quién pregunta y qué se conversó. Ahora tiene que responder con los 340 manuales y políticas de la empresa, citar de dónde sacó cada dato y decir «no lo sé» cuando no hay evidencia. Este capítulo construye el RAG completo: la ingesta, los embeddings, la búsqueda híbrida, el reordenamiento con filtros de permisos y vigencia, las citas verificadas y cómo medir que la recuperación funciona.</p></header>
+<section><h2>Por qué RAG antes que reentrenar</h2><div class="prose"><p>Hasta la versión 0.5, el asistente de atención respondía las preguntas de políticas con un contexto armado a mano: el párrafo de la política de reconexión, la tabla de reembolsos, pegados en la plantilla. Funcionaba para diez preguntas. Pero la jefa de reclamos quiere que los agentes puedan preguntar por cualquier cosa que esté en las carpetas compartidas: 340 documentos entre manuales, políticas, tarifas e instructivos, que cambian cada mes. Y la meta del nivel sigue escrita: 80 % de respuestas correctas y <b>ninguna sin fuente</b>.</p><p>En la reunión de planificación alguien preguntó lo de siempre: «¿y si entrenamos el modelo con todos los manuales?». Lucía respondió con una pregunta: «¿y el mes que viene, cuando cambie la tarifa de reconexión, lo volvemos a entrenar?».</p></div><div class="analogia"><b>Imagínalo así</b><p>Hay dos formas de preparar un examen. Una es memorizar el libro entero: lleva semanas, se te olvidan detalles y, si el profesor cambia una página, tu memoria queda vieja. La otra es un examen a libro abierto con un buen índice: no memorizas nada, buscas la página que responde, la lees y escribes la respuesta citando la página. Para preguntas sobre reglas que cambian, el libro abierto gana siempre.</p></div><div class="prose"><p>La técnica del libro abierto se llama <b>RAG</b> (<i>Retrieval-Augmented Generation</i>, generación aumentada con recuperación): antes de llamar al modelo, la aplicación <b>busca</b> en los documentos los fragmentos que responden la pregunta y los pone en el contexto; el modelo responde con ellos y cita cuáles usó. Frente al <b>ajuste fino</b> (<i>fine-tuning</i>), que sigue entrenando el modelo con ejemplos propios, el RAG tiene cinco ventajas para el conocimiento de una empresa:</p><ul><li><b>Vigencia.</b> Cambiar una política es reindexar un documento, en minutos. Reentrenar lleva días y cuesta dinero.</li><li><b>Citas.</b> Cada respuesta puede señalar el fragmento exacto del que salió. Un modelo ajustado no sabe de dónde aprendió algo.</li><li><b>Permisos.</b> La búsqueda filtra por lo que puede ver cada persona. Lo que un modelo aprendió en el entrenamiento lo puede contar a cualquiera.</li><li><b>Borrado.</b> Retirar un documento es sacarlo del índice. Sacar un dato de los parámetros de un modelo no tiene una solución sencilla.</li><li><b>Costo y riesgo.</b> Se empieza con los modelos que ya existen.</li></ul><p>El ajuste fino sirve para otra cosa: enseñar un formato, un tono o una tarea muy repetida. El capítulo 14 lo trata. Para los hechos de la empresa, primero RAG.</p></div><figure class="fig fig-arquitectura" id="08-diagrama-1"><div class="lienzo"><svg viewBox="0 0 980 470" style="min-width:780px" role="img" aria-label="Arquitectura del RAG en dos mitades: arriba la ingesta, que toma los documentos de las carpetas, revisa si cambiaron con un hash, extrae el texto, lo parte en fragmentos con metadatos, calcula los embeddings y los guarda en el índice; abajo la consulta, que busca por vectores y por palabras con el filtro de permisos, fusiona con RRF y filtra por vigencia, reordena, pasa los mejores fragmentos al modelo y verifica las citas antes de responder, o se abstiene si no hay evidencia">
+<defs>
+<marker id="c8d1-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+<marker id="c8d1-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker>
+<marker id="c8d1-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+</defs>
+<text x="20" y="32" class="t t-xs t-b k-enl">INGESTA · CORRE CUANDO CAMBIA UN DOCUMENTO</text>
+<rect x="20" y="48" width="150" height="62" rx="10" class="d-sis"/>
+<text x="34" y="72" class="t t-b" style="font-size:12px">Carpetas</text><text x="34" y="92" class="t t-s t-m">340 documentos</text>
+<rect x="210" y="48" width="150" height="62" rx="10" class="d-casa"/>
+<text x="224" y="72" class="t t-b" style="font-size:12px">¿Cambió?</text><text x="224" y="92" class="t t-s t-m">hash por documento</text>
+<rect x="400" y="48" width="150" height="62" rx="10" class="d-casa"/>
+<text x="414" y="72" class="t t-b" style="font-size:12px">Extraer texto</text><text x="414" y="92" class="t t-s t-m">títulos, listas, tablas</text>
+<rect x="590" y="48" width="150" height="62" rx="10" class="d-casa"/>
+<text x="604" y="72" class="t t-b" style="font-size:12px">Partir</text><text x="604" y="92" class="t t-s t-m">fragmentos + metadatos</text>
+<rect x="780" y="48" width="170" height="62" rx="10" class="c-enl"/>
+<text x="794" y="72" class="t t-b" style="font-size:12px">Embeddings</text><text x="794" y="92" class="t t-s t-m">modelo de embeddings</text>
+<line x1="171" y1="79" x2="208" y2="79" class="ln" marker-end="url(#c8d1-m)"/>
+<line x1="361" y1="79" x2="398" y2="79" class="ln" marker-end="url(#c8d1-m)"/>
+<line x1="551" y1="79" x2="588" y2="79" class="ln" marker-end="url(#c8d1-m)"/>
+<line x1="741" y1="79" x2="778" y2="79" class="ln" marker-end="url(#c8d1-m)"/>
+<text x="224" y="132" class="t t-s t-m">si no cambió, no se hace nada; si se retiró, sus fragmentos se marcan como vencidos</text>
+<line x1="865" y1="111" x2="865" y2="162" class="ln s-enl" style="stroke-width:2" marker-end="url(#c8d1-e)"/>
+
+<rect x="740" y="166" width="210" height="76" rx="12" class="c-enl" style="stroke-width:2.4"/>
+<text x="756" y="192" class="t t-b">Índice</text>
+<text x="756" y="211" class="t t-s">vector + texto + metadatos</text>
+<text x="756" y="228" class="t t-s t-m">pgvector y texto completo</text>
+<path d="M740 204H255V290" class="ln ln-d s-enl" style="stroke-width:1.8" marker-end="url(#c8d1-e)"/>
+<text x="420" y="196" class="t t-s k-enl">búsqueda en el índice, con los permisos de la sesión</text>
+
+<text x="20" y="276" class="t t-xs t-b k-casa">CONSULTA · CORRE EN CADA PREGUNTA</text>
+<rect x="20" y="294" width="120" height="66" rx="10" class="caja"/>
+<text x="32" y="320" class="t t-b" style="font-size:12px">Pregunta</text><text x="32" y="340" class="t t-s t-m">+ sesión y rol</text>
+<rect x="170" y="294" width="170" height="66" rx="10" class="c-enl"/>
+<text x="182" y="318" class="t t-b" style="font-size:12px">Búsqueda híbrida</text><text x="182" y="335" class="t t-s t-m">vectores + BM25</text><text x="182" y="350" class="t t-s t-m">filtro de permisos</text>
+<rect x="370" y="294" width="150" height="66" rx="10" class="d-casa"/>
+<text x="382" y="318" class="t t-b" style="font-size:12px">Fusión RRF</text><text x="382" y="335" class="t t-s t-m">y filtro de vigencia</text><text x="382" y="350" class="t t-s t-m">top 30</text>
+<rect x="550" y="294" width="130" height="66" rx="10" class="c-enl"/>
+<text x="562" y="318" class="t t-b" style="font-size:12px">Reordenador</text><text x="562" y="335" class="t t-s t-m">pregunta + fragmento</text><text x="562" y="350" class="t t-s t-m">top 4</text>
+<rect x="710" y="294" width="110" height="66" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="722" y="318" class="t t-b k-warm" style="font-size:12px">Modelo</text><text x="722" y="335" class="t t-s t-m">responde en</text><text x="722" y="350" class="t t-s t-m">JSON con citas</text>
+<rect x="850" y="294" width="110" height="66" rx="10" class="d-casa"/>
+<text x="862" y="318" class="t t-b" style="font-size:12px">Verificador</text><text x="862" y="335" class="t t-s t-m">¿existen las</text><text x="862" y="350" class="t t-s t-m">citas?</text>
+<line x1="141" y1="327" x2="168" y2="327" class="ln" marker-end="url(#c8d1-m)"/>
+<line x1="341" y1="327" x2="368" y2="327" class="ln" marker-end="url(#c8d1-m)"/>
+<line x1="521" y1="327" x2="548" y2="327" class="ln" marker-end="url(#c8d1-m)"/>
+<line x1="681" y1="327" x2="708" y2="327" class="ln" marker-end="url(#c8d1-m)"/>
+<line x1="821" y1="327" x2="848" y2="327" class="ln s-warm" marker-end="url(#c8d1-w)"/>
+<path d="M905 361V420H780" class="ln s-enl" style="stroke-width:2" marker-end="url(#c8d1-e)"/>
+<text x="560" y="424" class="t t-b" style="font-size:12px">respuesta con su fuente</text>
+<path d="M615 361V444H572" class="ln ln-d s-warm" style="stroke-width:1.6" marker-end="url(#c8d1-w)"/>
+<text x="562" y="448" class="t t-s k-warm" text-anchor="end">bajo el umbral: «no lo encontré en los manuales» (sin llamar al modelo)</text>
+</svg></div><figcaption><b>Las dos mitades del RAG.</b> Arriba, la ingesta, que corre cada vez que cambia un documento: se extrae el texto, se parte en fragmentos con sus metadatos, se calcula el embedding de cada uno y se guarda en el índice. Abajo, la consulta, que corre en cada pregunta: se busca por significado y por palabras, se fusionan los resultados, se filtran por permisos, vigencia y fuente, se reordenan y los mejores entran al contexto del modelo, que responde con citas. Un verificador revisa las citas antes de mostrar la respuesta. El índice, en el centro, es lo que une las dos mitades.</figcaption></figure></section>
+<section><h2>Ingesta: partir los documentos y detectar cambios</h2><div class="prose"><p>La <b>ingesta</b> (<i>ingestion</i>) es el proceso que lleva un documento de la carpeta compartida al índice de búsqueda. Tiene cuatro pasos.</p><ol class="steps"><li><span><b>Extraer el texto.</b> De un PDF, un documento de Word o una página web se saca el texto con su estructura: títulos, listas y tablas. Las tablas merecen cuidado, porque una tabla de tarifas convertida en una fila de palabras sueltas pierde el sentido; conviene convertir cada fila en una frase («Hogar 200: US$ 30,00 al mes»). Un PDF escaneado pasa antes por un reconocimiento de texto.</span></li><li><span><b>Partir en fragmentos.</b> El <b>fragmentado</b> (<i>chunking</i>) divide cada documento en pedazos que se buscan y se pasan al modelo por separado. Hay tres formas comunes: por tamaño fijo (por ejemplo, 300 tokens), con un <b>solapamiento</b> (<i>overlap</i>) entre fragmentos vecinos para no cortar una idea a la mitad; por estructura, siguiendo los títulos y las secciones del documento; y semántico, cortando donde cambia el tema. Para manuales bien escritos, partir por sección suele ser lo mejor.</span></li><li><span><b>Agregar metadatos.</b> Cada fragmento lleva su documento, su sección, su dueño, sus fechas de vigencia, su nivel de acceso y su versión. Sin metadatos no hay filtros ni citas.</span></li><li><span><b>Indexar.</b> Se calcula el embedding de cada fragmento y se guarda en el índice junto con su texto y sus metadatos.</span></li></ol><div class="code-copia"><pre><code>{
+  "id": "pol-reconexion-2026#s2",
+  "documento": "Política de reconexión",
+  "seccion": "2. Cargo por reconexión",
+  "texto": "El cargo por reconexión es de US$ 5,00 y se suma a la factura vencida.",
+  "dueno": "gerencia de cobranza",
+  "vigente_desde": "2026-01-01",
+  "vigente_hasta": null,
+  "acceso": "atencion",
+  "version": 7,
+  "hash": "9c1e4f…"
+}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Cómo se escribe el contenido para que se recupere bien (una respuesta por artículo, títulos que son preguntas, fragmentos que se entienden solos) está en <a href="https://aaramirez.github.io/chatbots-empresariales/temario.html" target="_blank" rel="noopener">Chatbots empresariales</a>.</p><p>El fragmento tiene un tamaño que se elige y se prueba: demasiado chico, pierde el contexto («se completa en 4 horas», ¿qué se completa?); demasiado grande, mete ruido y gasta tokens. El laboratorio de la sección de medición lo muestra con números.</p><p>Los documentos cambian, y reindexar los 340 cada noche es caro y lento. Por eso la ingesta <b>detecta cambios</b>: guarda un <b>hash</b> (<i>hash</i>), una huella corta calculada sobre el contenido, de cada documento y de cada fragmento. Si el hash no cambió, no se hace nada; si cambió, se vuelven a procesar solo los fragmentos distintos. Y si un documento se retira, sus fragmentos se borran del índice o se marcan como vencidos. Un índice que guarda la política de 2024 junto a la de 2026 sin distinguirlas es la forma más común de que un RAG responda con seguridad algo que ya no es cierto.</p></div></section>
+<section><h2>Embeddings y bases vectoriales</h2><div class="prose"><p>Buscar por palabras exactas falla con frecuencia. Un agente pregunta «¿en cuánto vuelve el internet después de pagar?» y el manual dice «la reconexión se completa en un plazo máximo de 4 horas hábiles». No comparten casi ninguna palabra, y significan lo mismo.</p></div><div class="analogia"><b>Imagínalo así</b><p>Imagina una biblioteca donde los libros no están ordenados por título, sino por tema, en un mapa: los de cocina italiana cerca de los de cocina española, lejos de los de mecánica. Si buscas «pasta», caminas a esa zona y encuentras también el libro que dice «tallarines», aunque nunca use la palabra «pasta». Un embedding es la dirección de cada fragmento en ese mapa del significado.</p></div><div class="prose"><p>Un <b>embedding</b> (<i>embedding</i>, vector de significado) es una lista de cientos o miles de números que un <b>modelo de embeddings</b> (<i>embedding model</i>) calcula a partir de un texto. Textos que significan algo parecido quedan con vectores cercanos. Para comparar dos vectores se usa casi siempre la <b>similitud del coseno</b> (<i>cosine similarity</i>): un número entre −1 y 1 que mide qué tan alineados están; cerca de 1, significan casi lo mismo. Cómo se calcula un embedding por dentro está en <a href="https://aaramirez.github.io/modelos-de-ia/temario.html" target="_blank" rel="noopener">Modelos de IA</a>.</p><p>Dos reglas prácticas. La primera: los fragmentos y las preguntas se convierten con <b>el mismo modelo de embeddings</b>; vectores de modelos distintos no se pueden comparar. Si se cambia de modelo, se reindexa todo. La segunda: el embedding es bueno para el significado y malo para los detalles exactos. «Hogar 100» y «Hogar 200» quedan casi en el mismo lugar del mapa.</p><p>Los vectores se guardan en una <b>base vectorial</b> (<i>vector database</i>), que encuentra los más cercanos a la pregunta sin compararla con todos los fragmentos uno por uno. Para eso usa un <b>índice de vecinos aproximados</b> (<i>approximate nearest neighbor</i>, ANN), que sacrifica un poco de exactitud por mucha velocidad. Ejemplos del mercado son pgvector (una extensión de PostgreSQL), Qdrant, Weaviate, Milvus y Pinecone. Para unos pocos miles de fragmentos, como los del asistente, pgvector en la misma base de datos de la aplicación alcanza de sobra.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Medir el parecido entre frases</h3></div><p>Vas a calcular los embeddings de cuatro frases con un modelo de embeddings local y a comparar cada una con una pregunta. Descarga primero el modelo <code>nomic-embed-text</code> (unos 270 MB; cualquier modelo de embeddings sirve). Guarda este programa como <code>parecido.py</code>:</p><div class="code-copia"><pre><code>import json, math, urllib.request
+
+def embeddings(textos):
+    cuerpo = {"model": "nomic-embed-text", "input": textos}
+    pedido = urllib.request.Request("http://localhost:11434/v1/embeddings",
+                                    data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido) as r:
+        return [d["embedding"] for d in json.load(r)["data"]]
+
+def coseno(a, b):
+    punto = sum(x * y for x, y in zip(a, b))
+    return punto / (math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b)))
+
+pregunta = "¿En cuánto tiempo vuelve el internet después de pagar?"
+frases = ["La reconexión se completa en un plazo máximo de 4 horas hábiles después del pago.",
+          "El cargo por reconexión es de US$ 5,00 y se suma a la factura vencida.",
+          "El plan Hogar 200 cuesta US$ 30,00 al mes.",
+          "El plan Hogar 100 cuesta US$ 22,00 al mes."]
+vectores = embeddings([pregunta] + frases)
+print(f"Cada embedding tiene {len(vectores[0])} números.\n")
+for frase, v in sorted(zip(frases, vectores[1:]), key=lambda p: -coseno(vectores[0], p[1])):
+    print(f"{coseno(vectores[0], v):.3f}  {frase}")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>ollama pull nomic-embed-text</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python parecido.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>ollama pull nomic-embed-text</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 parecido.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y mira qué frase queda primera y con qué puntaje.</span></li><li><span>Cambia la pregunta por «¿Cuánto cuesta el Hogar 200?» y vuelve a correrlo.</span></li><li><span>Compara los puntajes de las dos frases de planes.</span></li></ol><p><b>Qué observar:</b> con la primera pregunta, la frase de la reconexión queda arriba aunque casi no comparte palabras: el embedding captura el significado. Con la segunda, las dos frases de planes quedan muy cerca entre sí, porque para el embedding «100» y «200» casi no cambian el sentido. Ese es el punto débil que corrige la búsqueda por palabras clave de la sección siguiente. Los valores exactos dependen del modelo.</p></div></section>
+<section><h2>Búsqueda híbrida: vectores y palabras clave</h2><div class="prose"><p>La búsqueda por embeddings entiende paráfrasis pero se le escapan los códigos, los números y las siglas: «F-88213», «Hogar 200», «ONT». La búsqueda clásica por palabras hace justo lo contrario. La <b>búsqueda híbrida</b> (<i>hybrid search</i>) corre las dos y junta los resultados.</p><p>La búsqueda por palabras más usada es <b>BM25</b> (<i>Best Matching 25</i>), una fórmula que puntúa cada fragmento según cuántas veces aparecen las palabras de la pregunta, cuánto pesan esas palabras (una palabra rara pesa más que «el» o «servicio») y qué tan largo es el fragmento. Está en los motores de búsqueda de texto completo de PostgreSQL, Elasticsearch u OpenSearch.</p><p>Para juntar las dos listas se usa la <b>fusión por rango recíproco</b> (<i>reciprocal rank fusion</i>, RRF). No mezcla los puntajes, que están en escalas distintas, sino las posiciones: cada fragmento suma 1 / (60 + posición) por cada lista donde aparece. Un fragmento que sale tercero en vectores y primero en palabras suma 1/63 + 1/61; uno que sale solo en una lista suma menos. El 60 es una constante que suaviza la diferencia entre los primeros puestos; se usa ese valor por costumbre y casi nunca se cambia.</p></div></section>
+<section><h2>Reordenar y filtrar por permisos, fecha y fuente</h2><div class="prose"><p>La búsqueda híbrida es rápida pero gruesa: trae, digamos, los 50 candidatos más probables. De ahí hay que elegir los 4 o 5 que entran al contexto. Ese trabajo lo hacen dos piezas.</p><p>El <b>reordenador</b> (<i>reranker</i>) es un modelo que lee la pregunta y cada candidato <b>juntos</b> y da un puntaje de qué tan bien lo responde. Es más lento que comparar vectores, porque procesa cada par por separado, pero mucho más preciso: entiende que «¿cuánto cuesta el Hogar 200?» no se responde con el fragmento del Hogar 100. Por eso se usa solo sobre los 50 candidatos, no sobre todo el índice. A estos modelos se les llama <b>codificadores cruzados</b> (<i>cross-encoders</i>); hay opciones abiertas y comerciales.</p><p>Los <b>filtros</b> aplican reglas que no se negocian:</p><ul><li><b>Permisos.</b> Un agente no ve la guía interna de las supervisoras. El filtro va <b>dentro de la consulta</b> al índice, con los permisos de la sesión, nunca después del modelo: un fragmento que el modelo leyó, lo puede repetir.</li><li><b>Vigencia.</b> Solo fragmentos con <code>vigente_desde</code> anterior a hoy y sin <code>vigente_hasta</code> vencido. La política de reconexión de 2024 queda afuera aunque sea muy parecida a la pregunta.</li><li><b>Fuente.</b> Los documentos oficiales ganan a los borradores; si hay dos versiones del mismo documento, entra la última.</li></ul></div><figure class="fig fig-flujo" id="08-diagrama-2"><div class="lienzo"><svg viewBox="0 0 980 540" style="min-width:780px" role="img" aria-label="Diagrama de secuencia de una consulta RAG: la agente pregunta cuánto cuesta reconectar; el núcleo calcula el embedding de la pregunta, busca en el índice por vectores y por palabras con el filtro de permisos, fusiona con RRF y descarta lo vencido, el reordenador elige los cuatro mejores o avisa que no llegan al umbral, el modelo responde en JSON con citas, el núcleo verifica las citas y entrega la respuesta con su fuente">
+<defs>
+<marker id="c8d2-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+<marker id="c8d2-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c8d2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+<marker id="c8d2-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker>
+</defs>
+<rect x="4" y="14" width="112" height="50" rx="10" class="caja"/>
+<text x="60" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Agente 07</text>
+<text x="60" y="52" class="t t-s t-m" text-anchor="middle">reclamos</text>
+<line x1="60" y1="64" x2="60" y2="524" class="vida"/>
+<rect x="149" y="14" width="112" height="50" rx="10" class="d-casa"/>
+<text x="205" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Núcleo</text>
+<text x="205" y="52" class="t t-s t-m" text-anchor="middle">envoltorio</text>
+<line x1="205" y1="64" x2="205" y2="524" class="vida"/>
+<rect x="299" y="14" width="112" height="50" rx="10" class="c-enl"/>
+<text x="355" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Embeddings</text>
+<text x="355" y="52" class="t t-s t-m" text-anchor="middle">modelo</text>
+<line x1="355" y1="64" x2="355" y2="524" class="vida"/>
+<rect x="444" y="14" width="112" height="50" rx="10" class="c-enl"/>
+<text x="500" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Índice</text>
+<text x="500" y="52" class="t t-s t-m" text-anchor="middle">híbrido</text>
+<line x1="500" y1="64" x2="500" y2="524" class="vida"/>
+<rect x="589" y="14" width="112" height="50" rx="10" class="c-enl"/>
+<text x="645" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Reordenador</text>
+<text x="645" y="52" class="t t-s t-m" text-anchor="middle">cruzado</text>
+<line x1="645" y1="64" x2="645" y2="524" class="vida"/>
+<rect x="734" y="14" width="112" height="50" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="790" y="35" class="t t-b k-warm" text-anchor="middle" style="font-size:12px">Modelo</text>
+<text x="790" y="52" class="t t-s t-m" text-anchor="middle">pequeño</text>
+<line x1="790" y1="64" x2="790" y2="524" class="vida"/>
+<line x1="60" y1="100" x2="203" y2="100" class="ln" style="stroke-width:2" marker-end="url(#c8d2-m)"/>
+<text x="68" y="92" class="t" style="font-size:12px">① «¿cuánto cuesta</text>
+<text x="68" y="116" class="t" style="font-size:12px">reconectar?»</text>
+<line x1="205" y1="142" x2="353" y2="142" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c8d2-s)"/>
+<text x="213" y="134" class="t" style="font-size:12px">② embedding</text>
+<line x1="355" y1="168" x2="207" y2="168" class="ln s-enl ln-d" style="stroke-width:1.6" marker-end="url(#c8d2-e)"/>
+<text x="213" y="160" class="t" style="font-size:11px">vector</text>
+<line x1="205" y1="208" x2="498" y2="208" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c8d2-s)"/>
+<text x="213" y="200" class="t" style="font-size:12px">③ vectores + BM25, con permisos</text>
+<line x1="500" y1="234" x2="207" y2="234" class="ln s-enl ln-d" style="stroke-width:1.6" marker-end="url(#c8d2-e)"/>
+<text x="330" y="226" class="t" style="font-size:11px">50 candidatos</text>
+<path d="M205 256 h40 v24 h-38" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c8d2-s)"/>
+<text x="253" y="274" class="t" style="font-size:12px">④ RRF y fuera lo vencido</text>
+<line x1="205" y1="318" x2="643" y2="318" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c8d2-s)"/>
+<text x="330" y="310" class="t" style="font-size:12px">⑤ reordenar los 30 primeros</text>
+<line x1="645" y1="344" x2="207" y2="344" class="ln s-enl ln-d" style="stroke-width:1.6" marker-end="url(#c8d2-e)"/>
+<text x="420" y="336" class="t" style="font-size:11px">top 4, o «bajo el umbral»</text>
+<line x1="205" y1="386" x2="788" y2="386" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c8d2-s)"/>
+<text x="330" y="378" class="t" style="font-size:12px">⑥ fragmentos numerados [1] a [4] y la pregunta</text>
+<line x1="790" y1="420" x2="207" y2="420" class="ln s-warm" style="stroke-width:2" marker-end="url(#c8d2-w)"/>
+<text x="330" y="412" class="t t-mono" style="font-size:11px">{"respuesta":"…US$ 5,00…","citas":[1]}</text>
+<path d="M205 442 h40 v24 h-38" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c8d2-s)"/>
+<text x="253" y="460" class="t" style="font-size:12px">⑦ ¿existe la cita [1]? ¿dice US$ 5,00?</text>
+<line x1="205" y1="500" x2="62" y2="500" class="ln s-enl" style="stroke-width:2" marker-end="url(#c8d2-e)"/>
+<text x="68" y="492" class="t" style="font-size:12px">⑧ respuesta + fuente</text>
+<path d="M880 130V280" class="ln s-enl" style="stroke-width:3"/>
+<text x="892" y="203" class="t t-xs t-b k-enl">BUSCAR</text>
+<text x="892" y="218" class="t t-s t-m">②③④</text>
+<path d="M880 300V350" class="ln s-enl" style="stroke-width:3"/>
+<text x="892" y="323" class="t t-xs t-b k-enl">ELEGIR</text>
+<text x="892" y="338" class="t t-s t-m">⑤</text>
+<path d="M880 370V426" class="ln s-warm" style="stroke-width:3"/>
+<text x="892" y="396" class="t t-xs t-b k-warm">RESPONDER</text>
+<text x="892" y="411" class="t t-s t-m">⑥</text>
+<path d="M880 436V506" class="ln " style="stroke:var(--d-casa);stroke-width:3"/>
+<text x="892" y="469" class="t t-xs t-b k-casa">VERIFICAR</text>
+<text x="892" y="484" class="t t-s t-m">⑦⑧</text>
+</svg></div><figcaption><b>Una pregunta, de punta a punta.</b> Los participantes están arriba y el tiempo corre hacia abajo. ① La agente pregunta «¿cuánto cuesta reconectar?»; ② el núcleo calcula el embedding de la pregunta; ③ busca en paralelo por vectores y por palabras, con el filtro de permisos dentro de la consulta; ④ fusiona las dos listas con RRF y descarta lo vencido; ⑤ el reordenador elige los 4 mejores; ⑥ el modelo recibe los fragmentos numerados y responde en JSON con sus citas; ⑦ el verificador comprueba que cada cita exista y diga lo que la respuesta afirma; ⑧ la agente ve la respuesta con la fuente. Si el mejor puntaje no llega al umbral, el flujo se corta en ⑤ y la respuesta es «no lo encontré».</figcaption></figure><div class="lab" id="08-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Un RAG sobre el manual de atención</h3></div><p class="hint">Elige una pregunta, el rol de quien pregunta y cómo se busca. Mira los fragmentos candidatos con sus puntajes por vectores, por palabras y fusionados, cuáles quedan afuera por permisos o por vigencia, y la respuesta con sus citas. Apaga el filtro de vigencia o el reordenador y mira cuándo la respuesta sale mal.</p><style>
+[id="08-lab-1"] .opciones{grid-template-columns:minmax(0,1fr)}
+[id="08-lab-1"] .c8l1-fila{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+[id="08-lab-1"] .c8l1-fila>span{font:600 .78rem var(--f-display);color:var(--muted)}
+[id="08-lab-1"] .c8l1-chk{display:flex;flex-wrap:wrap;gap:6px 16px;font:500 .84rem var(--f-display);color:var(--ink)}
+[id="08-lab-1"] .c8l1-chk label{display:flex;gap:6px;align-items:center;cursor:pointer}
+[id="08-lab-1"] .c8l1-cands{display:grid;gap:6px}
+[id="08-lab-1"] .c8l1-c{display:grid;grid-template-columns:28px minmax(0,1fr);gap:2px 8px;border:1px solid var(--line);border-left:5px solid var(--line);border-radius:8px;padding:6px 9px;background:var(--card)}
+[id="08-lab-1"] .c8l1-c .n{grid-row:span 3;font:700 .9rem var(--f-mono);color:var(--muted)}
+[id="08-lab-1"] .c8l1-c .d{font:700 .74rem var(--f-display);color:var(--muted)}
+[id="08-lab-1"] .c8l1-c .x{font:500 .84rem/1.35 var(--f-body);color:var(--ink);overflow-wrap:anywhere}
+[id="08-lab-1"] .c8l1-c .s{display:flex;flex-wrap:wrap;gap:4px 10px;font:500 .72rem var(--f-mono);color:var(--muted)}
+[id="08-lab-1"] .c8l1-c .s b{color:var(--ink);font-weight:700}
+[id="08-lab-1"] .c8l1-c.entra{border-left-color:var(--good)}
+[id="08-lab-1"] .c8l1-c.fuera{border-left-color:var(--warm);opacity:.62}
+[id="08-lab-1"] .c8l1-c.fuera .x{text-decoration:line-through}
+[id="08-lab-1"] .c8l1-c.nada{border-left-color:var(--line)}
+[id="08-lab-1"] .c8l1-c .e{font:700 .7rem var(--f-display);letter-spacing:.04em;text-transform:uppercase}
+[id="08-lab-1"] .c8l1-c.entra .e{color:var(--good)} [id="08-lab-1"] .c8l1-c.fuera .e{color:var(--warm)} [id="08-lab-1"] .c8l1-c.nada .e{color:var(--muted)}
+[id="08-lab-1"] .c8l1-resp{border:1px solid var(--line);border-top:4px solid var(--muted);border-radius:10px;padding:8px 12px;background:var(--paper);font:500 .92rem/1.45 var(--f-body)}
+[id="08-lab-1"] .c8l1-resp b{display:block;font:700 .68rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+[id="08-lab-1"] .c8l1-resp.ok{border-top-color:var(--good)} [id="08-lab-1"] .c8l1-resp.mal{border-top-color:var(--warm)} [id="08-lab-1"] .c8l1-resp.par{border-top-color:var(--accent)}
+[id="08-lab-1"] .c8l1-resp sup{color:var(--accent);font-weight:700}
+</style>
+<div class="opciones">
+  <label>Pregunta del agente
+    <select id="c8l1-q">
+      <option value="0">¿Cuánto cuesta reconectar el servicio?</option>
+      <option value="1">¿En cuánto tiempo vuelve el internet después de pagar?</option>
+      <option value="2">¿Quién aprueba un reembolso de US$ 30,00?</option>
+      <option value="3">¿Hasta cuánto puede aprobar una supervisora sin consultar?</option>
+      <option value="4">¿Cuánto cuesta el Hogar 200?</option>
+      <option value="5">¿Cuánto debe hoy Carmen Rojas en la factura F-88213?</option>
+    </select></label>
+</div>
+<div class="c8l1-fila"><span>Quién pregunta</span>
+  <div class="btns" role="group" aria-label="Rol"><button type="button" data-rol="agente" aria-pressed="true">Agente</button><button type="button" data-rol="supervisora" aria-pressed="false">Supervisora</button></div>
+</div>
+<div class="c8l1-fila"><span>Cómo se busca</span>
+  <div class="btns" role="group" aria-label="Búsqueda"><button type="button" data-b="vec" aria-pressed="false">Solo vectores</button><button type="button" data-b="bm25" aria-pressed="false">Solo palabras</button><button type="button" data-b="hib" aria-pressed="true">Híbrida (RRF)</button></div>
+</div>
+<div class="c8l1-chk">
+  <label><input type="checkbox" id="c8l1-rr" checked>Reordenador</label>
+  <label><input type="checkbox" id="c8l1-vig" checked>Filtro de vigencia</label>
+  <label><input type="checkbox" id="c8l1-per" checked>Filtro de permisos en la consulta</label>
+</div>
+<div class="ctls"><label class="ctl">Umbral para abstenerse <output id="c8l1-u-o"></output>
+  <input id="c8l1-u" type="range" min="0.3" max="0.9" step="0.05" value="0.6"></label></div>
+<div class="c8l1-cands" id="c8l1-cands" aria-label="Fragmentos candidatos"></div>
+<div class="c8l1-resp" id="c8l1-resp" aria-live="polite"></div>
+<div class="readout texto" id="c8l1-out" aria-live="polite"></div></div></section>
+<section><h2>Responder con citas y abstenerse cuando no hay evidencia</h2><div class="prose"><p>Con los fragmentos elegidos, la plantilla de la respuesta los numera y le pide al modelo dos cosas: responder <b>solo</b> con ellos y decir qué número usó para cada afirmación. La salida tiene esquema, igual que en el capítulo 5:</p><div class="code-copia"><pre><code>{
+  "respuesta": "La reconexión cuesta US$ 5,00 y se suma a la factura vencida.",
+  "citas": [{"fragmento": 1, "texto_citado": "El cargo por reconexión es de US$ 5,00"}],
+  "confianza": "alta"
+}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Pedir citas no basta: un modelo también puede inventar una cita. Por eso un <b>verificador de citas</b> revisa cada una antes de mostrar la respuesta: que el número de fragmento exista entre los entregados, que el texto citado aparezca de verdad en ese fragmento y que los números de la respuesta (montos, plazos) estén en algún fragmento citado. Si algo falla, se reintenta una vez o se escala, como en el envoltorio del capítulo 2.</p><p>La otra mitad es <b>abstenerse</b> (<i>abstain</i>). Si el mejor fragmento tiene un puntaje por debajo de un <b>umbral</b> (<i>threshold</i>), la aplicación ni siquiera llama al modelo: responde «no encontré esto en los manuales» y, si corresponde, sugiere a quién preguntar. Lo mismo si el modelo responde que los fragmentos no alcanzan. Un «no lo sé» con una pista es una respuesta útil; un dato inventado con tono seguro es un reclamo futuro. El umbral se calibra con el conjunto de prueba de la última sección: muy alto, el asistente se abstiene de más; muy bajo, responde con evidencia floja.</p><p>Hay preguntas que el RAG no debe responder aunque encuentre algo parecido. «¿Cuánto debe Carmen hoy?» no está en ningún manual: es un dato vivo de facturación y se consulta con una herramienta (capítulo 9). Mezclar datos vivos con documentos es un error común: el manual dice cómo se calcula la deuda, no cuánto es.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un RAG mínimo con citas y abstención</h3></div><p>Vas a armar un RAG completo en un archivo: seis fragmentos en una lista, búsqueda por embeddings, umbral de abstención, una plantilla con fragmentos numerados y una verificación de que las citas existan. Necesitas <code>nomic-embed-text</code> y <code>llama3.2:3b</code>. Guarda este programa como <code>rag.py</code>:</p><div class="code-copia"><pre><code>import json, math, re, sys, urllib.request
+
+BASE = "http://localhost:11434/v1"
+UMBRAL = 0.55   # ajústalo según tu modelo de embeddings
+FRAGMENTOS = [
+    ("pol-reconexion#1", "El cargo por reconexión es de US$ 5,00 y se suma a la factura vencida."),
+    ("pol-reconexion#2", "La reconexión se completa en un plazo máximo de 4 horas hábiles después del pago."),
+    ("man-reembolsos#1", "Los reembolsos de hasta US$ 10,00 se aprueban automáticamente."),
+    ("man-reembolsos#2", "Los reembolsos mayores de US$ 10,00 requieren la aprobación de una supervisora."),
+    ("man-visitas#1", "Una visita se reprograma sin costo con al menos 24 horas de anticipación."),
+    ("tar-planes#1", "El plan Hogar 200 cuesta US$ 30,00 al mes."),
+]
+
+def post(ruta, cuerpo):
+    pedido = urllib.request.Request(BASE + ruta, data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido) as r:
+        return json.load(r)
+
+def embeddings(textos):
+    return [d["embedding"] for d in post("/embeddings", {"model": "nomic-embed-text", "input": textos})["data"]]
+
+def coseno(a, b):
+    return sum(x * y for x, y in zip(a, b)) / (math.dist(a, [0] * len(a)) * math.dist(b, [0] * len(b)))
+
+indice = list(zip(FRAGMENTOS, embeddings([t for _, t in FRAGMENTOS])))   # la ingesta
+pregunta = sys.argv[1] if len(sys.argv) &gt; 1 else "¿Quién aprueba un reembolso de US$ 30,00?"
+vp = embeddings([pregunta])[0]
+ranking = sorted(((coseno(vp, v), f) for f, v in indice), reverse=True)[:3]
+for puntaje, (fid, _) in ranking:
+    print(f"{puntaje:.3f}  {fid}")
+if ranking[0][0] &lt; UMBRAL:
+    sys.exit("\nNo encontré esto en los manuales: consulta a la supervisora.")
+
+numerados = "\n".join(f"[{i+1}] {t}" for i, (_, (_, t)) in enumerate(ranking))
+plantilla = ("Responde la pregunta usando SOLO los fragmentos numerados. Devuelve solo un JSON "
+             'con la forma {"respuesta": "...", "citas": [números]}. Si los fragmentos no '
+             'alcanzan, responde {"respuesta": "no lo sé", "citas": []}.\n\n'
+             f"Fragmentos:\n{numerados}\n\nPregunta: {pregunta}")
+salida = post("/chat/completions", {"model": "llama3.2:3b", "temperature": 0,
+              "messages": [{"role": "user", "content": plantilla}]})
+texto = salida["choices"][0]["message"]["content"]
+datos = json.loads(re.search(r"\{.*\}", texto, re.S).group(0))
+validas = [c for c in datos.get("citas", []) if isinstance(c, int) and 1 &lt;= c &lt;= len(ranking)]
+print("\nRespuesta:", datos.get("respuesta"))
+print("Fuentes:", [ranking[c - 1][1][0] for c in validas] or "ninguna")
+if len(validas) != len(datos.get("citas", [])):
+    print("Aviso: el modelo citó fragmentos que no existen; en producción se reintenta o se escala.")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python rag.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python rag.py "¿Cuánto cuesta reconectar el servicio?"</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python rag.py "¿Cuál es el horario de la oficina del centro?"</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 rag.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 rag.py "¿Cuánto cuesta reconectar el servicio?"</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 rag.py "¿Cuál es el horario de la oficina del centro?"</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Corre las tres preguntas y anota, para cada una, los puntajes de los tres primeros fragmentos y la respuesta.</span></li><li><span>Mira qué pasa con la pregunta del horario de la oficina, que no está en ningún fragmento.</span></li><li><span>Sube <code>UMBRAL</code> a <code>0.75</code> y vuelve a correr la primera pregunta.</span></li></ol><p><b>Qué observar:</b> en la primera pregunta, los dos fragmentos de reembolsos quedan arriba y la respuesta cita el que dice que más de US$ 10,00 requiere aprobación. La pregunta del horario tiene un mejor puntaje bajo: si queda debajo del umbral, el programa se abstiene sin llamar al modelo; si no, el modelo debería responder «no lo sé». Con un umbral muy alto, hasta las preguntas que sí tienen respuesta se abstienen: el umbral se calibra con preguntas de prueba. Un modelo pequeño puede devolver un JSON con texto alrededor; por eso el programa extrae el objeto y revisa las citas.</p></div></section>
+<section><h2>Graph RAG y RAG agéntico</h2><div class="prose"><p>El RAG que construimos busca una vez y responde. Hay dos variantes para cuando eso no alcanza.</p><p><b>Graph RAG</b> agrega un <b>grafo de conocimiento</b> (<i>knowledge graph</i>): una red de entidades (planes, políticas, tarifas, equipos, áreas) unidas por relaciones con nombre («el plan Hogar 200 está sujeto a la política de reconexión», «la política de reconexión fija la tarifa de US$ 5,00»). Ante una pregunta, se identifican las entidades, se recorren sus vecinas en el grafo y se recuperan los fragmentos pegados a ellas. Sirve para preguntas de varios saltos («¿qué cargos se le suman a un cliente del Hogar 200 que paga tarde?») y en dominios con muchas entidades relacionadas. A cambio, el grafo hay que construirlo y mantenerlo: las relaciones se extraen de los documentos, con un modelo y con revisión humana para las críticas.</p><p><b>RAG agéntico</b> (<i>agentic RAG</i>) deja que el modelo decida cuándo buscar, qué buscar y si lo encontrado alcanza. La búsqueda se vuelve una herramienta: el modelo reformula la pregunta, busca, lee, nota que falta algo, busca de nuevo con otras palabras y recién entonces responde. Resuelve preguntas compuestas, pero cuesta más llamadas, más tiempo y es más difícil de predecir. Necesita las herramientas del capítulo 9 y un límite de búsquedas por pregunta.</p></div><figure class="fig fig-comparacion" id="08-diagrama-3"><div class="lienzo"><svg viewBox="0 0 980 388" style="min-width:780px" role="img" aria-label="Tabla comparativa de cuatro variantes de RAG: simple, con reordenamiento, agéntico y Graph RAG; compara cómo busca cada una, cuántas llamadas al modelo hace, qué tan rápida es, qué preguntas resuelve bien y qué pide construir">
+<defs><marker id="c8d3-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker></defs>
+<rect x="170" y="16" width="196" height="58" rx="10" class="caja"/>
+<text x="182" y="40" class="t t-b" style="font-size:12px">Simple</text>
+<text x="182" y="59" class="t t-s t-m">una búsqueda, top k</text>
+<rect x="372" y="16" width="196" height="58" rx="10" class="c-enl"/>
+<text x="384" y="40" class="t t-b" style="font-size:12px">Con reordenamiento</text>
+<text x="384" y="59" class="t t-s t-m">el del asistente v0.6</text>
+<rect x="574" y="16" width="196" height="58" rx="10" class="c-red"/>
+<text x="586" y="40" class="t t-b" style="font-size:12px">Agéntico</text>
+<text x="586" y="59" class="t t-s t-m">usa herramientas (cap. 9)</text>
+<rect x="776" y="16" width="196" height="58" rx="10" class="c-tra"/>
+<text x="788" y="40" class="t t-b" style="font-size:12px">Graph RAG</text>
+<text x="788" y="59" class="t t-s t-m">entidades y relaciones</text>
+<line x1="16" y1="78" x2="972" y2="78" class="ln" style="stroke:var(--line)"/>
+<text x="16" y="108" class="t t-xs t-b t-m">CÓMO BUSCA</text>
+<text x="182" y="100" class="t" style="font-size:12px">una vez, por vectores</text>
+<text x="182" y="116" class="t" style="font-size:12px">o híbrida</text>
+<text x="384" y="100" class="t" style="font-size:12px">híbrida, y un modelo</text>
+<text x="384" y="116" class="t" style="font-size:12px">reordena los 30 primeros</text>
+<text x="586" y="100" class="t" style="font-size:12px">el modelo decide qué</text>
+<text x="586" y="116" class="t" style="font-size:12px">buscar y si le alcanza</text>
+<text x="788" y="100" class="t" style="font-size:12px">recorre el grafo y trae</text>
+<text x="788" y="116" class="t" style="font-size:12px">los fragmentos pegados</text>
+<line x1="16" y1="132" x2="972" y2="132" class="ln" style="stroke:var(--line)"/>
+<text x="16" y="162" class="t t-xs t-b t-m">LLAMADAS AL MODELO</text>
+<text x="182" y="162" class="t" style="font-size:12px">1</text>
+<text x="384" y="162" class="t" style="font-size:12px">1 + el reordenador</text>
+<text x="586" y="154" class="t" style="font-size:12px">de 2 a 6 o más</text>
+<text x="586" y="170" class="t" style="font-size:12px">con un tope</text>
+<text x="788" y="154" class="t" style="font-size:12px">1 o 2, más la</text>
+<text x="788" y="170" class="t" style="font-size:12px">extracción del grafo</text>
+<line x1="16" y1="186" x2="972" y2="186" class="ln" style="stroke:var(--line)"/>
+<text x="16" y="216" class="t t-xs t-b t-m">RAPIDEZ</text>
+<text x="182" y="216" class="t" style="font-size:12px">la más rápida</text>
+<text x="384" y="208" class="t" style="font-size:12px">rápida: suma</text>
+<text x="384" y="224" class="t" style="font-size:12px">unos cientos de ms</text>
+<text x="586" y="216" class="t" style="font-size:12px">lenta y variable</text>
+<text x="788" y="216" class="t" style="font-size:12px">media</text>
+<line x1="16" y1="240" x2="972" y2="240" class="ln" style="stroke:var(--line)"/>
+<text x="16" y="270" class="t t-xs t-b t-m">RESUELVE BIEN</text>
+<text x="182" y="262" class="t" style="font-size:12px">preguntas directas</text>
+<text x="182" y="278" class="t" style="font-size:12px">con un fragmento</text>
+<text x="384" y="262" class="t" style="font-size:12px">preguntas directas</text>
+<text x="384" y="278" class="t" style="font-size:12px">con códigos y números</text>
+<text x="586" y="262" class="t" style="font-size:12px">preguntas compuestas</text>
+<text x="586" y="278" class="t" style="font-size:12px">que piden varias búsquedas</text>
+<text x="788" y="262" class="t" style="font-size:12px">preguntas de varios</text>
+<text x="788" y="278" class="t" style="font-size:12px">saltos entre entidades</text>
+<line x1="16" y1="294" x2="972" y2="294" class="ln" style="stroke:var(--line)"/>
+<text x="16" y="324" class="t t-xs t-b t-m">PIDE CONSTRUIR</text>
+<text x="182" y="324" class="t" style="font-size:12px">ingesta e índice</text>
+<text x="384" y="316" class="t" style="font-size:12px">lo anterior y</text>
+<text x="384" y="332" class="t" style="font-size:12px">un reordenador</text>
+<text x="586" y="316" class="t" style="font-size:12px">herramientas, límites</text>
+<text x="586" y="332" class="t" style="font-size:12px">y trazas por paso</text>
+<text x="788" y="316" class="t" style="font-size:12px">un grafo con revisión</text>
+<text x="788" y="332" class="t" style="font-size:12px">humana y su mantenimiento</text>
+<path d="M170 362H962" class="ln" style="stroke-width:2" marker-end="url(#c8d3-m)"/>
+<text x="170" y="380" class="t t-s t-m">preguntas más difíciles, a cambio de más llamadas, más tiempo y más piezas que mantener</text>
+</svg></div><figcaption><b>Cuatro variantes de RAG.</b> Cada columna es una variante: simple, con reordenamiento, agéntico y Graph RAG. Las filas comparan cómo busca, cuántas llamadas al modelo hace, qué tan rápido es, qué preguntas resuelve bien y qué pide construir. Se lee de izquierda a derecha como una escalera: cada variante resuelve preguntas más difíciles a cambio de más costo y más piezas. Para el asistente, la columna de la izquierda con reordenamiento cubre la gran mayoría de las preguntas.</figcaption></figure></section>
+<section><h2>Medir la recuperación: precisión, exhaustividad y fidelidad</h2><div class="prose"><p>Un RAG puede fallar en dos lugares: la búsqueda no trajo el fragmento correcto, o lo trajo y el modelo respondió otra cosa. Por eso se mide por separado.</p><p>Para la <b>recuperación</b> se arma un conjunto de preguntas con los fragmentos que deberían salir para cada una, y se calculan dos números sobre los <i>k</i> fragmentos que entraron al contexto:</p><ul><li><b>Precisión en k</b> (<i>precision@k</i>): de los fragmentos recuperados, qué fracción era relevante. Baja precisión es ruido: tokens pagados que no sirven y que pueden distraer al modelo.</li><li><b>Exhaustividad en k</b> (<i>recall@k</i>): de los fragmentos relevantes, qué fracción se recuperó. Baja exhaustividad es una respuesta incompleta o una abstención innecesaria.</li></ul><p>Para la <b>generación</b> se mide la <b>fidelidad</b> (<i>faithfulness</i>, también llamada <i>groundedness</i>): si cada afirmación de la respuesta está respaldada por los fragmentos citados. Se mide con reglas (los montos de la respuesta aparecen en los fragmentos) y con un modelo como juez sobre una muestra, que el capítulo 16 calibra. Y se mide la <b>relevancia de la respuesta</b>: si responde lo que se preguntó.</p><p>Los dos números de la recuperación tiran en sentidos contrarios. Traer más fragmentos (<i>k</i> más grande) o fragmentos más largos sube la exhaustividad y baja la precisión, y además sube el costo. El punto justo depende de las preguntas reales, y se encuentra probando.</p></div><div class="lab" id="08-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Tamaño de fragmento y número de resultados</h3></div><p class="hint">El manual de atención se parte en fragmentos del tamaño que elijas y se buscan los k mejores para seis preguntas de prueba. Mueve el tamaño y k, y mira la precisión, la exhaustividad, los tokens que entran al contexto y qué preguntas quedan sin respuesta completa.</p><style>
+[id="08-lab-2"] .c8l2-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,130px),1fr));gap:8px}
+[id="08-lab-2"] .c8l2-k{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--paper)}
+[id="08-lab-2"] .c8l2-k span{display:block;font:600 .74rem var(--f-display);color:var(--muted)}
+[id="08-lab-2"] .c8l2-k output{font:700 1.25rem var(--f-mono);color:var(--ink)}
+[id="08-lab-2"] .c8l2-tw{overflow-x:auto}
+[id="08-lab-2"] table{border-collapse:collapse;width:100%;min-width:460px;font:500 .8rem var(--f-display)}
+[id="08-lab-2"] th,[id="08-lab-2"] td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:middle}
+[id="08-lab-2"] th{color:var(--muted);font-weight:700;font-size:.72rem;letter-spacing:.04em;text-transform:uppercase}
+[id="08-lab-2"] td.num{font-family:var(--f-mono);text-align:right;white-space:nowrap}
+[id="08-lab-2"] tr{cursor:pointer} [id="08-lab-2"] tr.sel td{background:var(--accent-soft)}
+[id="08-lab-2"] .bar{display:inline-block;height:8px;border-radius:3px;background:var(--c-enl);vertical-align:middle;margin-right:6px}
+[id="08-lab-2"] .est{font-weight:700} [id="08-lab-2"] .est.ok{color:var(--good)} [id="08-lab-2"] .est.mal{color:var(--warm)} [id="08-lab-2"] .est.par{color:var(--accent)}
+[id="08-lab-2"] .c8l2-fr{display:grid;gap:6px}
+[id="08-lab-2"] .c8l2-f{border:1px solid var(--line);border-left:5px solid var(--c-enl);border-radius:8px;padding:6px 9px;background:var(--card);font:500 .82rem/1.45 var(--f-body);overflow-wrap:anywhere}
+[id="08-lab-2"] .c8l2-f b{display:block;font:700 .68rem var(--f-display);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+[id="08-lab-2"] .c8l2-f mark{background:var(--good-soft);color:var(--ink);border-bottom:2px solid var(--good);padding:0 2px}
+[id="08-lab-2"] .c8l2-f .ruido{color:var(--muted)}
+</style>
+<div class="ctls">
+  <label class="ctl">Tamaño del fragmento <output id="c8l2-s-o"></output>
+    <input id="c8l2-s" type="range" min="1" max="6" step="1" value="1"></label>
+  <label class="ctl">Resultados que entran al contexto (k) <output id="c8l2-k-o"></output>
+    <input id="c8l2-k" type="range" min="1" max="6" step="1" value="2"></label>
+</div>
+<div class="btns" role="group" aria-label="Estrategia de fragmentado">
+  <button type="button" data-e="fijo" aria-pressed="true">Tamaño fijo</button>
+  <button type="button" data-e="sec" aria-pressed="false">Respetar secciones</button>
+</div>
+<div class="c8l2-kpis">
+  <div class="c8l2-k"><span>Fragmentos en el índice</span><output id="c8l2-m0"></output></div>
+  <div class="c8l2-k"><span>Exhaustividad media</span><output id="c8l2-m1"></output></div>
+  <div class="c8l2-k"><span>Precisión media</span><output id="c8l2-m2"></output></div>
+  <div class="c8l2-k"><span>Tokens por pregunta</span><output id="c8l2-m3"></output></div>
+  <div class="c8l2-k"><span>Respuestas completas</span><output id="c8l2-m4"></output></div>
+</div>
+<div class="c8l2-tw"><table aria-label="Resultados por pregunta (toca una fila para ver sus fragmentos)">
+  <thead><tr><th>Pregunta de prueba</th><th>Exhaust.</th><th>Precisión</th><th>Tokens</th><th>Estado</th></tr></thead>
+  <tbody id="c8l2-tb"></tbody></table></div>
+<div class="c8l2-fr" id="c8l2-fr" aria-live="polite"></div>
+<div class="readout texto" id="c8l2-out" aria-live="polite"></div></div><div class="caso"><b>Un caso real</b><p>Un equipo de soporte interno de una empresa de servicios de la región lanzó un asistente con RAG sobre su base de procedimientos. En las primeras semanas, los agentes reportaban respuestas «muy seguras y viejas»: el asistente citaba un procedimiento de cambio de equipo que se había reemplazado hacía meses. La causa no estaba en el modelo ni en los embeddings: la ingesta indexaba cada documento nuevo, pero nunca borraba los retirados, y el procedimiento viejo era más largo y detallado, así que ganaba la búsqueda. La corrección fue agregar fechas de vigencia como metadato, un filtro obligatorio en la consulta y un proceso que marca como vencidos los fragmentos de los documentos retirados. La lección: en un RAG, la calidad de la respuesta depende primero de la calidad del índice.</p></div><div class="ml"><b>En la práctica</b><p><b>El asistente, versión 0.6.</b> El equipo indexó los 340 documentos con fragmentos por sección, metadatos de dueño, vigencia y acceso, y detección de cambios por hash. La búsqueda es híbrida (pgvector y la búsqueda de texto completo de PostgreSQL, fusionadas con RRF), con el filtro de permisos y de vigencia dentro de la consulta, y un reordenador sobre los 30 primeros. Entran 4 fragmentos al contexto. Cada respuesta trae citas que un verificador comprueba, y por debajo del umbral el asistente responde «no lo encontré en los manuales». La jefa de reclamos armó con su equipo 120 preguntas reales con su fragmento esperado; con ellas se mide la exhaustividad en cada cambio. En la muestra semanal, el asistente pasó el 80 % de respuestas correctas, sin ninguna sin fuente: el nivel 2 quedó cumplido.</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>RAG en sus variantes: simple, con reordenamiento, agéntico y Graph RAG. La empresa no reentrena el modelo para que sepa sus políticas: le da a leer los fragmentos correctos en cada pregunta. La ingesta parte los documentos con sus metadatos y detecta cambios. La búsqueda híbrida junta significado y palabras exactas; el reordenador elige; los filtros de permisos, vigencia y fuente no se negocian. La respuesta cita, el código verifica las citas y, sin evidencia, el asistente se abstiene. Y todo se mide con precisión, exhaustividad y fidelidad.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>Nombra tres ventajas del RAG frente al ajuste fino para las políticas de una empresa.</summary><p>Cualquiera de estas: se actualiza reindexando un documento, permite citar la fuente, filtra por permisos, permite borrar un documento y no requiere entrenar un modelo.</p></details><details><summary>¿Por qué la búsqueda por embeddings sola confunde «Hogar 100» con «Hogar 200», y qué lo corrige?</summary><p>Porque el embedding captura el significado y casi no distingue números o códigos. Lo corrige la búsqueda por palabras clave (BM25) dentro de una búsqueda híbrida, y el reordenador.</p></details><details><summary>En la fusión por rango recíproco, un fragmento sale primero en una lista y no aparece en la otra; otro sale segundo en las dos. ¿Cuál suma más?</summary><p>El segundo: 1/62 + 1/62 ≈ 0,0323, contra 1/61 ≈ 0,0164 del primero. Aparecer en las dos listas pesa más.</p></details><details><summary>¿Por qué el filtro de permisos va dentro de la consulta al índice y no después de que responde el modelo?</summary><p>Porque un fragmento que el modelo leyó lo puede repetir en la respuesta; filtrar después ya es tarde.</p></details><details><summary>¿Qué revisa el verificador de citas?</summary><p>Que cada número de fragmento citado exista entre los entregados, que el texto citado aparezca en ese fragmento y que los montos y plazos de la respuesta estén en los fragmentos citados.</p></details><details><summary>Subes k de 4 a 10. ¿Qué pasa, en general, con la precisión, la exhaustividad y el costo?</summary><p>La exhaustividad sube o se mantiene, la precisión baja (entra más ruido) y el costo sube, porque entran más tokens al contexto.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Cómo funciona HNSW, el índice de vecinos aproximados más usado en las bases vectoriales?<small>Pista: busca «Hierarchical Navigable Small World».</small></li><li>¿Qué fórmula usa BM25 y qué controlan sus parámetros k1 y b?</li><li>¿Qué es la recuperación de «documento padre» (<i>parent document retrieval</i>) y qué problema del tamaño de los fragmentos resuelve?</li><li>¿Qué es HyDE (<i>Hypothetical Document Embeddings</i>) y por qué buscar con una respuesta inventada puede encontrar mejores fragmentos?</li><li>¿Qué mide la métrica MRR (<i>mean reciprocal rank</i>) y en qué se diferencia de la exhaustividad en k?</li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://ollama.com/blog/embedding-models" target="_blank" rel="noopener">Embeddings en Ollama <small>artículo oficial, en inglés</small></a><a class="vid" href="https://github.com/pgvector/pgvector" target="_blank" rel="noopener">pgvector: búsqueda vectorial en PostgreSQL <small>repositorio oficial, en inglés</small></a><a class="vid" href="https://aaramirez.github.io/chatbots-empresariales/temario.html" target="_blank" rel="noopener">Chatbots empresariales: cómo se escribe la base de conocimiento <small>curso del sitio</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const raiz=document.querySelector('[id="08-lab-1"]');
+  const C=[
+    {id:'R1',doc:'Política de reconexión 2026 §1',t:'Cuando una cuenta se suspende por falta de pago, el servicio se reconecta al registrar el pago de las facturas vencidas.'},
+    {id:'R2',doc:'Política de reconexión 2026 §2',t:'El cargo por reconexión es de US$ 5,00 y se suma a la factura vencida.'},
+    {id:'R3',doc:'Política de reconexión 2026 §3',t:'La reconexión se completa en un plazo máximo de 4 horas hábiles después del pago.'},
+    {id:'V1',doc:'Política de reconexión 2024 (retirada)',t:'El cargo por reconexión es de US$ 3,00 y se cobra en la factura siguiente. Aplica a toda reconexión del servicio.',vencido:true},
+    {id:'D1',doc:'Manual de cobros §4',t:'Un cobro duplicado se confirma con el área de facturación antes de prometer un reembolso.'},
+    {id:'D2',doc:'Manual de cobros §5',t:'Facturación responde en un máximo de 2 días hábiles.'},
+    {id:'E1',doc:'Manual de reembolsos §1',t:'Los reembolsos de hasta US$ 10,00 se aprueban automáticamente.'},
+    {id:'E2',doc:'Manual de reembolsos §2',t:'Los reembolsos mayores de US$ 10,00 requieren la aprobación de una supervisora.'},
+    {id:'E3',doc:'Manual de reembolsos §3',t:'El dinero llega al cliente en 5 a 10 días hábiles, según su banco.'},
+    {id:'S1',doc:'Guía interna de supervisoras §2',t:'Una supervisora puede aprobar excepciones de hasta US$ 50,00 sin consultar a la gerencia.',acceso:'supervisora'},
+    {id:'T1',doc:'Manual de visitas §1',t:'Una visita se reprograma sin costo con al menos 24 horas de anticipación.'},
+    {id:'T2',doc:'Manual de visitas §2',t:'Las franjas son mañana, de 8:00 a 12:00, y tarde, de 14:00 a 18:00.'},
+    {id:'P1',doc:'Tarifas de planes §1',t:'El plan Hogar 100 cuesta US$ 22,00 al mes.'},
+    {id:'P2',doc:'Tarifas de planes §2',t:'El plan Hogar 200 cuesta US$ 30,00 al mes; el cambio de plan se aplica desde el siguiente ciclo de facturación.'}
+  ];
+  const Q=['¿Cuánto cuesta reconectar el servicio?','¿En cuánto tiempo vuelve el internet después de pagar?','¿Quién aprueba un reembolso de US$ 30,00?','¿Hasta cuánto puede aprobar una supervisora sin consultar?','¿Cuánto cuesta el Hogar 200?','¿Cuánto debe hoy Carmen Rojas en la factura F-88213?'];
+  const STOP=new Set('el la los las un una de del en y a al se por con su sus que es cuanto cuando quien hasta sin despues mas mayores menos puede para o lo le hoy segun toda'.split(' '));
+  const CONC={recone:'reconexion',suspen:'reconexion',vuelve:'reconexion',pago:'pago',pagar:'pago',paga:'pago',recibo:'pago',plazo:'plazo',tiempo:'plazo',horas:'plazo',dias:'plazo',demora:'plazo',tarda:'plazo',cuesta:'precio',costo:'precio',cargo:'precio',cobra:'precio',precio:'precio',us:'precio',reembo:'reembolso',devolu:'reembolso',dinero:'reembolso',aprueb:'aprob',aproba:'aprob',autori:'aprob',superv:'superv',duplic:'duplicado',doble:'duplicado',factur:'factura',cobro:'factura',visita:'visita',reprog:'visita',franja:'franja',manana:'franja',tarde:'franja',plan:'plan',hogar:'plan',excepc:'excepcion',consul:'excepcion',gerenc:'excepcion'};
+  const norm=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const toks=s=>norm(s).split(/[^a-z0-9]+/).filter(w=>w&&!STOP.has(w)&&w!=='00').map(w=>w.slice(0,6));
+  const conc=ts=>new Set(ts.map(t=>CONC[t]).filter(Boolean));
+  C.forEach(c=>{c.tk=toks(c.t);c.cc=conc(c.tk);});
+  const N=C.length,avg=C.reduce((a,c)=>a+c.tk.length,0)/N;
+  const df=t=>C.filter(c=>c.tk.includes(t)).length;
+  const idf=t=>Math.log((N-df(t)+0.5)/(df(t)+0.5)+1);
+  function bm25(q,c){let s=0;new Set(q).forEach(t=>{const f=c.tk.filter(x=>x===t).length;if(f)s+=idf(t)*f*2.2/(f+1.2*(0.25+0.75*c.tk.length/avg));});return s;}
+  const cober=(q,c)=>{const u=[...new Set(q)];const tot=u.reduce((a,t)=>a+idf(t),0);return tot?u.filter(t=>c.tk.includes(t)).reduce((a,t)=>a+idf(t),0)/tot:0;};
+  const cos=(a,b)=>{if(!a.size||!b.size)return 0;let i=0;a.forEach(x=>{if(b.has(x))i++;});return i/Math.sqrt(a.size*b.size);};
+  let rol='agente',modo='hib';
+  const f2=v=>v.toFixed(2).replace('.',',');
+  function correr(){
+    const qi=+$('#c8l1-q').value,q=toks(Q[qi]),qc=conc(q),rr=$('#c8l1-rr').checked,vig=$('#c8l1-vig').checked,per=$('#c8l1-per').checked,U=+$('#c8l1-u').value;
+    $('#c8l1-u-o').textContent=f2(U);
+    raiz.querySelectorAll('[data-rol]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.rol===rol)));
+    raiz.querySelectorAll('[data-b]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.b===modo)));
+    const nums=q.filter(t=>/^\d{3,}$/.test(t));
+    const S=C.map(c=>{const v=cos(qc,c.cc),b=bm25(q,c),cv=cober(q,c);
+      const bono=nums.length&&nums.every(n=>c.tk.includes(n))?0.1:0;
+      return {c,v,b,cv,r:Math.min(1,0.65*v+0.35*cv+bono),fuera:per&&c.acceso&&c.acceso!==rol?'fuera por permisos':(vig&&c.vencido?'vencido: no entra':'')};});
+    const vivos=S.filter(s=>!s.fuera);
+    const porV=[...vivos].filter(s=>s.v>0).sort((a,b)=>b.v-a.v||b.b-a.b);
+    const porB=[...vivos].filter(s=>s.b>0).sort((a,b)=>b.b-a.b||b.v-a.v);
+    vivos.forEach(s=>{s.rrf=0;const i=porV.indexOf(s),j=porB.indexOf(s);if(i>=0)s.rrf+=1/(61+i);if(j>=0)s.rrf+=1/(61+j);});
+    let lista=modo==='vec'?porV:modo==='bm25'?porB:[...vivos].filter(s=>s.rrf>0).sort((a,b)=>b.rrf-a.rrf||b.b-a.b);
+    lista=lista.slice(0,6);
+    let usados=rr?[...lista].sort((a,b)=>b.r-a.r).slice(0,4):lista.slice(0,4);
+    const mejor=usados[0];
+    const rel=!mejor?0:Math.max(...usados.map(s=>rr?s.r:modo==='bm25'?s.cv:modo==='vec'?s.v:Math.max(s.v,s.cv)));
+    const abst=!mejor||rel<U;
+    // tarjetas: candidatos de la búsqueda más los que quedaron afuera por filtro y eran relevantes
+    const filtrados=S.filter(s=>s.fuera&&(s.v>0.5||s.cv>0.3));
+    const orden=rr?[...lista].sort((a,b)=>b.r-a.r):lista;
+    const tarjetas=orden.map((s,i)=>({s,n:i+1,estado:abst?'nada':(usados.includes(s)?'entra':'nada'),et:abst?'bajo el umbral':(usados.includes(s)?'entra al contexto ['+(usados.indexOf(s)+1)+']':'no entra (k = 4)')}))
+      .concat(filtrados.map(s=>({s,n:'–',estado:'fuera',et:s.fuera})));
+    $('#c8l1-cands').innerHTML=tarjetas.length?tarjetas.map(x=>{const s=x.s;
+      return '<div class="c8l1-c '+x.estado+'"><span class="n">'+x.n+'</span><span class="d">'+s.c.id+' · '+s.c.doc+'</span><span class="x">'+s.c.t+'</span><span class="s"><span>vectores <b>'+f2(s.v)+'</b></span><span>palabras <b>'+f2(s.b)+'</b></span>'+(s.rrf!==undefined&&!s.fuera?'<span>RRF <b>'+s.rrf.toFixed(4).replace('.',',')+'</b></span>':'')+(rr?'<span>reordenador <b>'+f2(s.r)+'</b></span>':'')+'<span class="e">'+x.et+'</span></span></div>';}).join(''):'<div class="c8l1-c nada"><span class="n">–</span><span class="x">La búsqueda no encontró ningún fragmento.</span></div>';
+    // respuesta
+    const ids=usados.map(s=>s.c.id),pos=id=>ids.indexOf(id)+1,has=id=>ids.includes(id);
+    const sup=id=>'<sup>['+pos(id)+']</sup>';
+    let txt,cl,nota='';
+    if(abst){
+      txt='No encontré esto en los manuales que puedes consultar.'+(qi===5?' El saldo de una factura es un dato vivo: se consulta en facturación con una herramienta (capítulo 9).':qi===3&&rol==='agente'?' Si es una excepción, consúltalo con tu supervisora.':'');
+      cl=(qi===5||(qi===3&&rol==='agente'))?'ok':'mal';
+      if(cl==='mal')nota='Se abstuvo aunque el manual sí tiene la respuesta: '+(modo==='bm25'&&qi===1?'las palabras de la pregunta no aparecen en el fragmento correcto.':'el umbral está demasiado alto o la búsqueda no trajo el fragmento.');
+    }else if(qi===0){
+      const a=pos('V1')||99,b=pos('R2')||99;
+      if(a<b){txt='La reconexión cuesta US$ 3,00 y se cobra en la factura siguiente'+sup('V1')+'.';cl='mal';nota='Respondió con la política de 2024, que ya no rige: sin el filtro de vigencia, el documento viejo compite y hasta gana, porque repite más las palabras de la pregunta. El reordenador no lo arregla: no sabe de fechas.';}
+      else if(b<99){txt='La reconexión cuesta US$ 5,00 y se suma a la factura vencida'+sup('R2')+'.';cl='ok';}
+      else{txt='El servicio se reconecta al registrar el pago'+(has('R1')?sup('R1'):'')+', pero no encontré el costo.';cl='par';}
+    }else if(qi===1){
+      if(has('R3')){txt='Se completa en un plazo máximo de 4 horas hábiles después del pago'+sup('R3')+'.';cl='ok';}
+      else if(has('R1')){txt='El servicio se reconecta al registrar el pago'+sup('R1')+'; los fragmentos no dicen en cuánto tiempo.';cl='par';}
+      else{txt='Los fragmentos recuperados no responden la pregunta.';cl='mal';}
+    }else if(qi===2){
+      if(has('E2')){txt='Más de US$ 10,00 requiere la aprobación de una supervisora'+sup('E2')+(has('E1')?'; hasta US$ 10,00 se aprueba solo'+sup('E1'):'')+'. Este de US$ 30,00 lo aprueba la supervisora.';cl='ok';}
+      else if(has('E1')){txt='Hasta US$ 10,00 se aprueba solo'+sup('E1')+'; no encontré quién aprueba montos mayores.';cl='par';}
+      else{txt='Los fragmentos recuperados no responden la pregunta.';cl='mal';}
+    }else if(qi===3){
+      if(has('S1')){txt='Hasta US$ 50,00 sin consultar a la gerencia'+sup('S1')+'.';
+        if(rol==='agente'){cl='mal';nota='Fuga: la guía interna de supervisoras entró al contexto de una agente porque el filtro de permisos no estaba en la consulta. El modelo la usó, como era de esperar.';}else cl='ok';}
+      else if(has('E2')){txt='Los manuales dicen que más de US$ 10,00 requiere una supervisora'+sup('E2')+', pero no fijan su límite.';cl='par';}
+      else{txt='Los fragmentos recuperados no responden la pregunta.';cl='mal';}
+    }else if(qi===4){
+      const a=pos('P1')||99,b=pos('P2')||99;
+      if(b<a){txt='El plan Hogar 200 cuesta US$ 30,00 al mes'+sup('P2')+'.';cl='ok';}
+      else if(a<99){txt='El plan cuesta US$ 22,00 al mes'+sup('P1')+'.';cl='mal';nota='Confundió el Hogar 200 con el Hogar 100: para los vectores, «100» y «200» casi no cambian el significado. Las palabras clave o el reordenador lo corrigen.';}
+      else{txt='No encontré la tarifa.';cl='mal';}
+    }else{
+      const top=usados[0].c;txt='Según el manual: «'+top.t+'»'+sup(top.id);cl='mal';nota='La respuesta cita un fragmento real, pero no responde: cuánto debe Carmen no está en ningún manual. Es un dato vivo de facturación; aquí lo correcto es abstenerse (sube el umbral o usa el reordenador).';
+    }
+    const R=$('#c8l1-resp');R.className='c8l1-resp '+cl;
+    R.innerHTML='<b>Respuesta del asistente'+(abst?' · se abstiene':'')+'</b>'+txt;
+    let o='<span>Puntaje de relevancia de la mejor evidencia: '+f2(rel)+' (umbral '+f2(U)+').</span>';
+    if(nota)o+='<span class="warn">'+nota+'</span>';
+    else if(cl==='ok')o+='<span class="ok">Respuesta correcta y con fuente'+(abst?': abstenerse era lo correcto':'')+'.</span>';
+    else if(cl==='par')o+='<span>Respuesta incompleta: el fragmento que completa la respuesta no entró al contexto.</span>';
+    if(modo==='vec'&&qi===1&&!abst)o+='<span>Los vectores encontraron el fragmento aunque casi no comparte palabras con la pregunta.</span>';
+    if(filtrados.length)o+='<span>'+filtrados.length+(filtrados.length===1?' fragmento parecido quedó':' fragmentos parecidos quedaron')+' afuera por los filtros antes de buscar, y no puede'+(filtrados.length===1?'':'n')+' llegar al modelo.</span>';
+    $('#c8l1-out').innerHTML=o;
+  }
+  raiz.querySelectorAll('[data-rol]').forEach(b=>b.addEventListener('click',()=>{rol=b.dataset.rol;correr();}));
+  raiz.querySelectorAll('[data-b]').forEach(b=>b.addEventListener('click',()=>{modo=b.dataset.b;correr();}));
+  raiz.querySelectorAll('select,input').forEach(c=>c.addEventListener('input',correr));
+  correr();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const raiz=document.querySelector('[id="08-lab-2"]');
+  const SEC=[
+    ['Reconexión',[['a1','Cuando una cuenta se suspende por falta de pago, el servicio se reconecta al registrar el pago de las facturas vencidas.'],['a2','El cargo por reconexión es de US$ 5,00 y se suma a la factura vencida.'],['a3','Se completa en un plazo máximo de 4 horas hábiles.'],['a4','Si el pago fue en una oficina, el agente registra el número de recibo en el ticket.']]],
+    ['Cobros duplicados',[['b1','Un cobro duplicado se confirma con el área de facturación antes de prometer nada.'],['b2','Esa área responde en un máximo de 2 días hábiles.'],['b3','Confirmado el doble cobro, se devuelve al mismo medio de pago.']]],
+    ['Reembolsos',[['c1','Los reembolsos de hasta US$ 10,00 se aprueban automáticamente.'],['c2','Los mayores requieren la aprobación de una supervisora.'],['c3','El dinero llega en 5 a 10 días hábiles, según el banco.']]],
+    ['Visitas técnicas',[['d1','Una visita técnica se reprograma sin costo con al menos 24 horas de anticipación.'],['d2','Las franjas son mañana, de 8:00 a 12:00, y tarde, de 14:00 a 18:00.'],['d3','Si nadie está en casa a la hora acordada, la segunda cuesta US$ 8,00.']]],
+    ['Planes',[['e1','El plan Hogar 100 cuesta US$ 22,00 al mes.'],['e2','El plan Hogar 200 cuesta US$ 30,00 al mes.'],['e3','El cambio de plan se aplica desde el siguiente ciclo de facturación.']]]
+  ];
+  const ORAC=[].concat(...SEC.map((s,i)=>s[1].map(o=>({id:o[0],t:o[1],sec:i}))));
+  const Q=[
+    {t:'¿Cuánto tarda la reconexión después del pago?',req:['a3'],ok:'Máximo 4 horas hábiles después del pago.'},
+    {t:'¿Cuánto cuesta reconectar?',req:['a2'],ok:'US$ 5,00, que se suman a la factura vencida.'},
+    {t:'¿En cuánto responde facturación por un cobro duplicado?',req:['b2'],ok:'En un máximo de 2 días hábiles.'},
+    {t:'¿Quién aprueba un reembolso de US$ 30,00?',req:['c1','c2'],ok:'Una supervisora: solo hasta US$ 10,00 se aprueba solo.'},
+    {t:'¿Cuánto cuesta una segunda visita si nadie estaba en casa?',req:['d3'],ok:'US$ 8,00.'},
+    {t:'¿Cuánto cuesta el Hogar 200?',req:['e2'],ok:'US$ 30,00 al mes.'}
+  ];
+  const STOP=new Set('el la los las un una de del en y a al se por con su sus que es cuanto cuando quien hasta sin despues mas menos puede para o lo le hoy segun esa nada si fue'.split(' '));
+  const CONC={recone:'reconexion',suspen:'reconexion',pago:'pago',pagar:'pago',recibo:'pago',plazo:'plazo',tarda:'plazo',horas:'plazo',dias:'plazo',respon:'plazo',cuesta:'precio',costo:'precio',cargo:'precio',us:'precio',reembo:'reembolso',devuel:'reembolso',dinero:'reembolso',aprueb:'aprob',aproba:'aprob',superv:'superv',duplic:'duplicado',doble:'duplicado',factur:'factura',cobro:'factura',visita:'visita',reprog:'visita',segund:'visita',casa:'visita',franja:'franja',manana:'franja',tarde:'franja',plan:'plan',hogar:'plan'};
+  const norm=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const toks=s=>norm(s).split(/[^a-z0-9]+/).filter(w=>w&&!STOP.has(w)&&w!=='00').map(w=>w.slice(0,6));
+  const conc=ts=>new Set(ts.map(t=>CONC[t]).filter(Boolean));
+  const cos=(a,b)=>{if(!a.size||!b.size)return 0;let i=0;a.forEach(x=>{if(b.has(x))i++;});return i/Math.sqrt(a.size*b.size);};
+  let estr='fijo',sel=0;
+  function partir(n){
+    const F=[];
+    if(estr==='fijo'){for(let i=0;i<ORAC.length;i+=n)F.push(ORAC.slice(i,i+n));}
+    else SEC.forEach((s,si)=>{const o=ORAC.filter(x=>x.sec===si);for(let i=0;i<o.length;i+=n)F.push(o.slice(i,i+n));});
+    return F.map(os=>{const t=os.map(o=>o.t).join(' ');const tk=toks(t);return {os,ids:os.map(o=>o.id),t,tk,cc:conc(tk),pal:t.split(/\s+/).length};});
+  }
+  function buscar(F,q,k){
+    const qt=toks(q),qc=conc(qt),N=F.length,avg=F.reduce((a,f)=>a+f.tk.length,0)/N;
+    const df=t=>F.filter(f=>f.tk.includes(t)).length,idf=t=>Math.log((N-df(t)+0.5)/(df(t)+0.5)+1);
+    F.forEach(f=>{f.v=cos(qc,f.cc);f.b=0;new Set(qt).forEach(t=>{const c=f.tk.filter(x=>x===t).length;if(c)f.b+=idf(t)*c*2.2/(c+1.2*(0.25+0.75*f.tk.length/avg));});});
+    const pv=F.filter(f=>f.v>0).sort((a,b)=>b.v-a.v||b.b-a.b),pb=F.filter(f=>f.b>0).sort((a,b)=>b.b-a.b||b.v-a.v);
+    F.forEach(f=>{f.r=0;const i=pv.indexOf(f),j=pb.indexOf(f);if(i>=0)f.r+=1/(61+i);if(j>=0)f.r+=1/(61+j);});
+    return F.filter(f=>f.r>0).sort((a,b)=>b.r-a.r||b.b-a.b).slice(0,k);
+  }
+  const pct=v=>Math.round(v*100)+' %';
+  function dibujar(){
+    const n=+$('#c8l2-s').value,k=+$('#c8l2-k').value;
+    $('#c8l2-s-o').textContent=n+(n===1?' oración':' oraciones');$('#c8l2-k-o').textContent=k;
+    raiz.querySelectorAll('[data-e]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.e===estr)));
+    const F=partir(n);
+    const R=Q.map(q=>{const got=buscar(F.map(f=>Object.assign({},f)),q.t,k);
+      const ids=[].concat(...got.map(g=>g.ids)),hit=q.req.filter(r=>ids.includes(r));
+      const rec=hit.length/q.req.length,prec=ids.length?hit.length/ids.length:0,tok=Math.round(got.reduce((a,g)=>a+g.pal,0)*1.3);
+      return {q,got,rec,prec,tok,est:rec===1?'ok':rec>0?'par':'mal'};});
+    const m=a=>a.reduce((x,y)=>x+y,0)/a.length;
+    $('#c8l2-m0').textContent=F.length;$('#c8l2-m1').textContent=pct(m(R.map(r=>r.rec)));$('#c8l2-m2').textContent=pct(m(R.map(r=>r.prec)));
+    $('#c8l2-m3').textContent=Math.round(m(R.map(r=>r.tok)));$('#c8l2-m4').textContent=R.filter(r=>r.est==='ok').length+' de 6';
+    const EST={ok:'completa',par:'incompleta',mal:'sin respuesta'};
+    $('#c8l2-tb').innerHTML=R.map((r,i)=>'<tr data-i="'+i+'" tabindex="0"'+(i===sel?' class="sel"':'')+'><td>'+r.q.t+'</td><td class="num"><span class="bar" style="width:'+(r.rec*36)+'px"></span>'+pct(r.rec)+'</td><td class="num">'+pct(r.prec)+'</td><td class="num">'+r.tok+'</td><td><span class="est '+r.est+'">'+EST[r.est]+'</span></td></tr>').join('');
+    raiz.querySelectorAll('tbody tr').forEach(tr=>{const go=()=>{sel=+tr.dataset.i;dibujar();};tr.addEventListener('click',go);tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}});});
+    const r=R[sel];
+    $('#c8l2-fr').innerHTML='<div class="c8l2-f" style="border-left-color:var(--accent)"><b>Pregunta</b>'+r.q.t+'</div>'+r.got.map((g,i)=>'<div class="c8l2-f"><b>Fragmento ['+(i+1)+'] · '+g.ids.join(', ')+'</b>'+g.os.map(o=>r.q.req.includes(o.id)?'<mark>'+o.t+'</mark>':'<span class="ruido">'+o.t+'</span>').join(' ')+'</div>').join('')+
+      '<div class="c8l2-f" style="border-left-color:var(--'+(r.est==='ok'?'good':r.est==='par'?'accent':'warm')+')"><b>Respuesta posible con estos fragmentos</b>'+(r.est==='ok'?r.q.ok:r.est==='par'?'Incompleta: falta '+r.q.req.filter(x=>![].concat(...r.got.map(g=>g.ids)).includes(x)).join(', ')+'. El asistente debería decir qué no encontró.':'No hay evidencia: lo correcto es abstenerse.')+'</div>';
+    let o='';
+    const recM=m(R.map(r=>r.rec)),precM=m(R.map(r=>r.prec));
+    if(n===1&&estr==='fijo')o+='<span class="warn">Con fragmentos de una oración, las frases que dependen de la anterior («Se completa en…», «Esa área responde…», «Los mayores requieren…») pierden de qué hablan y la búsqueda no las encuentra.</span>';
+    if(n>=4)o+='<span class="warn">Fragmentos grandes: casi todo se encuentra, pero cada respuesta arrastra mucho texto que no sirve. La precisión cae y los tokens suben: se paga más por cada pregunta y el modelo tiene más ruido que leer.</span>';
+    if(k>=5)o+='<span>Con k = '+k+', la exhaustividad sube a costa de meter fragmentos de otros temas.</span>';
+    if(estr==='sec'&&n>=3)o+='<span class="ok">Respetando las secciones, cada fragmento es una sección completa del manual: las frases nunca quedan separadas de su contexto.</span>';
+    if(recM===1&&precM>=0.3)o+='<span class="ok">Las seis preguntas tienen respuesta completa con '+Math.round(m(R.map(r=>r.tok)))+' tokens por pregunta. Este es el tipo de punto de equilibrio que se busca con el conjunto de prueba.</span>';
+    if(!o)o='<span>Mueve el tamaño y k. La exhaustividad dice si llegó la evidencia; la precisión, cuánto ruido vino con ella.</span>';
+    $('#c8l2-out').innerHTML=o;
+  }
+  $('#c8l2-s').addEventListener('input',dibujar);$('#c8l2-k').addEventListener('input',dibujar);
+  raiz.querySelectorAll('[data-e]').forEach(b=>b.addEventListener('click',()=>{estr=b.dataset.e;dibujar();}));
+  dibujar();
+})();
+</script>
+</body>
+</html>

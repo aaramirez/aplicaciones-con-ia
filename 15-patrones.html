@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Patrones · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="patrones">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 15 DE 20</span><h1>Patrones de aplicaciones con LLM: el catálogo</h1><p class="lede">En catorce capítulos el asistente de atención juntó una docena de soluciones con nombre propio: el envoltorio, el RAG, las herramientas, la aprobación humana, el enrutador. Este capítulo las ordena en un catálogo por el problema que resuelve cada una, agrega las dos que faltaban (el caché semántico y los guardrails como pieza de la arquitectura) y muestra cómo se combinan en la versión 1.0.</p></header>
+<section><div class="prose"><p>El asistente de atención llegó a la versión 1.0. Responde con los manuales y cita la fuente, reconoce a Carmen Rojas, recuerda su visita pendiente, reembolsa el cobro duplicado con la aprobación de la supervisora, el agente del capítulo 13 coordina una avería masiva y el clasificador propio del capítulo 14 ordena los tickets con un modelo pequeño. Una tarde llega al equipo una desarrolladora nueva y pregunta lo que pregunta cualquiera: «¿por dónde empiezo a leer esto?». Lucía no le muestra el código. Le muestra una lista de doce nombres.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un recetario de cocina no está ordenado por ingredientes, sino por lo que quieres lograr: entradas, sopas, platos de fondo, postres. Y un buen cocinero no inventa cada salsa desde cero: sabe que la bechamel resuelve «quiero algo cremoso que ligue» y que el sofrito resuelve «quiero una base con sabor». Cada receta base tiene nombre, sirve para muchos platos y tiene sus trampas conocidas. Un catálogo de patrones es el recetario base de una aplicación con modelos de lenguaje.</p></div><div class="prose"><p>Un <b>patrón de diseño</b> (<i>design pattern</i>) es una solución con nombre a un problema que se repite, junto con sus condiciones de uso y su costo. El nombre importa: «pongamos un enrutador con respaldo» le dice a todo el equipo qué piezas se van a construir, qué se mide y qué puede fallar. Este capítulo junta los patrones de las aplicaciones con un <b>modelo de lenguaje grande</b> (<i>large language model</i>, LLM) que el curso fue construyendo. Cada uno se presenta con la misma ficha: el problema, la solución, cuándo no usarlo, el nivel de la escalera y el capítulo donde nació.</p></div><figure class="fig fig-mapa" id="15-diagrama-1"><div class="lienzo"><svg viewBox="0 0 850 538" style="min-width:640px" role="img" aria-label="Catálogo de patrones ordenado por problema: el modelo varía o inventa, envoltorio determinista y salidas estructuradas; no sabe lo que sabe la empresa, RAG y memoria por capas; tiene que actuar, herramientas, MCP primero, cadenas y enrutadores; persigue un objetivo, el agente como cliente; actuar tiene riesgo, aprobación humana y guardrails; cuesta demasiado, caché semántico y enrutado; el proveedor falla, respaldo entre modelos. Abajo, evaluación y trazas sirven a todos.">
+<text x="20" y="30" class="t t-xs t-b t-m">PROBLEMA</text>
+<text x="230" y="30" class="t t-xs t-b t-m">PATRONES QUE LO RESUELVEN · CAPÍTULO DONDE NACIERON</text>
+<rect x="20" y="56" width="180" height="46" rx="10" class="d-inet"/>
+<text x="32" y="75" class="t t-b" style="font-size:12px">El modelo varía</text>
+<text x="32" y="91" class="t t-b" style="font-size:12px">o inventa</text>
+<path d="M200 79 H226" class="ln"/>
+<rect x="230" y="66" width="205" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/><text x="333" y="83" class="t" text-anchor="middle" style="font-size:12px">Envoltorio determinista · 2</text>
+<rect x="445" y="66" width="192" height="26" rx="13" class="c-fis"/><text x="541" y="83" class="t" text-anchor="middle" style="font-size:12px">Salidas estructuradas · 5</text>
+<rect x="20" y="112" width="180" height="46" rx="10" class="d-inet"/>
+<text x="32" y="131" class="t t-b" style="font-size:12px">No sabe lo que</text>
+<text x="32" y="147" class="t t-b" style="font-size:12px">sabe la empresa</text>
+<path d="M200 135 H226" class="ln"/>
+<rect x="230" y="122" width="185" height="26" rx="13" class="c-fis"/><text x="323" y="139" class="t" text-anchor="middle" style="font-size:12px">RAG en sus variantes · 8</text>
+<rect x="425" y="122" width="165" height="26" rx="13" class="c-enl"/><text x="508" y="139" class="t" text-anchor="middle" style="font-size:12px">Memoria por capas · 7</text>
+<rect x="20" y="168" width="180" height="46" rx="10" class="d-inet"/>
+<text x="32" y="187" class="t t-b" style="font-size:12px">Tiene que</text>
+<text x="32" y="203" class="t t-b" style="font-size:12px">actuar</text>
+<path d="M200 191 H226" class="ln"/>
+<rect x="230" y="178" width="232" height="26" rx="13" class="c-red"/><text x="346" y="195" class="t" text-anchor="middle" style="font-size:12px">Herramientas como funciones · 9</text>
+<rect x="472" y="178" width="132" height="26" rx="13" class="c-red"/><text x="538" y="195" class="t" text-anchor="middle" style="font-size:12px">MCP primero · 10</text>
+<rect x="614" y="178" width="199" height="26" rx="13" class="c-red"/><text x="713" y="195" class="t" text-anchor="middle" style="font-size:12px">Cadenas y enrutadores · 12</text>
+<rect x="20" y="224" width="180" height="46" rx="10" class="d-inet"/>
+<text x="32" y="243" class="t t-b" style="font-size:12px">Persigue un</text>
+<text x="32" y="259" class="t t-b" style="font-size:12px">objetivo</text>
+<path d="M200 247 H226" class="ln"/>
+<rect x="230" y="234" width="205" height="26" rx="13" class="c-tra"/><text x="333" y="251" class="t" text-anchor="middle" style="font-size:12px">El agente como cliente · 13</text>
+<rect x="20" y="280" width="180" height="46" rx="10" class="d-inet"/>
+<text x="32" y="299" class="t t-b" style="font-size:12px">Actuar</text>
+<text x="32" y="315" class="t t-b" style="font-size:12px">tiene riesgo</text>
+<path d="M200 303 H226" class="ln"/>
+<rect x="230" y="290" width="273" height="26" rx="13" class="c-red"/><text x="366" y="307" class="t" text-anchor="middle" style="font-size:12px">Aprobación humana e idempotencia · 11</text>
+<rect x="513" y="290" width="158" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/><text x="592" y="307" class="t" text-anchor="middle" style="font-size:12px">Guardrails · 15 y 18</text>
+<rect x="20" y="336" width="180" height="46" rx="10" class="d-inet"/>
+<text x="32" y="355" class="t t-b" style="font-size:12px">Cuesta demasiado</text>
+<text x="32" y="371" class="t t-b" style="font-size:12px">o tarda</text>
+<path d="M200 359 H226" class="ln"/>
+<rect x="230" y="346" width="158" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/><text x="309" y="363" class="t" text-anchor="middle" style="font-size:12px">Caché semántico · 15</text>
+<rect x="398" y="346" width="259" height="26" rx="13" class="c-apl"/><text x="528" y="363" class="t" text-anchor="middle" style="font-size:12px">Enrutado al modelo más pequeño · 14</text>
+<rect x="20" y="392" width="180" height="46" rx="10" class="d-inet"/>
+<text x="32" y="411" class="t t-b" style="font-size:12px">El proveedor</text>
+<text x="32" y="427" class="t t-b" style="font-size:12px">falla</text>
+<path d="M200 415 H226" class="ln"/>
+<rect x="230" y="402" width="232" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/><text x="346" y="419" class="t" text-anchor="middle" style="font-size:12px">Respaldo entre modelos · 3 y 14</text>
+<rect x="20" y="452" width="810" height="40" rx="10" class="caja" style="stroke-dasharray:5 4"/>
+<text x="34" y="477" class="t t-b" style="font-size:12px">Para todos los problemas:</text>
+<rect x="230" y="459" width="179" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/><text x="319" y="476" class="t" text-anchor="middle" style="font-size:12px">Evaluación primero · 16</text>
+<rect x="419" y="459" width="145" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/><text x="491" y="476" class="t" text-anchor="middle" style="font-size:12px">Trazas y KPIs · 17</text>
+<text x="20" y="520" class="t t-s t-m">Color = nivel donde nace:</text>
+<rect x="170" y="508" width="16" height="14" rx="4" class="caja" style="stroke-dasharray:3 2"/>
+<text x="192" y="520" class="t t-s">base común</text>
+<rect x="271.6" y="508" width="16" height="14" rx="4" class="c-fis"/>
+<text x="294" y="520" class="t t-s">nivel 1</text>
+<rect x="354.72" y="508" width="16" height="14" rx="4" class="c-enl"/>
+<text x="377" y="520" class="t t-s">nivel 2</text>
+<rect x="437.84000000000003" y="508" width="16" height="14" rx="4" class="c-red"/>
+<text x="460" y="520" class="t t-s">nivel 3</text>
+<rect x="520.96" y="508" width="16" height="14" rx="4" class="c-tra"/>
+<text x="543" y="520" class="t t-s">nivel 4</text>
+<rect x="604.08" y="508" width="16" height="14" rx="4" class="c-apl"/>
+<text x="626" y="520" class="t t-s">nivel 5</text>
+</svg></div><figcaption><b>El catálogo, ordenado por problema.</b> Cada fila es una familia de problemas: el modelo varía o inventa, no sabe lo que sabe la empresa, tiene que actuar, persigue un objetivo, actuar tiene riesgo, cuesta demasiado y el proveedor falla. A la derecha de cada problema, los patrones que lo resuelven, con el número del capítulo donde nacieron y el color del nivel de la escalera (los de borde punteado son de la base común, que sirve a todos los niveles). La franja de abajo recuerda que la evaluación y las trazas sirven a todos los problemas.</figcaption></figure></section>
+<section><h2>Envoltorio determinista y salidas estructuradas</h2><div class="prose"><p>Los dos primeros patrones resuelven el problema de fondo de todo el curso: un núcleo probabilístico al servicio de un negocio que necesita respuestas repetibles.</p><p><b>Envoltorio determinista</b> (<i>deterministic wrapper</i>, capítulo 2). <i>Problema:</i> el mismo pedido da respuestas distintas, y a veces inventa un monto. <i>Solución:</i> capas de código alrededor del modelo (parámetros fijos, plantillas versionadas, esquemas, contexto verificado, herramientas y validadores) que fijan lo que entra, restringen lo que sale y verifican el resultado; el modelo planea y el código ejecuta. <i>Cuándo no:</i> en un borrador creativo que una persona revisa entero, cada capa extra es costo sin beneficio. <i>Nivel:</i> base común, porque lo usan todos.</p><p><b>Salidas estructuradas</b> (<i>structured outputs</i>, capítulo 5). <i>Problema:</i> otro programa necesita leer la respuesta, y la prosa no se puede leer con confianza. <i>Solución:</i> el modelo devuelve un JSON que cumple un <b>esquema JSON</b> (<i>JSON Schema</i>), con enumeraciones e identificadores canónicos; el código lo valida y decide si rechaza, repara o reintenta. <i>Cuándo no:</i> cuando la salida solo la lee una persona, como la explicación que el agente le lee a la clienta. <i>Nivel:</i> 1. <i>Trampa conocida:</i> un JSON válido no es un JSON correcto; el caso de las fechas mes/día del capítulo 5 lo mostró.</p><p>Los dos se refuerzan: el esquema es una capa del envoltorio, y el envoltorio es lo que convierte un esquema en una garantía.</p></div></section>
+<section><h2>RAG en sus variantes y memoria por capas</h2><div class="prose"><p>La segunda familia de problemas es de conocimiento: el modelo no sabe nada de la empresa ni de la persona que atiende.</p><p><b>RAG</b> (<i>Retrieval-Augmented Generation</i>, generación aumentada con recuperación, capítulo 8). <i>Problema:</i> el modelo responde con lo que aprendió en público, no con las políticas vigentes de la empresa. <i>Solución:</i> buscar los fragmentos relevantes en un índice (por significado y por palabras), filtrarlos por permisos y vigencia, reordenarlos, ponerlos en el contexto y exigir una cita por cada afirmación, o «no lo sé». Tiene cuatro variantes en escalera de costo: simple, con reordenamiento, agéntico (el modelo decide qué buscar y cuándo parar) y <b>Graph RAG</b> (sobre un grafo de entidades y relaciones). <i>Cuándo no:</i> cuando el problema es de formato o de tono y no de conocimiento; ahí ayuda más una plantilla o, en el extremo, el ajuste del capítulo 14. <i>Nivel:</i> 1, completo en el 2.</p><p><b>Memoria por capas</b> (<i>layered memory</i>, capítulo 7). <i>Problema:</i> el modelo no recuerda nada entre llamadas, y meter toda la historia en el contexto es caro y peligroso. <i>Solución:</i> capas de trabajo, de sesión, de largo plazo y de equipo, cada una con reglas explícitas de qué se escribe, quién la ve, cuándo se resume y cuándo expira; en cada turno se ensambla solo lo que hace falta. <i>Cuándo no:</i> en una tarea de un solo turno, como clasificar un ticket. <i>Nivel:</i> 2.</p><p>RAG y memoria se parecen por dentro (los dos recuperan texto y lo ponen en el contexto) y se diferencian en el dueño del dato: el RAG trae lo que la empresa publicó y la memoria trae lo que pasó con una persona. Por eso tienen permisos y plazos de retención distintos, aunque compartan el mismo índice vectorial.</p></div></section>
+<section><h2>Cadenas, enrutadores y herramientas como funciones</h2><div class="prose"><p>La tercera familia aparece cuando la aplicación tiene que hacer algo más que contestar.</p><p><b>Herramientas como funciones con contrato</b> (<i>tool calling</i>, capítulo 9). <i>Problema:</i> el modelo necesita datos exactos o tiene que cambiar algo en un sistema. <i>Solución:</i> el modelo propone una llamada con nombre y argumentos que cumplen un esquema; el código la valida, la ejecuta con los permisos de quien pide y devuelve el resultado, incluidos los errores como datos. Cada herramienta tiene ficha en el registro: riesgo, permisos y dueño. <i>Cuándo no:</i> cuando el dato cabe en el contexto de forma fija y no cambia; una tabla de tres tarifas no necesita una herramienta. <i>Nivel:</i> 3.</p><p><b>Cadena</b> (<i>prompt chain</i>, capítulo 12). <i>Problema:</i> un pedido con varias partes sale mal en una sola llamada larga. <i>Solución:</i> partir la tarea en pasos fijos, cada uno con su modelo, su plantilla y su validación (extraer, después clasificar, después redactar), con el código en medio. <b>Enrutador</b> (<i>router</i>, capítulos 12 y 14). <i>Problema:</i> pedidos distintos necesitan caminos o modelos distintos. <i>Solución:</i> un paso barato (reglas, un clasificador o un modelo pequeño) decide a qué camino va cada pedido, y cada camino es más simple que un camino para todo. <i>Cuándo no:</i> si todos los pedidos son parecidos, el enrutador es un paso más que puede equivocarse. <i>Nivel:</i> 3; el enrutado entre modelos, 5.</p><p>El agente del capítulo 13 cierra esta familia con su propio patrón, <b>el agente como cliente de los niveles anteriores</b>: decide los pasos hacia un objetivo, pero cada paso usa una herramienta del registro, pasa por la misma política y queda en la misma traza.</p></div><div class="lab" id="15-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Mapa de patrones</h3></div><p class="hint">Elige un problema del asistente de atención. El mapa enciende los patrones que lo resuelven, con su nivel y el capítulo donde nacieron, y la lectura explica por qué hace falta cada uno y qué pasa si falta. Prueba también elegir dos problemas a la vez para ver qué patrones comparten.</p><style>
+[id="15-lab-1"] .c15l1-g{display:grid;gap:4px}
+[id="15-lab-1"] .c15l1-g>span{font:700 .72rem var(--f-display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+[id="15-lab-1"] .c15l1-mapa{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:6px}
+[id="15-lab-1"] .c15l1-p{border:1px solid var(--line);border-left-width:5px;border-radius:8px;padding:6px 9px;background:var(--card);font:600 .8rem/1.3 var(--f-display);color:var(--ink);opacity:.38;transition:opacity .2s,box-shadow .2s}
+[id="15-lab-1"] .c15l1-p small{display:block;font:500 .72rem var(--f-display);color:var(--muted);margin-top:2px}
+[id="15-lab-1"] .c15l1-p.on{opacity:1;box-shadow:0 0 0 2px var(--accent)}
+[id="15-lab-1"] .c15l1-p.dos{box-shadow:0 0 0 3px var(--warm)}
+[id="15-lab-1"] .c15l1-p .c15l1-badge{display:inline-block;margin-top:3px;font:700 .66rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--warm)}
+[id="15-lab-1"] .c15l1-p[data-n="base"]{border-left-style:dashed;border-left-color:var(--muted)}
+[id="15-lab-1"] .c15l1-p[data-n="1"]{border-left-color:var(--c-fis)}
+[id="15-lab-1"] .c15l1-p[data-n="2"]{border-left-color:var(--c-enl)}
+[id="15-lab-1"] .c15l1-p[data-n="3"]{border-left-color:var(--c-red)}
+[id="15-lab-1"] .c15l1-p[data-n="4"]{border-left-color:var(--c-tra)}
+[id="15-lab-1"] .c15l1-p[data-n="5"]{border-left-color:var(--c-apl)}
+[id="15-lab-1"] .c15l1-ley{display:flex;flex-wrap:wrap;gap:4px 14px;font:500 .76rem var(--f-display);color:var(--muted)}
+[id="15-lab-1"] .c15l1-ley i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px}
+[id="15-lab-1"] .c15l1-out h5{margin:.3rem 0 .1rem;font:700 .8rem var(--f-display);color:var(--ink)}
+[id="15-lab-1"] .c15l1-out ul{margin:0;padding-left:1.1rem}
+[id="15-lab-1"] .c15l1-out li{margin:.15rem 0}
+</style>
+<div class="c15l1-g"><span>Problemas del asistente (puedes elegir más de uno)</span>
+<div class="btns" role="group" aria-label="Problemas" id="c15l1-prob"></div></div>
+<div class="c15l1-ley" aria-hidden="true">
+  <span><i style="border:2px dashed var(--muted)"></i>Base común</span>
+  <span><i style="background:var(--c-fis)"></i>Nivel 1</span>
+  <span><i style="background:var(--c-enl)"></i>Nivel 2</span>
+  <span><i style="background:var(--c-red)"></i>Nivel 3</span>
+  <span><i style="background:var(--c-tra)"></i>Nivel 4</span>
+  <span><i style="background:var(--c-apl)"></i>Nivel 5</span>
+</div>
+<ul class="c15l1-mapa" id="c15l1-mapa" aria-label="Catálogo de patrones"></ul>
+<div class="readout texto c15l1-out" id="c15l1-out" aria-live="polite"></div></div></section>
+<section><h2>MCP primero y aprobación humana</h2><div class="prose"><p><b>MCP primero</b> (<i>MCP-first</i>, capítulo 10). <i>Problema:</i> N aplicaciones por M sistemas son N × M integraciones, cada una con su forma de autenticar y de describir las operaciones. <i>Solución:</i> cada sistema se publica una vez como servidor del <b>MCP</b> (<i>Model Context Protocol</i>, protocolo de contexto de modelos), con herramientas, recursos y prompts, y cualquier cliente compatible lo usa. <i>Cuándo no:</i> una operación interna de una sola aplicación, que nunca va a tener otro cliente, puede quedarse como función local. <i>Nivel:</i> 3.</p><p><b>Aprobación humana y tarjetas «Haz esto»</b> (<i>human in the loop</i>, HITL, capítulo 11). <i>Problema:</i> una acción con efecto irreversible, como devolver dinero, no puede depender de la opinión del modelo. <i>Solución:</i> una política en código decide actuar, preguntar o negarse con datos del sistema; las aprobaciones viajan como tarjetas con enlaces firmados; cada escritura lleva una <b>clave de idempotencia</b> (<i>idempotency key</i>) y lo que no se puede deshacer se compensa. <i>Cuándo no:</i> si todo pide aprobación, la supervisora aprueba sin leer y el control se vuelve un trámite. <i>Nivel:</i> 3.</p><p>Estos dos patrones se combinan casi siempre: el servidor MCP de facturación anuncia <code>registrar_reembolso</code>, pero la política y la aprobación viven del lado del cliente, en el asistente, porque es el que sabe quién pide y por qué.</p></div></section>
+<section><h2><i>Guardrails</i> de entrada y de salida</h2><div class="prose"><p>Hasta aquí, cada control vivía dentro de su capítulo: el validador de esquema en el 5, el verificador de citas en el 8, la política en el 11. Un <b>guardrail</b> (<i>guardrail</i>, baranda de protección) es un control que se aplica a todo lo que entra o sale del modelo, con independencia de la función que lo pidió.</p></div><div class="analogia"><b>Imagínalo así</b><p>En una carretera de montaña la baranda no maneja el auto ni decide la ruta. Está en las curvas peligrosas para que un error del conductor no termine en el barranco. Nadie la pone en medio del camino, y nadie confía en ella para manejar: es la última línea, no la primera.</p></div><div class="prose"><p>Los <b>guardrails de entrada</b> revisan lo que llega antes de que el modelo lo lea: datos personales que no deben salir hacia el proveedor (se enmascaran), textos de tamaño anormal, temas fuera del alcance del asistente, e instrucciones escondidas en un correo o un documento. Los <b>guardrails de salida</b> revisan lo que el modelo produjo antes de que alguien lo use: que no aparezcan datos de otro cliente, que los montos del texto coincidan con los del sistema, que las citas existan y que el tono cumpla las reglas de la empresa. Y los <b>guardrails de acción</b>, que ya conoces, revisan cada llamada a herramienta contra la política.</p><p>El patrón tiene tres reglas de arquitectura. Los guardrails viven <b>fuera del prompt</b>, en código, porque un prompt se puede convencer y el código no. Se aplican <b>en la puerta</b>, no en cada función, para que una función nueva no nazca sin ellos. Y se combinan los baratos (reglas y expresiones regulares, en milisegundos) con los caros (un clasificador o un modelo pequeño que juzga), de modo que el caro solo corre cuando el barato no alcanza. Marcos abiertos como Guardrails AI, NeMo Guardrails o Llama Guard son ejemplos del mercado. Cómo se ataca una aplicación y cómo se defiende en capas es el tema del capítulo 18; aquí basta con su lugar en la arquitectura.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un guardrail de salida que no se deja convencer</h3></div><p>Vas a escribir un guardrail de salida que revisa tres respuestas del asistente antes de mostrarlas: que el monto del texto sea el del sistema, que cada cita exista en los documentos que entraron al contexto y que no aparezca una cuenta distinta de la que se atiende. No necesitas Ollama: las respuestas vienen escritas, como si las hubiera producido el modelo. Guarda este programa como <code>guardrail_salida.py</code>:</p><div class="code-copia"><pre><code>import re
+
+SISTEMA = {"cuenta": "20417", "total": "35,00"}            # lo que dice facturación
+DOCUMENTOS = {"politica-reconexion-2026", "manual-cobros"}  # lo que entró al contexto
+
+RESPUESTAS = [
+    "Carmen debe pagar US$ 35,00: la factura F-88213 más la reconexión "
+    "[politica-reconexion-2026].",
+    "El total es US$ 38,00, porque la reconexión cuesta US$ 8,00 "
+    "[politica-reconexion-2024].",
+    "Carmen debe US$ 35,00 [manual-cobros]. Ojo: la cuenta 31552 también tiene "
+    "una factura vencida.",
+]
+
+def revisar(texto):
+    problemas = []
+    montos = re.findall(r"US\$ ?(\d+,\d{2})", texto)
+    if montos and montos[0] != SISTEMA["total"]:
+        problemas.append(f"monto {montos[0]} distinto del sistema ({SISTEMA['total']})")
+    for cita in re.findall(r"\[([a-z0-9-]+)\]", texto):
+        if cita not in DOCUMENTOS:
+            problemas.append(f"cita a un documento que no entró al contexto: {cita}")
+    for cuenta in re.findall(r"cuenta (\d{5})", texto):
+        if cuenta != SISTEMA["cuenta"]:
+            problemas.append(f"menciona otra cuenta: {cuenta}")
+    return problemas
+
+for i, texto in enumerate(RESPUESTAS, 1):
+    problemas = revisar(texto)
+    estado = "PASA" if not problemas else "BLOQUEADA"
+    print(f"Respuesta {i}: {estado}")
+    for p in problemas:
+        print("   -", p)</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python guardrail_salida.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 guardrail_salida.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota qué respuestas pasan y por qué se bloquean las otras.</span></li><li><span>En la segunda respuesta, cambia <code>38,00</code> por <code>35,00</code> y vuelve a correrlo: ¿pasa?</span></li><li><span>Agrega una cuarta respuesta que diga el monto con letras («treinta y cinco dólares») y mira qué hace el guardrail.</span></li></ol><p><b>Qué observar:</b> la primera respuesta pasa; la segunda se bloquea dos veces, por el monto y por citar la política retirada de 2024 (la trampa del capítulo 4); la tercera, por mencionar a otro cliente. En el paso 2 el monto ya cuadra, pero la cita vieja la sigue bloqueando: cada regla revisa una cosa distinta. El paso 3 muestra el límite de las reglas baratas: el monto escrito con letras se escapa. Por eso el monto nunca debería salir del texto del modelo, sino del campo <code>monto</code> que llena el sistema, y por eso este guardrail es la última línea y no la única.</p></div></section>
+<section><h2><i>Caching</i> semántico</h2><div class="prose"><p>Este es el patrón nuevo del capítulo. En la semana de mayor volumen, la traza mostró que una de cada cinco consultas al asistente era alguna forma de «¿cuánto cuesta la reconexión?». Cada una pagaba una llamada completa al modelo, unos US$ 0,0027 y dos o tres segundos, para producir la misma respuesta con la misma cita.</p></div><div class="analogia"><b>Imagínalo así</b><p>En la recepción de un edificio, la primera vez que alguien pregunta «¿a qué hora cierra la farmacia del primer piso?», el recepcionista llama a la farmacia. La quinta vez ya no llama: responde de memoria, aunque cada persona lo pregunte con otras palabras. Pero si alguien pregunta «¿a qué hora cierra la ferretería?», no le da la hora de la farmacia porque «suena parecido». Y el día que la farmacia cambia de horario, se olvida de lo que sabía.</p></div><div class="prose"><p>Un <b>caché</b> (<i>cache</i>) guarda respuestas ya calculadas para no calcularlas otra vez. El caché clásico usa una clave exacta: si el texto es idéntico, devuelve lo guardado. Con lenguaje natural casi nunca hay dos pedidos idénticos. El <b>caché semántico</b> (<i>semantic cache</i>) compara por significado: calcula el <b>embedding</b> (vector de significado) de la pregunta, busca la pregunta guardada más parecida con la <b>similitud del coseno</b> (<i>cosine similarity</i>) y, si supera un <b>umbral</b> (<i>threshold</i>), devuelve la respuesta guardada sin llamar al modelo.</p><p>No hay que confundirlo con el <b>caché de prompts</b> (<i>prompt caching</i>) del capítulo 3. Aquel lo ofrece el proveedor: cobra menos por la parte del contexto que se repite igual entre llamadas, pero el modelo igual genera la respuesta. El caché semántico lo construyes tú y evita la llamada entera. Se pueden usar los dos a la vez.</p></div><figure class="fig fig-flujo" id="15-diagrama-2"><div class="lienzo"><svg viewBox="0 0 980 620" style="min-width:780px" role="img" aria-label="Diagrama de secuencia de una consulta con caché semántico: el panel manda la pregunta; la puerta revisa si es personal; pide el embedding; busca la más parecida en el caché; con similitud 0,96 devuelve la respuesta guardada en unos 60 milisegundos. Si la similitud es 0,81, llama al modelo con el RAG en unos 2,4 segundos y guarda la respuesta con sus fuentes. Al cambiar un documento citado se borran las respuestas que lo citan.">
+<defs><marker id="c15d2-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker><marker id="c15d2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker><marker id="c15d2-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker><marker id="c15d2-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker></defs>
+<rect x="18" y="14" width="124" height="50" rx="10" class="caja"/>
+<text x="80" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Panel</text>
+<text x="80" y="52" class="t t-s t-m" text-anchor="middle">del agente</text>
+<line x1="80" y1="64" x2="80" y2="556" class="vida"/>
+<rect x="188" y="14" width="124" height="50" rx="10" class="d-casa"/>
+<text x="250" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Puerta</text>
+<text x="250" y="52" class="t t-s t-m" text-anchor="middle">guardrails · caché</text>
+<line x1="250" y1="64" x2="250" y2="556" class="vida"/>
+<rect x="358" y="14" width="124" height="50" rx="10" class="c-enl"/>
+<text x="420" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Embeddings</text>
+<text x="420" y="52" class="t t-s t-m" text-anchor="middle">modelo pequeño</text>
+<line x1="420" y1="64" x2="420" y2="556" class="vida"/>
+<rect x="528" y="14" width="124" height="50" rx="10" class="c-enl"/>
+<text x="590" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Caché</text>
+<text x="590" y="52" class="t t-s t-m" text-anchor="middle">índice vectorial</text>
+<line x1="590" y1="64" x2="590" y2="556" class="vida"/>
+<rect x="698" y="14" width="124" height="50" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="760" y="35" class="t t-b k-warm" text-anchor="middle" style="font-size:12px">Modelo</text>
+<text x="760" y="52" class="t t-s t-m" text-anchor="middle">con RAG</text>
+<line x1="760" y1="64" x2="760" y2="556" class="vida"/>
+<line x1="80" y1="100" x2="248" y2="100" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c15d2-s)"/><text x="90" y="92" class="t" style="font-size:12px">① pregunta</text>
+<path d="M250 116 h34 v18 h-32" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c15d2-s)"/>
+<text x="292" y="130" class="t t-s">② ¿es personal? no</text>
+<line x1="250" y1="170" x2="418" y2="170" class="ln" style="stroke:var(--c-enl);stroke-width:2" marker-end="url(#c15d2-g)"/><text x="260" y="162" class="t" style="font-size:12px">③ embedding de la pregunta</text>
+<line x1="420" y1="200" x2="252" y2="200" class="ln" style="stroke:var(--c-enl);stroke-width:2" marker-end="url(#c15d2-g)"/><text x="300" y="192" class="t" style="font-size:12px">vector</text>
+<line x1="250" y1="240" x2="588" y2="240" class="ln" style="stroke:var(--c-enl);stroke-width:2" marker-end="url(#c15d2-g)"/><text x="260" y="232" class="t" style="font-size:12px">④ buscar · plantilla v4 · índice v12</text>
+<line x1="590" y1="276" x2="252" y2="276" class="ln" style="stroke:var(--c-enl);stroke-width:2" marker-end="url(#c15d2-g)"/><text x="300" y="268" class="t" style="font-size:12px">0,96 ≥ 0,92 · respuesta + cita</text>
+<line x1="250" y1="312" x2="82" y2="312" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c15d2-s)"/><text x="96" y="304" class="t" style="font-size:12px">⑤ respuesta guardada</text>
+<line x1="20" y1="338" x2="830" y2="338" class="ln ln-d"/>
+<text x="24" y="356" class="t t-s t-m">Si no hay una parecida:</text>
+<line x1="590" y1="384" x2="252" y2="384" class="ln" style="stroke:var(--c-enl);stroke-width:2" marker-end="url(#c15d2-g)"/><text x="300" y="376" class="t" style="font-size:12px">⑥ la más parecida: 0,81</text>
+<line x1="250" y1="420" x2="758" y2="420" class="ln" style="stroke:var(--warm);stroke-width:2" marker-end="url(#c15d2-w)"/><text x="420" y="412" class="t" style="font-size:12px">⑦ llamada completa: RAG + modelo</text>
+<line x1="760" y1="456" x2="252" y2="456" class="ln" style="stroke:var(--warm);stroke-width:2" marker-end="url(#c15d2-w)"/><text x="560" y="448" class="t" style="font-size:12px">respuesta + fuentes</text>
+<line x1="250" y1="492" x2="588" y2="492" class="ln" style="stroke:var(--c-enl);stroke-width:2" marker-end="url(#c15d2-g)"/><text x="260" y="484" class="t" style="font-size:12px">⑧ guardar con fuentes y versiones</text>
+<line x1="250" y1="524" x2="82" y2="524" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c15d2-s)"/><text x="110" y="516" class="t" style="font-size:12px">respuesta</text>
+<rect x="250" y="566" width="580" height="42" rx="8" class="caja" style="stroke-dasharray:4 3"/>
+<text x="264" y="584" class="t t-s">Invalidación: cuando cambia un documento citado, se borran las</text>
+<text x="264" y="599" class="t t-s">respuestas que lo citan; además, cada entrada vence sola (TTL).</text>
+<path d="M860 92v228" class="ln" style="stroke:var(--good);stroke-width:3"/>
+<text x="872" y="190" class="t t-xs t-b" style="fill:var(--good)">ACIERTO</text>
+<text x="872" y="206" class="t t-s t-m">≈ 60 ms</text>
+<text x="872" y="220" class="t t-s t-m">un embedding</text>
+<path d="M860 370v160" class="ln s-warm" style="stroke-width:3"/>
+<text x="872" y="440" class="t t-xs t-b k-warm">FALLO</text>
+<text x="872" y="456" class="t t-s t-m">≈ 2,4 s</text>
+<text x="872" y="470" class="t t-s t-m">llamada completa</text>
+</svg></div><figcaption><b>Una consulta que pasa por el caché semántico.</b> Los participantes están arriba y el tiempo corre hacia abajo. ① El panel manda la pregunta; ② la puerta revisa si es personal (menciona una cuenta o depende de quién pregunta) y, si lo es, la manda directo al modelo; ③ si no, pide su embedding; ④ busca la más parecida en el caché, dentro de la misma versión de plantilla y de índice; ⑤ con similitud 0,96, sobre el umbral de 0,92, devuelve la respuesta guardada con su cita en milisegundos. Abajo, el camino del fallo: ⑥ similitud 0,81, ⑦ llamada completa al modelo con el RAG, ⑧ se guarda la respuesta con sus fuentes. A la derecha, la barra de tiempo de cada camino y, abajo, la invalidación: cuando cambia un documento citado, se borran las respuestas que lo citan.</figcaption></figure><div class="prose"><p>El patrón parece simple y tiene cuatro decisiones de diseño, cada una con su trampa:</p><ol class="steps"><li><span><b>El umbral.</b> Muy bajo, y «¿cuánto cuesta la reconexión?» se sirve con la respuesta de «¿cuánto cuesta la instalación?»: un <b>falso acierto</b> (<i>false hit</i>), una respuesta segura y equivocada. Muy alto, y casi nada se sirve del caché. El umbral se elige con un conjunto de pares de preguntas etiquetados como «misma pregunta» o «distinta», no a ojo.</span></li><li><span><b>Qué se puede guardar.</b> Solo las respuestas que no dependen de quién pregunta. «¿Cuánto cuesta la reconexión?» sí; «¿cuánto debe Carmen?» nunca, porque la respuesta de una clienta servida a otra es una fuga de datos. La regla práctica: si la respuesta usó una herramienta con datos de un cliente o la memoria de una persona, no entra al caché.</span></li><li><span><b>La clave completa.</b> Además del embedding, la entrada guarda la versión de la plantilla, el modelo, la versión del índice y los permisos del documento citado. Una respuesta generada con <code>respuesta-agente@v3</code> no se sirve cuando la plantilla ya es la v4, y una respuesta que cita un manual interno no se sirve a quien no puede leerlo.</span></li><li><span><b>La invalidación.</b> Cada entrada guarda las fuentes que citó. Cuando la ingesta del capítulo 8 detecta que cambió un documento, borra las respuestas que lo citan. Además, cada entrada vence sola después de un plazo (<i>time to live</i>, TTL).</span></li></ol><p>Las negaciones son el falso acierto más traicionero: «¿me cobran reconexión si pago hoy?» y «¿me cobran reconexión si no pago?» quedan muy cerca en el mapa del significado. Por eso el caché semántico se usa en preguntas frecuentes y estables, y se mide con su propio número: la tasa de falsos aciertos en una muestra revisada, además de la tasa de aciertos y el ahorro.</p></div><div class="lab" id="15-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3><i>Caching</i> semántico</h3></div><p class="hint">Doce preguntas llegan al asistente una tras otra. Mueve el umbral de similitud y activa o desactiva las dos protecciones: no guardar las preguntas personales e invalidar cuando cambia un documento citado. Mira cuáles se sirven del caché, cuáles fueron falsos aciertos, cuánto se ahorra y cuánto baja el tiempo de respuesta.</p><style>
+[id="15-lab-2"] .c15l2-chk{display:flex;gap:8px;align-items:flex-start;font:500 .86rem/1.35 var(--f-display);color:var(--ink);cursor:pointer}
+[id="15-lab-2"] .c15l2-chk small{display:block;color:var(--muted);font-size:.76rem}
+[id="15-lab-2"] .c15l2-lista{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+[id="15-lab-2"] .c15l2-q{display:grid;grid-template-columns:1.6rem minmax(0,1fr) auto;gap:4px 8px;align-items:center;border:1px solid var(--line);border-left-width:5px;border-radius:8px;padding:5px 8px;background:var(--card);font:500 .8rem/1.3 var(--f-display);color:var(--ink)}
+[id="15-lab-2"] .c15l2-q b.n{font:700 .74rem var(--f-mono);color:var(--muted)}
+[id="15-lab-2"] .c15l2-q small{grid-column:2/-1;color:var(--muted);font-size:.72rem}
+[id="15-lab-2"] .c15l2-q .tag{font:700 .66rem var(--f-display);letter-spacing:.05em;text-transform:uppercase;padding:2px 6px;border-radius:4px;white-space:nowrap}
+[id="15-lab-2"] .c15l2-q.modelo{border-left-color:var(--muted)}
+[id="15-lab-2"] .c15l2-q.modelo .tag{background:var(--paper);color:var(--muted)}
+[id="15-lab-2"] .c15l2-q.hit{border-left-color:var(--good)}
+[id="15-lab-2"] .c15l2-q.hit .tag{background:var(--good-soft);color:var(--good)}
+[id="15-lab-2"] .c15l2-q.mal{border-left-color:var(--warm)}
+[id="15-lab-2"] .c15l2-q.mal .tag{background:var(--warm-soft);color:var(--warm)}
+[id="15-lab-2"] .c15l2-ev{font:600 .76rem var(--f-display);color:var(--accent);padding:3px 8px;border:1px dashed var(--accent);border-radius:8px}
+[id="15-lab-2"] .c15l2-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,128px),1fr));gap:8px}
+[id="15-lab-2"] .c15l2-k{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--paper)}
+[id="15-lab-2"] .c15l2-k span{display:block;font:600 .72rem var(--f-display);color:var(--muted)}
+[id="15-lab-2"] .c15l2-k output{font:700 1.1rem var(--f-mono);color:var(--ink)}
+[id="15-lab-2"] .c15l2-k.malk output{color:var(--warm)}
+</style>
+<div class="ctls">
+  <label class="ctl">Umbral de similitud <output id="c15l2-uo">0,92</output>
+    <input type="range" id="c15l2-u" min="0.80" max="0.99" step="0.01" value="0.92" aria-label="Umbral de similitud"></label>
+</div>
+<label class="c15l2-chk"><input type="checkbox" id="c15l2-pers" checked> <span>No guardar ni servir preguntas personales<small>las que dependen del cliente que está abierto en la pantalla</small></span></label>
+<label class="c15l2-chk"><input type="checkbox" id="c15l2-inv" checked> <span>Invalidar cuando cambia un documento citado<small>borra las respuestas que citan el manual que se actualizó</small></span></label>
+<ol class="c15l2-lista" id="c15l2-lista" aria-label="Preguntas en orden de llegada"></ol>
+<div class="c15l2-kpis">
+  <div class="c15l2-k"><span>Servidas del caché</span><output id="c15l2-k1">0</output></div>
+  <div class="c15l2-k" id="c15l2-kf"><span>Falsos aciertos</span><output id="c15l2-k2">0</output></div>
+  <div class="c15l2-k"><span>Costo de las 12</span><output id="c15l2-k3">US$ 0</output></div>
+  <div class="c15l2-k"><span>Tiempo medio</span><output id="c15l2-k4">0 ms</output></div>
+</div>
+<div class="readout texto" id="c15l2-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un caché semántico con tu modelo local</h3></div><p>Vas a poner un caché semántico delante de tu modelo local y a mandarle cinco preguntas: dos dicen lo mismo con otras palabras y una se parece pero pregunta otra cosa. Necesitas Ollama con <code>llama3.2:3b</code> y el modelo de embeddings <code>nomic-embed-text</code> del capítulo 8 (cualquier modelo pequeño sirve). Guarda este programa como <code>cache_semantico.py</code>:</p><div class="code-copia"><pre><code>import json, math, time, urllib.request
+
+BASE = "http://localhost:11434/v1"
+UMBRAL = 0.90
+POLITICA = ("Política de reconexión vigente desde 2026: el cargo por reconexión es de "
+            "US$ 5,00 y se suma a la factura vencida. La instalación nueva cuesta US$ 20,00.")
+CACHE = []  # (pregunta, embedding, respuesta)
+
+def post(ruta, cuerpo):
+    pedido = urllib.request.Request(BASE + ruta, data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido) as r:
+        return json.load(r)
+
+def embedding(texto):
+    return post("/embeddings", {"model": "nomic-embed-text", "input": [texto]})["data"][0]["embedding"]
+
+def coseno(a, b):
+    punto = sum(x * y for x, y in zip(a, b))
+    return punto / (math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b)))
+
+def preguntar(pregunta):
+    inicio = time.perf_counter()
+    vector = embedding(pregunta)
+    mejor = max(CACHE, key=lambda e: coseno(vector, e[1]), default=None)
+    similitud = coseno(vector, mejor[1]) if mejor else 0.0
+    if mejor and similitud &gt;= UMBRAL:
+        origen, respuesta = f"CACHÉ (parecida a «{mejor[0]}»)", mejor[2]
+    else:
+        datos = post("/chat/completions", {"model": "llama3.2:3b", "temperature": 0,
+            "messages": [{"role": "system", "content": "Responde en una frase solo con este contexto: " + POLITICA},
+                         {"role": "user", "content": pregunta}]})
+        respuesta = datos["choices"][0]["message"]["content"].strip()
+        CACHE.append((pregunta, vector, respuesta))
+        origen = "MODELO"
+    ms = (time.perf_counter() - inicio) * 1000
+    print(f"\n{pregunta}\n  similitud {similitud:.3f} -&gt; {origen}, {ms:.0f} ms\n  {respuesta[:110]}")
+
+for p in ["¿Cuánto cuesta la reconexión del servicio?",
+          "¿Cuánto me cobran por reconectar el servicio?",
+          "Precio de la reconexión",
+          "¿Cuánto cuesta la instalación del servicio?",
+          "¿Me cobran reconexión si pago la factura hoy?"]:
+    preguntar(p)</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>ollama pull nomic-embed-text</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python cache_semantico.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>ollama pull nomic-embed-text</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 cache_semantico.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota, para cada pregunta, la similitud, si salió del caché o del modelo y los milisegundos.</span></li><li><span>Fíjate en la cuarta pregunta: ¿qué similitud tuvo con la primera? ¿Se sirvió del caché?</span></li><li><span>Cambia <code>UMBRAL</code> a <code>0.75</code> y luego a <code>0.97</code>, y vuelve a correrlo cada vez.</span></li></ol><p><b>Qué observar:</b> las respuestas del caché tardan una fracción de lo que tarda el modelo, porque solo cuestan un embedding. Las dos reformulaciones de la reconexión deberían servirse del caché; la instalación y la pregunta con condición tienen similitudes altas aunque piden otra cosa. Con umbral 0,75 aparecen falsos aciertos (la instalación recibe el precio de la reconexión); con 0,97 casi todo va al modelo. Las similitudes exactas dependen del modelo de embeddings: el umbral se calibra con tus propias preguntas, nunca se copia de otro sistema.</p></div><div class="caso"><b>Un caso real</b><p><b>La respuesta de una clienta servida a otra.</b> Un equipo de una empresa de servicios puso un caché semántico delante de su asistente interno para bajar costos. La clave era solo el embedding de la pregunta. Durante una semana todo fue bien: un tercio de las consultas se servía del caché. Entonces un agente preguntó «¿cuál es el saldo pendiente de este cliente?» con la ficha de un cliente abierta, y el asistente respondió en milisegundos con el saldo de otro cliente, el de la primera vez que alguien había hecho esa pregunta. La pregunta era idéntica; el contexto, no. La corrección fue la regla de esta sección: las respuestas que usan datos de un cliente no se guardan, la clave incluye las versiones y los permisos, y el caché tiene su propia métrica de falsos aciertos en la revisión semanal.</p></div></section>
+<section><h2>Respaldo entre modelos</h2><div class="prose"><p><b>Respaldo entre modelos</b> (<i>model fallback</i>, capítulos 3 y 14). <i>Problema:</i> el proveedor se cae, responde con lentitud o limita la tasa justo en la hora pico. <i>Solución:</i> la puerta a los modelos tiene configurado de antemano un segundo modelo, idealmente de otro proveedor o local, que pasó la misma batería de evaluación; ante errores transitorios agotados o un tiempo de espera superado, la llamada pasa al respaldo y la traza lo marca. Si tampoco hay respaldo, se degrada con honestidad: «el asistente no está disponible». <i>Cuándo no:</i> un respaldo que nunca se evaluó es peor que ninguno, porque falla en silencio con otro formato o con menos calidad.</p><p>El respaldo tiene un primo: el <b>enrutado al modelo más pequeño que cumple</b> del capítulo 14. Los dos usan la misma lista de modelos evaluados; el enrutador elige por costo en el camino normal, el respaldo elige por disponibilidad cuando el camino normal falla. Un <b>cortacircuitos</b> (<i>circuit breaker</i>) completa el patrón: si el proveedor principal falla muchas veces seguidas, la puerta deja de intentarlo durante un rato y manda todo al respaldo, en vez de pagar un tiempo de espera en cada pedido.</p></div></section>
+<section><h2>Cómo combinarlos según el nivel</h2><div class="prose"><p>Ningún patrón trabaja solo, y no todos hacen falta desde el primer día. La regla es la misma de la escalera: cada nivel agrega patrones y conserva los de abajo, y los de la base común empiezan con la primera llamada.</p></div><figure class="fig fig-capas" id="15-diagrama-3"><div class="lienzo"><svg viewBox="0 0 880 434" style="min-width:680px" role="img" aria-label="Patrones del asistente por nivel, de abajo hacia arriba: base común con envoltorio determinista, guardrails, respaldo, evaluación, trazas y caché semántico; nivel 1 salidas estructuradas, plantillas y RAG simple; nivel 2 memoria, RAG con permisos y adaptadores de canal; nivel 3 herramientas, MCP, aprobación humana, cadenas y enrutadores; nivel 4 el agente como cliente; nivel 5 enrutado y ajuste. A la derecha la versión del asistente donde entró cada fila.">
+<rect x="20" y="20" width="840" height="54" rx="10" class="c-apl"/>
+<text x="34" y="42" class="t t-xs t-b k-apl">NIVEL 5</text>
+<text x="34" y="60" class="t t-b" style="font-size:12px">Modelos ajustados</text>
+<rect x="170" y="34" width="226" height="26" rx="13" class="caja"/><text x="283" y="51" class="t" text-anchor="middle" style="font-size:12px">Enrutado al modelo más pequeño</text>
+<rect x="404" y="34" width="158" height="26" rx="13" class="caja"/><text x="483" y="51" class="t" text-anchor="middle" style="font-size:12px">Ajuste y destilación</text>
+<text x="846" y="53" class="t t-b k-apl" text-anchor="end" style="font-size:12px">v1.0</text>
+<rect x="20" y="82" width="840" height="54" rx="10" class="c-tra"/>
+<text x="34" y="104" class="t t-xs t-b k-tra">NIVEL 4</text>
+<text x="34" y="122" class="t t-b" style="font-size:12px">Agentes</text>
+<rect x="170" y="96" width="172" height="26" rx="13" class="caja"/><text x="256" y="113" class="t" text-anchor="middle" style="font-size:12px">El agente como cliente</text>
+<rect x="350" y="96" width="165" height="26" rx="13" class="caja"/><text x="432" y="113" class="t" text-anchor="middle" style="font-size:12px">Presupuestos y parada</text>
+<text x="846" y="115" class="t t-b k-tra" text-anchor="end" style="font-size:12px">v1.0</text>
+<rect x="20" y="144" width="840" height="54" rx="10" class="c-red"/>
+<text x="34" y="166" class="t t-xs t-b k-red">NIVEL 3</text>
+<text x="34" y="184" class="t t-b" style="font-size:12px">Herramientas</text>
+<rect x="170" y="158" width="105" height="26" rx="13" class="caja"/><text x="222" y="175" class="t" text-anchor="middle" style="font-size:12px">Herramientas</text>
+<rect x="283" y="158" width="98" height="26" rx="13" class="caja"/><text x="332" y="175" class="t" text-anchor="middle" style="font-size:12px">MCP primero</text>
+<rect x="389" y="158" width="138" height="26" rx="13" class="caja"/><text x="458" y="175" class="t" text-anchor="middle" style="font-size:12px">Aprobación humana</text>
+<rect x="535" y="158" width="165" height="26" rx="13" class="caja"/><text x="617" y="175" class="t" text-anchor="middle" style="font-size:12px">Cadenas y enrutadores</text>
+<text x="846" y="177" class="t t-b k-red" text-anchor="end" style="font-size:12px">v0.7 a v0.9</text>
+<rect x="20" y="206" width="840" height="54" rx="10" class="c-enl"/>
+<text x="34" y="228" class="t t-xs t-b k-enl">NIVEL 2</text>
+<text x="34" y="246" class="t t-b" style="font-size:12px">Personalizadas</text>
+<rect x="170" y="220" width="138" height="26" rx="13" class="caja"/><text x="239" y="237" class="t" text-anchor="middle" style="font-size:12px">Memoria por capas</text>
+<rect x="316" y="220" width="246" height="26" rx="13" class="caja"/><text x="439" y="237" class="t" text-anchor="middle" style="font-size:12px">RAG con permisos y reordenamiento</text>
+<rect x="570" y="220" width="158" height="26" rx="13" class="caja"/><text x="649" y="237" class="t" text-anchor="middle" style="font-size:12px">Adaptadores de canal</text>
+<text x="846" y="239" class="t t-b k-enl" text-anchor="end" style="font-size:12px">v0.4 a v0.6</text>
+<rect x="20" y="268" width="840" height="54" rx="10" class="c-fis"/>
+<text x="34" y="290" class="t t-xs t-b k-fis">NIVEL 1</text>
+<text x="34" y="308" class="t t-b" style="font-size:12px">Generación</text>
+<rect x="170" y="282" width="165" height="26" rx="13" class="caja"/><text x="253" y="299" class="t" text-anchor="middle" style="font-size:12px">Salidas estructuradas</text>
+<rect x="343" y="282" width="172" height="26" rx="13" class="caja"/><text x="429" y="299" class="t" text-anchor="middle" style="font-size:12px">Plantillas versionadas</text>
+<rect x="523" y="282" width="91" height="26" rx="13" class="caja"/><text x="569" y="299" class="t" text-anchor="middle" style="font-size:12px">RAG simple</text>
+<text x="846" y="301" class="t t-b k-fis" text-anchor="end" style="font-size:12px">v0.1 a v0.3</text>
+<rect x="20" y="330" width="840" height="88" rx="10" class="caja" style="stroke-dasharray:5 4"/>
+<text x="34" y="352" class="t t-xs t-b t-m">BASE COMÚN</text>
+<text x="34" y="370" class="t t-s t-m">desde la v0.1</text>
+<rect x="170" y="342" width="179" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/><text x="259" y="359" class="t" text-anchor="middle" style="font-size:12px">Envoltorio determinista</text>
+<rect x="357" y="342" width="91" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/><text x="402" y="359" class="t" text-anchor="middle" style="font-size:12px">Guardrails</text>
+<rect x="456" y="342" width="172" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/><text x="542" y="359" class="t" text-anchor="middle" style="font-size:12px">Respaldo entre modelos</text>
+<rect x="636" y="342" width="145" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/><text x="708" y="359" class="t" text-anchor="middle" style="font-size:12px">Evaluación primero</text>
+<rect x="170" y="380" width="111" height="26" rx="13" class="caja" style="stroke-dasharray:4 3"/><text x="226" y="397" class="t" text-anchor="middle" style="font-size:12px">Trazas y KPIs</text>
+<rect x="289" y="380" width="252" height="26" rx="13" class="caja" style="stroke:var(--warm);stroke-width:1.6;stroke-dasharray:4 3"/><text x="416" y="397" class="t" text-anchor="middle" style="font-size:12px">Caché semántico (entra en la v1.0)</text>
+<text x="846" y="382" class="t t-b t-m" text-anchor="end" style="font-size:12px">todas</text>
+</svg></div><figcaption><b>Los patrones del asistente, nivel por nivel.</b> Se lee de abajo hacia arriba. La franja punteada del fondo es la base común: envoltorio determinista, guardrails, respaldo entre modelos, evaluación primero (capítulo 16), trazas y KPIs (capítulo 17) y el caché semántico, marcado aparte porque entró recién en la v1.0, cuando hubo volumen para justificarlo. Encima, cada fila de color es un nivel con los patrones que agrega: salidas estructuradas, plantillas y RAG simple en el 1; memoria por capas, RAG con permisos y adaptadores de canal en el 2; herramientas, MCP primero, aprobación humana, cadenas y enrutadores en el 3; el agente como cliente y sus presupuestos en el 4; enrutado y ajuste en el 5. A la derecha, la versión del asistente donde entró cada fila.</figcaption></figure><div class="prose"><p>Tres criterios ayudan a decidir el orden:</p><ul><li><b>Primero lo que evita daños, después lo que ahorra.</b> El envoltorio, los guardrails y la aprobación humana van antes que el caché o el enrutado, porque un asistente barato y equivocado no le sirve a nadie.</li><li><b>Cada patrón nuevo con su medición.</b> Un caché sin métrica de falsos aciertos, o un enrutador sin la calidad por modelo, es una apuesta. Por eso los dos capítulos que siguen, evaluación y observabilidad, son la condición para usar cualquier patrón de este catálogo.</li><li><b>El patrón más simple que resuelve el problema.</b> RAG simple antes que agéntico, una cadena fija antes que un agente, una regla antes que un clasificador. Se sube de variante cuando la medición muestra que la simple no alcanza.</li></ul></div><div class="ml"><b>En la práctica</b><p><b>La ficha de patrones de la v1.0.</b> Lucía dejó en el repositorio del asistente un archivo corto: cada patrón en uso, con el capítulo que lo explica, el módulo del código que lo implementa, su métrica y su dueño. Doce filas. Cuando la desarrolladora nueva preguntó por qué el asistente no guardaba en caché las preguntas sobre saldos, la respuesta ya estaba ahí: «caché semántico, solo preguntas sin datos de cliente; umbral 0,92 calibrado con 400 pares; falsos aciertos medidos cada semana, meta menos de 1 %». El caché semántico entró último, con la v1.0: sirve una de cada cinco consultas de tarifas y la revisión semanal todavía no encontró un falso acierto con ese umbral. La ficha también sirvió para lo contrario: el RAG agéntico se probó y se descartó, porque el RAG con reordenamiento ya pasaba la meta y costaba la mitad.</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>El catálogo completo, ordenado por el problema que resuelve cada patrón. Envoltorio determinista y salidas estructuradas cuando el modelo varía o tiene que hablar con otro programa; RAG y memoria cuando no sabe lo que sabe la empresa; herramientas, cadenas, enrutadores y MCP cuando tiene que actuar; aprobación humana y guardrails cuando actuar tiene riesgo; caché semántico y enrutado cuando cuesta demasiado; respaldo cuando el proveedor falla. Cada patrón tiene su «cuándo no», y ninguno se usa sin su medición.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>¿Qué diferencia hay entre el caché de prompts del capítulo 3 y el caché semántico?</summary><p>El caché de prompts lo ofrece el proveedor y abarata la parte repetida del contexto, pero el modelo igual genera la respuesta. El caché semántico lo construye la aplicación y evita la llamada entera cuando una pregunta parecida ya se respondió.</p></details><details><summary>¿Por qué «¿cuánto debe Carmen?» nunca entra al caché semántico?</summary><p>Porque la respuesta depende del cliente: servirla a otra pregunta parecida entregaría el saldo de una persona a otra, una fuga de datos. Solo se guardan respuestas que no usan datos de un cliente ni memoria personal.</p></details><details><summary>Nombra tres cosas que debe incluir la clave de una entrada del caché además del embedding.</summary><p>Cualquiera de estas: la versión de la plantilla, el modelo, la versión del índice, los permisos de los documentos citados y las fuentes citadas (para invalidar cuando cambian).</p></details><details><summary>¿Por qué los guardrails viven en la puerta y en código, y no dentro del prompt?</summary><p>Porque un prompt se puede convencer con otro texto y el código no, y porque en la puerta se aplican a toda función, incluidas las nuevas, sin depender de que alguien se acuerde de agregarlos.</p></details><details><summary>Un equipo quiere poner un agente de nivel 4 para responder preguntas frecuentes de tarifas. ¿Qué patrón más simple le propondrías y por qué?</summary><p>Un RAG simple o con reordenamiento, quizás con caché semántico: las preguntas frecuentes no necesitan planear pasos. Se sube de variante solo cuando la medición muestra que la simple no alcanza.</p></details><details><summary>¿Qué tienen en común el respaldo entre modelos y el enrutado al modelo más pequeño, y en qué se diferencian?</summary><p>Usan la misma lista de modelos evaluados con la misma batería. El enrutador elige por costo en el camino normal; el respaldo elige por disponibilidad cuando el modelo principal falla.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué es un índice HNSW y por qué permite buscar el vector más parecido sin compararlo con todos?<small>Pista: busca «Hierarchical Navigable Small World».</small></li><li>¿Qué libro de 1994 popularizó los patrones de diseño en el software y qué tomó de la arquitectura de Christopher Alexander?<small>Pista: busca «Gang of Four» y «A Pattern Language».</small></li><li>¿Qué políticas de reemplazo usan los cachés clásicos (LRU, LFU) y cuál conviene para un caché semántico con preguntas frecuentes?</li><li>¿Cómo funciona el estado «medio abierto» de un cortacircuitos y por qué existe?<small>Pista: busca «circuit breaker half-open».</small></li><li>¿Qué es Llama Guard y qué categorías de riesgo clasifica?<small>Pista: mira la ficha del modelo publicada por Meta.</small></li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://eugeneyan.com/writing/llm-patterns/" target="_blank" rel="noopener">Patterns for Building LLM-based Systems &amp; Products, de Eugene Yan <small>artículo, en inglés</small></a><a class="vid" href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents, de Anthropic <small>cadenas, enrutadores y agentes, en inglés</small></a><a class="vid" href="https://github.com/zilliztech/GPTCache" target="_blank" rel="noopener">GPTCache: un caché semántico de código abierto <small>repositorio, en inglés</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const PAT={
+    env:{n:'Envoltorio determinista',niv:'base',cap:'cap. 2'},
+    sal:{n:'Salidas estructuradas',niv:'1',cap:'cap. 5'},
+    rag:{n:'RAG con permisos y vigencia',niv:'1',cap:'cap. 8'},
+    mem:{n:'Memoria por capas',niv:'2',cap:'cap. 7'},
+    her:{n:'Herramientas como funciones',niv:'3',cap:'cap. 9'},
+    mcp:{n:'MCP primero',niv:'3',cap:'cap. 10'},
+    hitl:{n:'Aprobación humana e idempotencia',niv:'3',cap:'cap. 11'},
+    cad:{n:'Cadenas y enrutadores en un flujo',niv:'3',cap:'cap. 12'},
+    age:{n:'El agente como cliente',niv:'4',cap:'cap. 13'},
+    enr:{n:'Enrutado al modelo más pequeño',niv:'5',cap:'cap. 14'},
+    gua:{n:'Guardrails de entrada y salida',niv:'base',cap:'caps. 15 y 18'},
+    cac:{n:'Caché semántico',niv:'base',cap:'cap. 15'},
+    res:{n:'Respaldo entre modelos',niv:'base',cap:'caps. 3 y 14'},
+    eva:{n:'Evaluación primero',niv:'base',cap:'cap. 16'},
+    tra:{n:'Trazas y KPIs',niv:'base',cap:'cap. 17'}
+  };
+  const PROB=[
+    {id:'monto',t:'Inventa montos',p:{env:'el modelo planea y redacta; el total lo calcula el código. Sin envoltorio, el monto depende del azar del muestreo.',her:'calcular_total devuelve 35,00 desde facturación. Sin la herramienta, el modelo adivina la reconexión.',gua:'el guardrail de salida bloquea un monto distinto del sistema si algo se escapa.'}},
+    {id:'leer',t:'Otro programa no puede leer la respuesta',p:{sal:'un JSON con esquema, validado en el código. Sin esquema, el sistema de tickets recibe prosa que no sabe enrutar.',env:'decide qué hacer si el JSON no pasa: reparar, reintentar o escalar.'}},
+    {id:'vieja',t:'Cita la política retirada de 2024',p:{rag:'el filtro de vigencia saca del índice los documentos retirados. Sin él, el documento viejo y largo gana la búsqueda.',gua:'bloquea una cita a un documento que no entró al contexto.',eva:'la batería tiene la trampa de 2024 como caso de borde y la corre en cada cambio.'}},
+    {id:'olvida',t:'Pregunta otra vez lo que el agente ya dijo',p:{mem:'la memoria de sesión guarda lo dicho y se ensambla en cada turno. Sin ella, cada llamada empieza de cero.'}},
+    {id:'saldo',t:'Tiene que consultar el saldo real',p:{her:'una herramienta de lectura con los permisos de quien pregunta. Sin ella, el saldo sale de la imaginación del modelo.',mcp:'facturación se publica una vez como servidor MCP y la usan todos los clientes.'}},
+    {id:'integrar',t:'Cada sistema nuevo se integra a mano en cada aplicación',p:{mcp:'una integración, muchos clientes: N + M conectores en vez de N × M.'}},
+    {id:'dinero',t:'Puede devolver dinero por error',p:{hitl:'la política decide actuar, preguntar o negarse con el monto del sistema, y la clave de idempotencia evita el doble reembolso.',gua:'el guardrail de acción revisa cada llamada a herramienta contra la política.',tra:'la traza y la auditoría muestran quién propuso, quién aprobó y qué se ejecutó.'}},
+    {id:'averia',t:'Una avería masiva con cientos de tickets',p:{age:'el agente persigue el objetivo «avisar y agrupar», pero cada paso usa herramientas del registro.',cad:'los pasos fijos (agrupar, redactar el aviso, avisar) van en un flujo orquestado.',hitl:'el aviso masivo a clientes espera la aprobación de una persona.'}},
+    {id:'costo',t:'La factura del proveedor se disparó',p:{cac:'las preguntas frecuentes y estables se sirven sin llamar al modelo.',enr:'cada pedido va al modelo más pequeño que cumple la meta de calidad.',tra:'el costo por función dice dónde se va el dinero antes de optimizar.'}},
+    {id:'caida',t:'El proveedor se cae en la hora pico',p:{res:'un segundo modelo ya evaluado toma el tráfico; si no hay, el panel avisa en vez de inventar.',tra:'la alarma de errores y de latencia avisa antes que los agentes.'}},
+    {id:'correo',t:'Un correo trae órdenes escondidas',p:{gua:'el guardrail de entrada marca instrucciones dentro de los datos y el de salida revisa lo que sale.',hitl:'aunque el modelo obedezca, la acción riesgosa espera a una persona.'}},
+    {id:'cambio',t:'Un cambio de prompt rompió algo y nadie se enteró',p:{eva:'ningún cambio se publica sin pasar la batería contra la versión anterior.',tra:'las señales de calidad en producción (escalamientos, correcciones) delatan lo que la batería no vio.'}}
+  ];
+  let sel=new Set(['monto']);
+  const bx=$('#c15l1-prob');
+  bx.innerHTML=PROB.map(p=>'<button type="button" data-p="'+p.id+'" aria-pressed="false">'+p.t+'</button>').join('');
+  bx.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    const id=b.dataset.p;if(sel.has(id))sel.delete(id);else sel.add(id);pintar();
+  }));
+  function pintar(){
+    bx.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',sel.has(b.dataset.p)?'true':'false'));
+    const cuenta={};
+    PROB.filter(p=>sel.has(p.id)).forEach(p=>Object.keys(p.p).forEach(k=>cuenta[k]=(cuenta[k]||0)+1));
+    $('#c15l1-mapa').innerHTML=Object.keys(PAT).map(k=>{
+      const P=PAT[k],c=cuenta[k]||0;
+      return '<li class="c15l1-p'+(c?' on':'')+(c>1?' dos':'')+'" data-n="'+P.niv+'">'+P.n+'<small>'+(P.niv==='base'?'base común':'nivel '+P.niv)+' · '+P.cap+'</small>'+(c>1?'<span class="c15l1-badge">lo usan '+c+' problemas</span>':'')+'</li>';
+    }).join('');
+    const elegidos=PROB.filter(p=>sel.has(p.id));
+    if(!elegidos.length){$('#c15l1-out').innerHTML='<span>Elige al menos un problema para ver qué patrones lo resuelven.</span>';return;}
+    let h=elegidos.map(p=>'<h5>'+p.t+'</h5><ul>'+Object.keys(p.p).map(k=>'<li><b>'+PAT[k].n+'</b> ('+PAT[k].cap+'): '+p.p[k]+'</li>').join('')+'</ul>').join('');
+    const comp=Object.keys(cuenta).filter(k=>cuenta[k]>1);
+    const base=Object.keys(cuenta).filter(k=>PAT[k].niv==='base').length;
+    if(elegidos.length>1)h+=comp.length?'<span class="ok">Patrones compartidos: '+comp.map(k=>PAT[k].n).join(', ')+'. Construir uno bien resuelve varios problemas a la vez.</span>':'<span>Estos problemas no comparten patrones: cada uno pide su propia pieza.</span>';
+    h+='<span>'+base+' de los patrones encendidos son de la base común: sirven a todos los niveles y conviene tenerlos desde la primera versión.</span>';
+    $('#c15l1-out').innerHTML=h;
+  }
+  pintar();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  // g: grupo de significado; per: depende del cliente; doc: documento que cita la respuesta
+  const Q=[
+    {t:'¿Cuánto cuesta la reconexión?',g:'R',doc:'politica'},
+    {t:'¿Cuánto me cobran por reconectar el servicio?',g:'R',doc:'politica'},
+    {t:'¿Qué horario tienen las visitas técnicas?',g:'H',doc:'visitas'},
+    {t:'¿Cuál es el saldo de este cliente? (ficha de Carmen, 20417)',g:'S1',per:true},
+    {t:'¿Cuánto cuesta la instalación?',g:'I',doc:'politica'},
+    {t:'Precio de la reconexión',g:'R',doc:'politica'},
+    {t:'¿Cuál es el saldo de este cliente? (ficha de Luis, 31552)',g:'S2',per:true},
+    {t:'¿A qué hora pueden venir los técnicos?',g:'H',doc:'visitas'},
+    {t:'¿Me cobran reconexión si pago hoy, antes del corte?',g:'C',doc:'politica'},
+    {ev:'Se publica la versión nueva del manual de visitas: ahora también hay visitas los sábados.'},
+    {t:'¿En qué horario hacen las visitas técnicas?',g:'H',doc:'visitas'},
+    {t:'¿Cuánto sale reconectar?',g:'R',doc:'politica'},
+    {t:'¿Cuánto cuesta instalar el servicio?',g:'I',doc:'politica'}
+  ];
+  const real=Q.map((q,i)=>i).filter(i=>!Q[i].ev);
+  // similitudes de ejemplo entre preguntas (índices de Q)
+  const S={'1-0':.95,'5-0':.92,'5-1':.91,'11-0':.93,'11-1':.94,'11-5':.92,
+    '4-0':.89,'4-1':.87,'4-5':.86,'12-4':.95,'12-0':.88,'12-1':.86,'12-5':.85,'12-11':.87,
+    '8-0':.90,'8-1':.91,'8-5':.88,'11-8':.90,'12-8':.80,'8-4':.84,
+    '7-2':.93,'10-2':.96,'10-7':.94,'6-3':1.0};
+  function sim(a,b){const k=a+'-'+b;if(S[k]!==undefined)return S[k];const h=((a*37+b*61)%23)/100;return .45+h;}
+  const COSTO_M=0.0027,MS_M=2400,COSTO_C=0.00002,MS_C=60;
+  const fmt=v=>'US$ '+v.toFixed(4).replace('.',',');
+  function correr(){
+    const u=parseFloat($('#c15l2-u').value),pers=$('#c15l2-pers').checked,inv=$('#c15l2-inv').checked;
+    $('#c15l2-uo').textContent=u.toFixed(2).replace('.',',');
+    let cache=[],filas=[],hits=0,malos=0,costo=0,ms=0,tipos={fa:0,fuga:0,vieja:0},versionVisitas=1;
+    Q.forEach((q,i)=>{
+      if(q.ev){versionVisitas=2;if(inv)cache=cache.filter(e=>Q[e.i].doc!=='visitas');filas.push({ev:q.ev,inv});return;}
+      if(pers&&q.per){costo+=COSTO_M;ms+=MS_M;filas.push({i,cls:'modelo',tag:'Personal → modelo',det:'no se busca ni se guarda en el caché'});return;}
+      let best=null,bs=0;cache.forEach(e=>{const s=sim(i,e.i);if(s>bs){bs=s;best=e;}});
+      costo+=COSTO_C;ms+=MS_C;
+      if(best&&bs>=u){
+        hits++;
+        const qb=Q[best.i];let cls='hit',tag='Caché ✓',det='similitud '+bs.toFixed(2).replace('.',',')+' con la n.º '+(real.indexOf(best.i)+1);
+        if(qb.g!==q.g){cls='mal';malos++;
+          if(q.per){tag='Fuga';tipos.fuga++;det+=': recibe el saldo de otro cliente';}
+          else{tag='Falso acierto';tipos.fa++;det+=': recibe la respuesta de otra pregunta';}
+        }else if(q.doc==='visitas'&&best.v<versionVisitas){cls='mal';malos++;tag='Vieja';tipos.vieja++;det+=': respuesta del manual anterior, sin los sábados';}
+        filas.push({i,cls,tag,det});
+      }else{
+        costo+=COSTO_M;ms+=MS_M;
+        cache.push({i,v:q.doc==='visitas'?versionVisitas:1});
+        filas.push({i,cls:'modelo',tag:'Modelo',det:best?'la más parecida: '+bs.toFixed(2).replace('.',',')+', bajo el umbral; se guarda':'caché vacío; se guarda'});
+      }
+    });
+    $('#c15l2-lista').innerHTML=filas.map(f=>f.ev?'<li class="c15l2-ev">'+f.ev+(f.inv?' El caché borra las respuestas que lo citan.':' El caché no se entera.')+'</li>':
+      '<li class="c15l2-q '+f.cls+'"><b class="n">'+(real.indexOf(f.i)+1)+'</b><span>'+Q[f.i].t+'</span><span class="tag">'+f.tag+'</span><small>'+f.det+'</small></li>').join('');
+    const n=real.length,sin=n*COSTO_M;
+    $('#c15l2-k1').textContent=hits+' de '+n;$('#c15l2-k2').textContent=malos;
+    $('#c15l2-k3').textContent=fmt(costo);$('#c15l2-k4').textContent=Math.round(ms/n)+' ms';
+    $('#c15l2-kf').classList.toggle('malk',malos>0);
+    let h='<span>Sin caché, las 12 preguntas cuestan '+fmt(sin)+' y tardan '+MS_M+' ms cada una. Con este caché: '+fmt(costo)+' ('+Math.round((1-costo/sin)*100)+' % menos) y '+Math.round(ms/n)+' ms en promedio.</span>';
+    if(tipos.fuga)h+='<span class="warn">Fuga de datos: la pregunta sobre el saldo de Luis recibió el saldo de Carmen. La pregunta era idéntica; el cliente, no. Activa «No guardar ni servir preguntas personales».</span>';
+    if(tipos.fa)h+='<span class="warn">'+tipos.fa+' falso(s) acierto(s): con umbral '+u.toFixed(2).replace('.',',')+', preguntas distintas que suenan parecido («instalación», «si pago hoy») reciben el precio de la reconexión. Sube el umbral.</span>';
+    if(tipos.vieja)h+='<span class="warn">Respuesta vieja: el manual de visitas cambió y el caché siguió sirviendo el horario anterior. Activa la invalidación por documento.</span>';
+    if(!malos&&hits)h+='<span class="ok">Ningún falso acierto: el caché sirve solo reformulaciones de la misma pregunta. Este es el punto que se busca, y se confirma con una muestra revisada cada semana.</span>';
+    if(hits<=2&&!malos)h+='<span>Con un umbral tan alto casi nada se sirve del caché: es seguro, pero el ahorro es mínimo.</span>';
+    $('#c15l2-out').innerHTML=h;
+  }
+  ['#c15l2-u','#c15l2-pers','#c15l2-inv'].forEach(s=>$(s).addEventListener('input',correr));
+  ['#c15l2-pers','#c15l2-inv'].forEach(s=>$(s).addEventListener('change',correr));
+  correr();
+})();
+</script>
+</body>
+</html>

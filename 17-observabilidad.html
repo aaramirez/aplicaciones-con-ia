@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Observabilidad y KPIs · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="observabilidad">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 17 DE 20</span><h1>Observabilidad y KPIs</h1><p class="lede">La batería dice si una versión está lista; la observabilidad dice qué está pasando ahora, con los agentes reales. Este capítulo instrumenta el asistente de atención con trazas y tramos, mide el costo por función y por nivel, la latencia en percentiles y las señales de calidad, y arma los KPIs de cada nivel de la escalera, sin dejar datos personales en los registros.</p></header>
+<section><div class="prose"><p>Un martes a las 10:40, la jefa de reclamos escribió en el chat del equipo: «el asistente está lento y hoy contestó raro dos veces». Mateo abrió la herramienta de trazas, filtró las consultas de esa mañana de su equipo y encontró las dos en un minuto. Las dos tenían un tramo de recuperación que había traído el manual de visitas viejo; las dos habían esperado ocho segundos porque el proveedor estaba limitando la tasa y la puerta había pasado al modelo de respaldo. Dos problemas distintos, con causa y hora. Sin las trazas, la conversación habría sido «a mí me funciona».</p><p>Este capítulo construye lo que hizo posible ese minuto. El capítulo 2 dejó dicho qué guardar de cada llamada y el capítulo 16, cómo evaluar antes de publicar. Aquí se arma la parte que mira la aplicación mientras trabaja.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un avión lleva una caja negra que graba todo lo que pasa en la cabina y en los instrumentos, y en tierra hay un centro de control que mira, en vivo, la posición y la altura de cada vuelo. La caja negra sirve para entender un incidente después; el centro de control, para ver un problema mientras ocurre. Una aplicación con IA necesita las dos cosas: la traza de cada respuesta y el tablero que dice si hoy está todo bien.</p></div><div class="prose"><p>La <b>observabilidad</b> (<i>observability</i>) es la capacidad de entender qué pasa dentro de un sistema mirando lo que produce hacia afuera: sus registros, sus métricas y sus trazas. En una aplicación con un <b>modelo de lenguaje grande</b> (<i>large language model</i>, LLM) tiene una dificultad extra: la misma entrada puede dar salidas distintas, y una respuesta puede ser técnicamente exitosa (código 200, JSON válido, dos segundos) y estar equivocada. Por eso no alcanza con mirar si el servicio responde: hay que poder reconstruir por qué respondió lo que respondió.</p></div></section>
+<section><h2>Qué registrar: entrada, contexto, modelo, parámetros, herramientas y salida</h2><div class="prose"><p>La lista del capítulo 2 sigue siendo la base: el pedido y quién lo hizo, el modelo con su versión exacta, los parámetros, la plantilla con su versión, el contexto que entró, las herramientas con sus entradas y salidas, la salida, los validadores, los reintentos, los tokens, el costo y los tiempos. Lo que cambia ahora es la forma: en lugar de una línea de registro por llamada, cada dato es un <b>atributo</b> (<i>attribute</i>) de un tramo con nombre normalizado, para que cualquier herramienta lo entienda.</p><p>El estándar abierto para eso es <b>OpenTelemetry</b>, un proyecto que define cómo se describen y se envían trazas, métricas y registros, con independencia de la herramienta que los guarda. Sus <b>convenciones semánticas</b> (<i>semantic conventions</i>) para IA generativa fijan los nombres de los atributos de una llamada a un modelo: <code>gen_ai.request.model</code> para el modelo pedido, <code>gen_ai.usage.input_tokens</code> y <code>gen_ai.usage.output_tokens</code> para los tokens, <code>gen_ai.response.finish_reasons</code> para cómo terminó la respuesta. El asistente agrega atributos propios con un prefijo: <code>app.plantilla</code>, <code>app.indice</code>, <code>app.funcion</code>, <code>app.nivel</code> y <code>app.rol</code>.</p><p>Dos reglas deciden qué más se guarda:</p><ul><li><b>Todo lo que hace falta para reproducir, siempre.</b> Versiones, parámetros, identificadores de los fragmentos que entraron, herramientas llamadas y resultados de los validadores. Son datos chicos y sin información personal.</li><li><b>El texto completo, con cuidado.</b> El prompt armado, el contexto y la respuesta son lo más útil para depurar y lo más sensible. Las convenciones de OpenTelemetry los tratan como opcionales por esa razón. El asistente los guarda enmascarados, en un almacén aparte y con menos días de retención, como se ve al final del capítulo.</li></ul></div><div class="practica"><div class="practica-title"><span class="tag">En el navegador</span><h3>Las convenciones de OpenTelemetry para IA generativa</h3></div><p>Vas a leer la especificación pública de los tramos de IA generativa y a comparar sus nombres con la lista de lo que el asistente registra. Solo necesitas el navegador.</p><ol class="steps"><li><span>Abre <a href="https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/client-inference.md" target="_blank" rel="noopener">las convenciones semánticas para la inferencia de IA generativa</a>, en el repositorio público del proyecto.</span></li><li><span>Busca los atributos para el modelo pedido, el modelo que respondió, los tokens de entrada y de salida, la temperatura y el máximo de tokens. Anota sus nombres.</span></li><li><span>Busca cómo se arma el nombre del tramo (la línea <i>Span name</i>) y qué valores admite <code>gen_ai.operation.name</code>.</span></li><li><span>Busca qué dice la página sobre registrar el contenido de los mensajes (entradas y salidas) y con qué nivel de requisito aparece.</span></li></ol><p><b>Qué observar:</b> los nombres empiezan con <code>gen_ai.</code> y se agrupan en pedido (<code>request</code>), respuesta (<code>response</code>) y uso (<code>usage</code>); distinguir el modelo pedido del que respondió sirve justamente para detectar cuando un alias cambia de versión, como en el capítulo 16. El contenido de los mensajes no es obligatorio: queda a decisión de cada aplicación por su sensibilidad. La especificación todavía está marcada como en desarrollo y algunos nombres pueden cambiar; por eso conviene que los nombres vivan en un solo módulo del código.</p></div></section>
+<section><h2>Trazas y tramos de una conversación, al estilo Langfuse</h2><div class="prose"><p>Una <b>traza</b> (<i>trace</i>) es el recorrido completo de un pedido por el sistema, y cada paso dentro de ella es un <b>tramo</b> (<i>span</i>), con su inicio, su duración, sus atributos y su tramo padre. Los tramos se anidan: la recuperación contiene el cálculo del embedding, la búsqueda y el reordenamiento. Y las trazas de una misma conversación se agrupan en una <b>sesión</b> (<i>session</i>).</p></div><div class="analogia"><b>Imagínalo así</b><p>El seguimiento de un paquete de mensajería muestra cada estación por la que pasó: recibido en la sucursal, en el centro de distribución, en el camión de reparto, entregado, con la hora de cada una. Si el paquete se atrasó, se ve en qué estación se quedó. Una traza es el seguimiento de una pregunta, y cada tramo es una estación.</p></div><div class="prose"><p>Herramientas como Langfuse (de código abierto y que se puede instalar en servidores propios), Arize Phoenix o LangSmith están hechas para aplicaciones con modelos de lenguaje, y son ejemplos del mercado; también sirve un almacén genérico de trazas como Jaeger o Grafana Tempo, con OpenTelemetry. Lo que agregan las especializadas son tres ideas que conviene copiar aunque no se usen:</p><ul><li><b>El tramo de generación</b> (<i>generation</i>) es un tipo especial: además del tiempo, guarda el modelo, los tokens, el costo calculado y el prompt con su versión, y se puede abrir para leer qué entró y qué salió.</li><li><b>Los puntajes</b> (<i>scores</i>) se pegan a la traza: el voto del agente, el resultado de un juez en línea, la corrección que hizo antes de enviar la respuesta. Así la calidad queda junto a la causa.</li><li><b>Las versiones del prompt</b> se registran con la traza, de modo que se puede filtrar «todas las respuestas producidas con <code>respuesta-agente@v5.1</code>» y compararlas con las de la versión anterior.</li></ul></div><figure class="fig fig-esquema" id="17-diagrama-1"><div class="lienzo"><svg viewBox="0 0 900 488" style="min-width:720px" role="img" aria-label="Traza de la consulta de Carmen sobre la reconexión, con sus tramos en cascada: guardrail de entrada, caché omitido por ser personal, recuperación con embedding, búsqueda y reordenamiento, generación del plan, herramienta calcular_total por MCP, generación de la redacción, validación y guardrail de salida. Las dos generaciones ocupan casi todo el tiempo. A la derecha, los atributos del tramo de generación; abajo, el puntaje del agente.">
+<text x="20" y="26" class="t t-xs t-b t-m">TRAZA 7c1e…a90 · sesión s-4b07 · consulta de la cuenta ***17</text>
+<text x="20" y="46" class="t t-b" style="font-size:13px">2,65 s · US$ 0,0044 · 3.515 tokens</text>
+<line x1="218.0" y1="80" x2="218.0" y2="398" class="vida"/>
+<text x="218" y="76" class="t t-s t-m" text-anchor="middle">0,0 s</text>
+<line x1="297.6" y1="80" x2="297.6" y2="398" class="vida"/>
+<text x="298" y="76" class="t t-s t-m" text-anchor="middle">0,5 s</text>
+<line x1="377.2" y1="80" x2="377.2" y2="398" class="vida"/>
+<text x="377" y="76" class="t t-s t-m" text-anchor="middle">1,0 s</text>
+<line x1="456.9" y1="80" x2="456.9" y2="398" class="vida"/>
+<text x="457" y="76" class="t t-s t-m" text-anchor="middle">1,5 s</text>
+<line x1="536.5" y1="80" x2="536.5" y2="398" class="vida"/>
+<text x="536" y="76" class="t t-s t-m" text-anchor="middle">2,0 s</text>
+<line x1="616.1" y1="80" x2="616.1" y2="398" class="vida"/>
+<text x="616" y="76" class="t t-s t-m" text-anchor="middle">2,5 s</text>
+<text x="20" y="103" class="t t-mono t-b" style="font-size:11px">consulta</text>
+<rect x="218.0" y="91" width="422.0" height="15" rx="3" class="caja" style="fill:var(--ink);opacity:.45;stroke:none"/>
+<text x="634" y="103" class="t t-s t-b" style="fill:var(--card)" text-anchor="end" style="font-size:11px">2,65 s</text>
+<text x="34" y="129" class="t t-mono" style="font-size:11px">guardrail_entrada</text>
+<rect x="218.0" y="117" width="3.0" height="15" rx="3" class="caja" style="fill:var(--muted);stroke:none"/>
+<text x="227" y="129" class="t t-s t-m">8 ms</text>
+<text x="34" y="155" class="t t-mono" style="font-size:11px">cache_semantico · omitido</text>
+<rect x="219.3" y="143" width="3.0" height="15" rx="3" class="caja" style="fill:var(--muted);stroke:none"/>
+<text x="228" y="155" class="t t-s t-m">1 ms</text>
+<text x="34" y="181" class="t t-mono" style="font-size:11px">recuperacion</text>
+<rect x="219.4" y="169" width="30.3" height="15" rx="3" class="c-enl"/>
+<text x="256" y="181" class="t t-s t-m">190 ms</text>
+<text x="48" y="207" class="t t-mono" style="font-size:11px">embedding</text>
+<rect x="219.4" y="195" width="6.4" height="15" rx="3" class="c-enl"/>
+<text x="232" y="207" class="t t-s t-m">40 ms</text>
+<text x="48" y="233" class="t t-mono" style="font-size:11px">busqueda_hibrida</text>
+<rect x="225.8" y="221" width="14.3" height="15" rx="3" class="c-enl"/>
+<text x="246" y="233" class="t t-s t-m">90 ms</text>
+<text x="48" y="259" class="t t-mono" style="font-size:11px">reordenar</text>
+<rect x="240.1" y="247" width="9.6" height="15" rx="3" class="c-enl"/>
+<text x="256" y="259" class="t t-s t-m">60 ms</text>
+<text x="34" y="285" class="t t-mono" style="font-size:11px">generacion_plan</text>
+<rect x="249.7" y="273" width="143.3" height="15" rx="3" class="caja" style="fill:var(--warm);stroke:var(--warm)"/>
+<text x="399" y="285" class="t t-s t-m">900 ms</text>
+<text x="34" y="311" class="t t-mono" style="font-size:11px">calcular_total · MCP</text>
+<rect x="393.0" y="299" width="19.1" height="15" rx="3" class="c-red" style="fill:var(--c-red)"/>
+<text x="418" y="311" class="t t-s t-m">120 ms</text>
+<text x="34" y="337" class="t t-mono" style="font-size:11px">generacion_redaccion</text>
+<rect x="412.1" y="325" width="222.9" height="15" rx="3" class="caja" style="fill:var(--warm);stroke:var(--warm)"/>
+<text x="629" y="337" class="t t-s t-b" style="fill:var(--card)" text-anchor="end" style="font-size:11px">1,40 s</text>
+<text x="34" y="363" class="t t-mono" style="font-size:11px">validacion</text>
+<rect x="635.1" y="351" width="3.2" height="15" rx="3" class="d-casa" style="fill:var(--d-casa)"/>
+<text x="632" y="363" class="t t-s t-b" style="fill:var(--card)" text-anchor="end" style="font-size:11px">20 ms</text>
+<text x="34" y="389" class="t t-mono" style="font-size:11px">guardrail_salida</text>
+<rect x="638.2" y="377" width="3.0" height="15" rx="3" class="caja" style="fill:var(--muted);stroke:none"/>
+<text x="635" y="389" class="t t-s t-b" style="fill:var(--card)" text-anchor="end" style="font-size:11px">11 ms</text>
+<rect x="660" y="80" width="222" height="290" rx="10" class="caja" style="stroke:var(--warm);stroke-width:1.6"/>
+<path d="M660 332 L636 332" class="ln ln-d" style="stroke:var(--warm)"/>
+<text x="672" y="102" class="t t-b t-mono" style="font-size:12px">generacion_redaccion</text>
+<text x="672" y="130" class="t t-s t-m t-mono">gen_ai.request.model</text>
+<text x="672" y="143" class="t t-s">mediano, versión fija</text>
+<text x="672" y="164" class="t t-s t-m t-mono">gen_ai.usage.input_tokens</text>
+<text x="672" y="177" class="t t-s">1.700</text>
+<text x="672" y="198" class="t t-s t-m t-mono">gen_ai.usage.output_tokens</text>
+<text x="672" y="211" class="t t-s">180</text>
+<text x="672" y="232" class="t t-s t-m t-mono">costo</text>
+<text x="672" y="245" class="t t-s">US$ 0,00242</text>
+<text x="672" y="266" class="t t-s t-m t-mono">app.plantilla</text>
+<text x="672" y="279" class="t t-s">respuesta-agente@v5.1</text>
+<text x="672" y="300" class="t t-s t-m t-mono">TTFT</text>
+<text x="672" y="313" class="t t-s">600 ms (streaming)</text>
+<text x="672" y="334" class="t t-s t-m t-mono">entrada</text>
+<text x="672" y="347" class="t t-s">total=35,00 · fuente: …2026</text>
+<rect x="20" y="416" width="620" height="40" rx="10" class="caja" style="stroke-dasharray:5 3"/>
+<text x="34" y="441" class="t t-s">Puntajes de la traza:  voto del agente: arriba  ·  juez en línea: fiel a la fuente  ·  sin corrección</text>
+<rect x="20" y="464" width="16" height="11" rx="3" class="caja" style="fill:var(--warm);stroke:var(--warm)"/>
+<text x="42" y="474" class="t t-s">modelo</text>
+<rect x="100" y="464" width="16" height="11" rx="3" class="c-enl"/>
+<text x="122" y="474" class="t t-s">recuperación</text>
+<rect x="216" y="464" width="16" height="11" rx="3" class="c-red" style="fill:var(--c-red)"/>
+<text x="238" y="474" class="t t-s">herramienta</text>
+<rect x="326" y="464" width="16" height="11" rx="3" class="d-casa" style="fill:var(--d-casa)"/>
+<text x="348" y="474" class="t t-s">validación</text>
+<rect x="430" y="464" width="16" height="11" rx="3" class="caja" style="fill:var(--muted);stroke:none"/>
+<text x="452" y="474" class="t t-s">guardrail y caché</text>
+</svg></div><figcaption><b>La anatomía de una traza.</b> La consulta de Carmen sobre la reconexión, tramo por tramo. Cada barra es un tramo; su largo es su duración y su sangría, su tramo padre. De arriba hacia abajo: el guardrail de entrada, el caché semántico (omitido, porque la pregunta es sobre una clienta), la recuperación con sus tres hijos, la generación del plan, la herramienta <code>calcular_total</code> por MCP, la generación de la redacción, la validación y el guardrail de salida. Las barras cálidas son las del modelo: se llevan casi todo el tiempo. A la derecha, los atributos del tramo de generación (modelo, tokens, costo, plantilla) y, abajo, el puntaje que dejó el agente.</figcaption></figure><div class="lab" id="17-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Sigue la traza de una conversación</h3></div><p class="hint">Elige una traza del asistente y abre cada tramo para ver su duración, sus tokens, su costo y lo que entró y salió (ya enmascarado). Compara una consulta servida desde el caché, una con herramienta, un reembolso que esperó una aprobación y una avería atendida por el agente: mira dónde se va el tiempo y el dinero en cada una.</p><style>
+[id="17-lab-1"] .c17l1-wf{display:grid;gap:3px}
+[id="17-lab-1"] .c17l1-row{display:grid;grid-template-columns:minmax(0,32%) minmax(0,1fr) 4.6rem;gap:8px;align-items:center;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:500 .76rem var(--f-display);color:var(--ink);cursor:pointer}
+[id="17-lab-1"] .c17l1-row[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+[id="17-lab-1"] .c17l1-row .nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+[id="17-lab-1"] .c17l1-row .ms{font:600 .74rem var(--f-mono);text-align:right;color:var(--muted)}
+[id="17-lab-1"] .c17l1-pista{position:relative;height:14px;background:var(--grid);border-radius:3px;overflow:hidden}
+[id="17-lab-1"] .c17l1-bar{position:absolute;top:0;bottom:0;min-width:3px;border-radius:3px}
+[id="17-lab-1"] .t-gen{background:var(--warm)}
+[id="17-lab-1"] .t-tool{background:var(--c-red)}
+[id="17-lab-1"] .t-ret{background:var(--c-enl)}
+[id="17-lab-1"] .t-guard{background:var(--muted)}
+[id="17-lab-1"] .t-val{background:var(--d-casa)}
+[id="17-lab-1"] .t-hum{background:repeating-linear-gradient(45deg,var(--warm-soft) 0 6px,var(--warm) 6px 8px)}
+[id="17-lab-1"] .t-raiz{background:var(--ink);opacity:.55}
+@media (max-width:560px){[id="17-lab-1"] .c17l1-row{grid-template-columns:minmax(0,1fr) 3.8rem;row-gap:3px}[id="17-lab-1"] .c17l1-row .nom{grid-column:1/-1;white-space:normal}}
+[id="17-lab-1"] .c17l1-ley{display:flex;flex-wrap:wrap;gap:4px 14px;font:500 .74rem var(--f-display);color:var(--muted)}
+[id="17-lab-1"] .c17l1-ley i{display:inline-block;width:12px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+[id="17-lab-1"] .c17l1-det{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--paper);display:grid;gap:4px;font:500 .8rem/1.4 var(--f-display);color:var(--ink)}
+[id="17-lab-1"] .c17l1-det h5{margin:0;font:700 .82rem var(--f-display)}
+[id="17-lab-1"] .c17l1-det dl{display:grid;grid-template-columns:minmax(110px,max-content) minmax(0,1fr);gap:2px 10px;margin:0}
+[id="17-lab-1"] .c17l1-det dt{color:var(--muted)}
+[id="17-lab-1"] .c17l1-det dd{margin:0;font-family:var(--f-mono);font-size:.74rem;overflow-wrap:anywhere}
+[id="17-lab-1"] .c17l1-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,120px),1fr));gap:8px}
+[id="17-lab-1"] .c17l1-k{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--paper)}
+[id="17-lab-1"] .c17l1-k span{display:block;font:600 .72rem var(--f-display);color:var(--muted)}
+[id="17-lab-1"] .c17l1-k output{font:700 1.02rem var(--f-mono);color:var(--ink)}
+</style>
+<div class="btns" role="group" aria-label="Traza">
+  <button type="button" data-t="cache" aria-pressed="false">Tarifa desde el caché</button>
+  <button type="button" data-t="carmen" aria-pressed="true">Reconexión de Carmen</button>
+  <button type="button" data-t="reembolso" aria-pressed="false">Reembolso con aprobación</button>
+  <button type="button" data-t="averia" aria-pressed="false">Avería zona Norte (agente)</button>
+</div>
+<div class="c17l1-kpis">
+  <div class="c17l1-k"><span>Duración total</span><output id="c17l1-k1">0</output></div>
+  <div class="c17l1-k"><span>Costo</span><output id="c17l1-k2">0</output></div>
+  <div class="c17l1-k"><span>Tokens</span><output id="c17l1-k3">0</output></div>
+  <div class="c17l1-k"><span>Tiempo en el modelo</span><output id="c17l1-k4">0</output></div>
+</div>
+<div class="c17l1-wf" id="c17l1-wf" aria-label="Tramos de la traza (pulsa uno para ver su detalle)"></div>
+<div class="c17l1-ley" aria-hidden="true"><span><i class="t-gen"></i>generación (modelo)</span><span><i class="t-ret"></i>recuperación</span><span><i class="t-tool"></i>herramienta</span><span><i class="t-val"></i>validación y política</span><span><i class="t-guard"></i>guardrail y caché</span><span><i class="t-hum"></i>espera humana</span></div>
+<div class="c17l1-det" id="c17l1-det" aria-live="polite"></div>
+<div class="readout texto" id="c17l1-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Trazas propias, con datos enmascarados, y su resumen</h3></div><p>Vas a instrumentar seis consultas a tu modelo local: cada una deja una traza con tres tramos (recuperación, generación y validación) en un archivo JSONL (<i>JSON Lines</i>, un objeto JSON por línea), con los datos personales enmascarados antes de escribir. Al final, el programa lee el archivo y calcula el costo por función y la latencia en percentiles. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>trazas.py</code>:</p><div class="code-copia"><pre><code>import json, re, time, uuid, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+PRECIO = {"entrada": 1.00, "salida": 4.00}  # US$ por millón de tokens, inventados
+DOCS = {"reconexion": "El cargo por reconexión es de US$ 5,00.",
+        "visitas": "Las visitas técnicas son de lunes a viernes, de 8:00 a 18:00."}
+CONSULTAS = [
+    ("tarifas", "¿Cuánto cuesta la reconexión? La pide Carmen Rojas, cuenta 20417."),
+    ("tarifas", "¿Cuánto cuesta reconectar? Es para carmen.rojas@ejemplo.com"),
+    ("visitas", "¿En qué horario pueden ir los técnicos a la cuenta 31552?"),
+    ("tarifas", "Precio de la reconexión del servicio"),
+    ("visitas", "¿Hacen visitas los sábados? Cliente Ana Gómez, cuenta 40981."),
+    ("visitas", "¿A qué hora llega el técnico?"),
+]
+
+def enmascarar(texto):
+    texto = re.sub(r"[\w.]+@[\w.]+", "&lt;correo&gt;", texto)
+    return re.sub(r"(cuenta )\d{3}(\d{2})", r"\1***\2", texto)  # cuenta 20417 -&gt; cuenta ***17
+
+def tramo(traza, nombre, padre, inicio, **atributos):
+    return {"traza": traza, "tramo": uuid.uuid4().hex[:8], "padre": padre, "nombre": nombre,
+            "ms": round((time.perf_counter() - inicio) * 1000), **atributos}
+
+with open("trazas.jsonl", "w", encoding="utf-8") as archivo:
+    for funcion, pregunta in CONSULTAS:
+        traza, raiz, t0 = uuid.uuid4().hex[:12], uuid.uuid4().hex[:8], time.perf_counter()
+        t = time.perf_counter()
+        doc = "reconexion" if "reconect" in pregunta.lower() or "reconexión" in pregunta.lower() else "visitas"
+        tramos = [tramo(traza, "recuperacion", raiz, t, fragmentos=[doc])]
+        t = time.perf_counter()
+        cuerpo = {"model": "llama3.2:3b", "temperature": 0, "max_tokens": 120,
+                  "messages": [{"role": "system", "content": "Responde en una frase con: " + DOCS[doc]},
+                               {"role": "user", "content": pregunta}]}
+        pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                        headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(pedido) as r:
+            datos = json.load(r)
+        uso = datos.get("usage", {})
+        ent, sal = uso.get("prompt_tokens", 0), uso.get("completion_tokens", 0)
+        costo = (ent * PRECIO["entrada"] + sal * PRECIO["salida"]) / 1_000_000
+        respuesta = datos["choices"][0]["message"]["content"]
+        tramos.append(tramo(traza, "generacion", raiz, t, **{"gen_ai.request.model": "llama3.2:3b",
+            "gen_ai.usage.input_tokens": ent, "gen_ai.usage.output_tokens": sal, "costo_usd": costo,
+            "entrada": enmascarar(pregunta), "salida": enmascarar(respuesta)}))
+        t = time.perf_counter()
+        tramos.append(tramo(traza, "validacion", raiz, t, cita_ok=bool(re.search(r"5,00|8:00", respuesta))))
+        tramos.append({"traza": traza, "tramo": raiz, "padre": None, "nombre": "consulta",
+                       "app.funcion": funcion, "ms": round((time.perf_counter() - t0) * 1000)})
+        for x in tramos:
+            archivo.write(json.dumps(x, ensure_ascii=False) + "\n")
+
+lineas = [json.loads(l) for l in open("trazas.jsonl", encoding="utf-8")]
+totales = sorted(x["ms"] for x in lineas if x["nombre"] == "consulta")
+def percentil(valores, p):
+    return valores[max(0, round(p / 100 * len(valores)) - 1)]
+funcion_de = {x["traza"]: x["app.funcion"] for x in lineas if x["nombre"] == "consulta"}
+costo = {}
+for x in lineas:
+    if x["nombre"] == "generacion":
+        f = funcion_de[x["traza"]]
+        costo[f] = costo.get(f, 0) + x["costo_usd"]
+print("Latencia de la consulta: p50", percentil(totales, 50), "ms · p95", percentil(totales, 95), "ms")
+print("Costo por función (US$):", {f: round(c, 6) for f, c in costo.items()})
+print("Ejemplo de tramo guardado:", [x for x in lineas if x["nombre"] == "generacion"][0]["entrada"])</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>python trazas.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Get-Content trazas.jsonl -TotalCount 4</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 trazas.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>head -n 4 trazas.jsonl</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota la latencia p50 y p95 y el costo de cada función.</span></li><li><span>Mira las primeras líneas del archivo: identifica la traza, el tramo raíz y sus hijos por los campos <code>traza</code> y <code>padre</code>.</span></li><li><span>Busca en el archivo el número de cuenta 20417 y el correo de Carmen. ¿Aparecen?</span></li></ol><p><b>Qué observar:</b> cada consulta deja cuatro líneas que comparten el mismo identificador de traza, y los tramos hijos apuntan a la raíz: con eso cualquier herramienta reconstruye el árbol. Casi todo el tiempo se va en el tramo de generación. Con seis consultas, la p95 es directamente la más lenta, que suele ser la primera, porque el modelo se carga en memoria: un promedio escondería esa diferencia. En el archivo, la cuenta aparece como <code>cuenta ***17</code> y el correo como <code>&lt;correo&gt;</code>: el enmascarado ocurre antes de escribir, no después. Los nombres, en cambio, siguen ahí: una expresión regular no sabe qué palabras son un nombre, y por eso el texto completo vive en un almacén aparte aunque esté enmascarado. Si <code>usage</code> llega vacío, los tokens quedan en cero; la API compatible de Ollama lo devuelve en las respuestas sin <i>streaming</i>.</p></div></section>
+<section><h2>Costos por usuario, por función y por nivel</h2><div class="prose"><p>El capítulo 3 enseñó a calcular el costo de una llamada. En producción la pregunta cambia: no es cuánto cuesta una llamada, sino <b>en qué se va el dinero</b>. La traza lo responde si cada tramo de generación lleva su costo y cada traza lleva sus etiquetas: la función (<code>consulta_tarifas</code>, <code>clasificar_ticket</code>, <code>reembolso</code>, <code>averia</code>), el nivel de la escalera, el equipo y el rol de quien pidió. El usuario se guarda como un identificador seudónimo, no con su nombre.</p></div><div class="analogia"><b>Imagínalo así</b><p>La cuenta del celular de una familia no dice solo el total del mes: separa cuánto gastó cada línea, en llamadas, en datos y en roaming. Recién con ese detalle alguien descubre que el gasto alto era la línea del hijo de viaje, y no «el plan, que está caro».</p></div><div class="prose"><p>Así se veía el mes típico de la v1.0, con los precios inventados del capítulo 3:</p><div class="tbl"><table><thead><tr><th>Función</th><th>Nivel</th><th>Volumen al mes</th><th>Costo medio</th><th>Costo del mes</th></tr></thead><tbody><tr><td>Consultas de tarifas y políticas</td><td>1 y 2</td><td>30.000</td><td>US$ 0,0024 (una de cada cinco, del caché)</td><td>US$ 72</td></tr><tr><td>Clasificación de tickets, modelo pequeño propio</td><td>5</td><td>40.000</td><td>US$ 0,0002</td><td>US$ 8</td></tr><tr><td>Reembolsos y visitas con herramientas</td><td>3</td><td>3.000</td><td>US$ 0,0060</td><td>US$ 18</td></tr><tr><td>Agente de avería masiva</td><td>4</td><td>6 averías</td><td>US$ 0,25</td><td>US$ 1,50</td></tr><tr><td>Batería en la integración continua (CI) y jueces en línea</td><td>base</td><td>60 corridas y una muestra diaria</td><td>—</td><td>US$ 80</td></tr></tbody></table></div><p>Tres lecturas salen de la tabla, y ninguna se ve en el total. La clasificación es la función con más volumen y casi no cuesta, porque el capítulo 14 la pasó a un modelo pequeño. El agente, que asusta por su costo por ejecución, es lo más barato del mes porque corre pocas veces. Y la evaluación cuesta casi lo mismo que la operación: es una decisión correcta, pero tiene que estar a la vista para que nadie la recorte por sorpresa.</p><p>El número que conecta el costo con el negocio es el <b>costo por resultado</b>: por consulta resuelta sin corrección, por reembolso bien hecho, por avería atendida. Una función barata que los agentes corrigen la mitad de las veces sale cara. Los presupuestos y las alertas de gasto (por día, por función y por usuario) viven en la puerta a los modelos del capítulo 3 y leen estos mismos datos. El costo de cada conversación en un bot de cara al cliente, con los mensajes del canal incluidos, está en <a href="https://aaramirez.github.io/chatbots-empresariales/13-costo-por-conversacion.html" target="_blank" rel="noopener">El costo por conversación</a>.</p></div></section>
+<section><h2>Latencia: tiempo hasta la primera palabra y percentil 95</h2><div class="prose"><p>El agente no siente el promedio: siente la consulta que lo dejó esperando con la clienta en línea.</p></div><div class="analogia"><b>Imagínalo así</b><p>Si un bus pasa cada diez minutos «en promedio», pero un día de cada veinte tarda cuarenta, la gente no recuerda el promedio: recuerda el día que llegó tarde al trabajo. Para saber si el servicio es bueno hay que mirar cuánto se espera en los peores días normales, no en el día típico.</p></div><div class="prose"><p>Un <b>percentil</b> (<i>percentile</i>) dice qué valor no supera un porcentaje de los casos. El percentil 50 (p50, la mediana) es la consulta típica; el <b>percentil 95</b> (p95) es el tiempo que no supera el 95 % de las consultas, es decir, la peor de cada veinte. En una muestra de cien consultas del asistente, el promedio era 2,6 segundos y parecía bien; la p95 era 7,9 segundos, porque cinco consultas habían pasado por reintentos y por el modelo de respaldo. El promedio escondía exactamente lo que la jefa de reclamos estaba sintiendo.</p><p>En el asistente se miden dos tiempos, ya conocidos del capítulo 3: el <b>tiempo hasta la primera palabra</b> (<i>time to first token</i>, TTFT), que es lo que percibe el agente cuando la explicación llega por <i>streaming</i>, y el tiempo total, que es lo que espera un programa por el JSON completo. Para cada uno se fija un <b>objetivo de nivel de servicio</b> (<i>service level objective</i>, SLO): por ejemplo, p95 del TTFT por debajo de 1,5 segundos y p95 total por debajo de 6 segundos en las consultas. Las alarmas se disparan con la p95, no con el promedio.</p><p>La traza permite además descomponer la latencia por tramo. En una consulta con herramienta, la generación se lleva cerca del 80 % del tiempo; la recuperación, el 7 %; la herramienta, el 5 %. Esa descomposición dice dónde vale la pena trabajar: acortar la salida o pasar a un modelo más pequeño mueve mucho más que optimizar la búsqueda. Y separa lo que no es latencia del sistema: un reembolso que esperó veinte minutos la aprobación de la supervisora tiene un tramo de espera humana, que se mide aparte, con su propio objetivo.</p></div></section>
+<section><h2>Señales de calidad: votos, escalamientos y correcciones</h2><div class="prose"><p>La latencia y el costo se miden solos. La calidad, en producción, se infiere de señales:</p><ul><li><b>Votos.</b> El pulgar arriba o abajo del panel, con motivo opcional. Pocos y sesgados hacia las quejas, pero cada voto negativo apunta a una traza concreta.</li><li><b>Correcciones.</b> Si el agente edita la respuesta antes de enviarla, la diferencia entre lo que propuso el asistente y lo que envió el agente es la mejor etiqueta disponible. La <b>tasa de corrección</b> es el porcentaje de respuestas editadas de forma sustancial.</li><li><b>Escalamientos.</b> Los del capítulo 2: veces que el validador no pudo resolver y la respuesta pasó a una persona. Si sube de un día para otro, algo cambió en el modelo, en la plantilla o en los datos.</li><li><b>Abandonos.</b> El agente pide algo, no usa la respuesta y busca en el manual por su cuenta.</li><li><b>Jueces en línea.</b> Las reglas y el juez calibrado del capítulo 16 sobre una muestra diaria, con su puntaje pegado a la traza.</li></ul><p>Cada señal se registra como puntaje de su traza, así que se puede ir del número al caso: de «la tasa de corrección subió a 14 % el jueves» a las veinte trazas corregidas, y de ahí a su causa común. Las fallas confirmadas vuelven al conjunto dorado, como se vio en el capítulo 16. Y cuando las preguntas de los agentes empiezan a ser de temas que antes no aparecían (un producto nuevo, una política nueva), las señales empeoran sin que nada del sistema haya cambiado: es la <b>deriva</b> (<i>drift</i>), que en los modelos clásicos se vigila con métricas propias en <a href="https://aaramirez.github.io/mlops/temario.html" target="_blank" rel="noopener">MLOps</a>.</p></div></section>
+<section><h2>Los KPIs de cada nivel</h2><div class="prose"><p>Un <b>indicador clave de desempeño</b> (<i>key performance indicator</i>, KPI) es un número que dice si algo cumple su propósito. El patrón de este capítulo pide uno por nivel de la escalera, porque cada nivel promete algo distinto y puede fallar solo:</p><div class="tbl"><table><thead><tr><th>Nivel</th><th>Promete</th><th>KPIs técnicos del asistente</th><th>Meta</th></tr></thead><tbody><tr><td>Base común</td><td>Responder rápido, barato y siempre</td><td>Latencia p95, costo por consulta, disponibilidad, activaciones del respaldo</td><td>≤ 6 s · ≤ US$ 0,004 · ≥ 99,5 %</td></tr><tr><td>1 · Generación contextualizada</td><td>Responder bien y con fuente</td><td>Respuestas correctas con fuente en la muestra semanal, abstención</td><td>≥ 80 % y ninguna sin fuente · entre 5 y 12 %</td></tr><tr><td>2 · Interacciones personalizadas</td><td>Conocer a la persona y recordar</td><td>Agentes que tienen que repetir datos ya dichos, agentes activos por semana</td><td>≤ 5 % · ≥ 80 de 90</td></tr><tr><td>3 · Automatizaciones con herramientas</td><td>Actuar bien y una sola vez</td><td>Acciones correctas en revisión, rechazos en aprobación, duplicados</td><td>≥ 95 % · ≤ 10 % · 0</td></tr><tr><td>4 · Agentes con objetivos</td><td>Llegar al objetivo dentro del presupuesto</td><td>Averías atendidas sin intervenir fuera de los puntos de control, costo por avería</td><td>≥ 75 % · ≤ US$ 0,50</td></tr><tr><td>5 · Modelos ajustados</td><td>Igual calidad, menos costo</td><td>Acuerdo del clasificador propio con el modelo grande, consultas enrutadas al pequeño</td><td>≥ 92 % · ≥ 70 %</td></tr></tbody></table></div></div><figure class="fig fig-capas" id="17-diagrama-3"><div class="lienzo"><svg viewBox="0 0 900 378" style="min-width:720px" role="img" aria-label="KPIs por nivel, de abajo hacia arriba: base común con latencia p95, costo por consulta y disponibilidad; nivel 1 correctas con fuente y abstención; nivel 2 datos repetidos y agentes activos; nivel 3 acciones correctas, rechazos y duplicados; nivel 4 averías sin intervenir y costo por avería; nivel 5 acuerdo del clasificador y consultas enrutadas. A la derecha, de dónde sale cada número.">
+<rect x="20" y="16" width="860" height="50" rx="10" class="c-apl"/>
+<text x="34" y="36" class="t t-xs t-b k-apl">NIVEL 5</text>
+<text x="34" y="54" class="t t-b" style="font-size:12px">gastar menos</text>
+<rect x="200" y="28" width="240" height="26" rx="13" class="caja"/><text x="320" y="45" class="t" text-anchor="middle" style="font-size:11px">acuerdo con el modelo grande ≥ 92 %</text>
+<rect x="448" y="28" width="190" height="26" rx="13" class="caja"/><text x="543" y="45" class="t" text-anchor="middle" style="font-size:11px">enrutadas al pequeño ≥ 70 %</text>
+<text x="866" y="46" class="t t-s t-m" text-anchor="end">trazas</text>
+<rect x="20" y="74" width="860" height="50" rx="10" class="c-tra"/>
+<text x="34" y="94" class="t t-xs t-b k-tra">NIVEL 4</text>
+<text x="34" y="112" class="t t-b" style="font-size:12px">llegar al objetivo</text>
+<rect x="200" y="86" width="153" height="26" rx="13" class="caja"/><text x="277" y="103" class="t" text-anchor="middle" style="font-size:11px">sin intervenir ≥ 75 %</text>
+<rect x="361" y="86" width="190" height="26" rx="13" class="caja"/><text x="457" y="103" class="t" text-anchor="middle" style="font-size:11px">costo por avería ≤ US$ 0,50</text>
+<text x="866" y="104" class="t t-s t-m" text-anchor="end">trazas</text>
+<rect x="20" y="132" width="860" height="50" rx="10" class="c-red"/>
+<text x="34" y="152" class="t t-xs t-b k-red">NIVEL 3</text>
+<text x="34" y="170" class="t t-b" style="font-size:12px">actuar una vez</text>
+<rect x="200" y="144" width="178" height="26" rx="13" class="caja"/><text x="289" y="161" class="t" text-anchor="middle" style="font-size:11px">acciones correctas ≥ 95 %</text>
+<rect x="386" y="144" width="116" height="26" rx="13" class="caja"/><text x="444" y="161" class="t" text-anchor="middle" style="font-size:11px">rechazos ≤ 10 %</text>
+<rect x="510" y="144" width="110" height="26" rx="13" class="caja"/><text x="566" y="161" class="t" text-anchor="middle" style="font-size:11px">duplicados = 0</text>
+<text x="866" y="162" class="t t-s t-m" text-anchor="end">revisión y trazas</text>
+<rect x="20" y="190" width="860" height="50" rx="10" class="c-enl"/>
+<text x="34" y="210" class="t t-xs t-b k-enl">NIVEL 2</text>
+<text x="34" y="228" class="t t-b" style="font-size:12px">recordar</text>
+<rect x="200" y="202" width="141" height="26" rx="13" class="caja"/><text x="271" y="219" class="t" text-anchor="middle" style="font-size:11px">repiten datos ≤ 5 %</text>
+<rect x="349" y="202" width="135" height="26" rx="13" class="caja"/><text x="416" y="219" class="t" text-anchor="middle" style="font-size:11px">activos ≥ 80 de 90</text>
+<text x="866" y="220" class="t t-s t-m" text-anchor="end">puntajes y uso</text>
+<rect x="20" y="248" width="860" height="50" rx="10" class="c-fis"/>
+<text x="34" y="268" class="t t-xs t-b k-fis">NIVEL 1</text>
+<text x="34" y="286" class="t t-b" style="font-size:12px">responder con fuente</text>
+<rect x="200" y="260" width="190" height="26" rx="13" class="caja"/><text x="295" y="277" class="t" text-anchor="middle" style="font-size:11px">correctas con fuente ≥ 80 %</text>
+<rect x="398" y="260" width="141" height="26" rx="13" class="caja"/><text x="469" y="277" class="t" text-anchor="middle" style="font-size:11px">abstención 5 a 12 %</text>
+<text x="866" y="278" class="t t-s t-m" text-anchor="end">muestra semanal</text>
+<rect x="20" y="306" width="860" height="50" rx="10" class="caja" style="stroke-dasharray:5 4"/>
+<text x="34" y="326" class="t t-xs t-b t-m">BASE COMÚN</text>
+<text x="34" y="344" class="t t-b" style="font-size:12px">rápido, barato, siempre</text>
+<rect x="200" y="318" width="135" height="26" rx="13" class="caja"/><text x="267" y="335" class="t" text-anchor="middle" style="font-size:11px">latencia p95 ≤ 6 s</text>
+<rect x="343" y="318" width="129" height="26" rx="13" class="caja"/><text x="407" y="335" class="t" text-anchor="middle" style="font-size:11px">costo ≤ US$ 0,004</text>
+<rect x="480" y="318" width="166" height="26" rx="13" class="caja"/><text x="562" y="335" class="t" text-anchor="middle" style="font-size:11px">disponibilidad ≥ 99,5 %</text>
+<text x="866" y="336" class="t t-s t-m" text-anchor="end">trazas y métricas</text>
+</svg></div><figcaption><b>Un KPI por promesa.</b> Se lee de abajo hacia arriba, como la escalera. La franja punteada es la base común, con la latencia, el costo y la disponibilidad. Cada fila de color es un nivel con la promesa que hace (responder con fuente, recordar, actuar una sola vez, llegar al objetivo, gastar menos) y sus KPIs con su meta. A la derecha, de dónde sale cada número: de las trazas, de los puntajes o de la revisión semanal de una muestra.</figcaption></figure><div class="prose"><p>Estos son los KPIs técnicos. Los de negocio (el tiempo de las consultas de tarifas frente a la línea base de 4 minutos, la satisfacción de los agentes, el costo por contacto) se miden con los mismos datos y se deciden en <a href="https://aaramirez.github.io/adopcion-de-ia/temario.html" target="_blank" rel="noopener">IA en la empresa</a>; la contención y la resolución de un bot de cara al cliente, en <a href="https://aaramirez.github.io/chatbots-empresariales/14-medir-y-mejorar.html" target="_blank" rel="noopener">Contención, desvío y satisfacción</a>. Un buen tablero pone los dos juntos: un KPI técnico en rojo explica un KPI de negocio que empeora.</p><p>El tablero por niveles tiene una ventaja que se nota en los días malos: cuando algo falla, dice dónde mirar. Si la abstención se dispara y todo lo demás está bien, el problema está en el nivel 1 (la recuperación o el índice); si suben los rechazos en aprobación, en el nivel 3 (la política o las propuestas del modelo); si sube la latencia en todos, en la base (el proveedor o la puerta).</p></div><div class="lab" id="17-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Un tablero de KPIs por nivel</h3></div><p class="hint">Ocho semanas de datos simulados del asistente, un KPI por tarjeta con su meta. Elige un escenario, mira las curvas y decide qué nivel está fallando; después pulsa el nivel que elegiste para ver si acertaste y qué traza mirarías primero.</p><style>
+[id="17-lab-2"] .c17l2-g{display:grid;gap:4px}
+[id="17-lab-2"] .c17l2-g>span{font:700 .72rem var(--f-display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+[id="17-lab-2"] .c17l2-tab{display:grid;gap:6px}
+[id="17-lab-2"] .c17l2-fila{display:grid;grid-template-columns:minmax(0,96px) minmax(0,1fr);gap:8px;align-items:stretch}
+@media (max-width:560px){[id="17-lab-2"] .c17l2-fila{grid-template-columns:minmax(0,1fr)}}
+[id="17-lab-2"] .c17l2-niv{border-radius:8px;padding:6px 8px;font:700 .72rem/1.25 var(--f-display);letter-spacing:.04em;text-transform:uppercase;display:flex;align-items:center;border:1px solid var(--line)}
+[id="17-lab-2"] .c17l2-tarjetas{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr));gap:6px}
+[id="17-lab-2"] .c17l2-t{border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:var(--card);display:grid;gap:2px;font:500 .72rem/1.25 var(--f-display);color:var(--muted)}
+[id="17-lab-2"] .c17l2-t b{font:700 .95rem var(--f-mono);color:var(--ink)}
+[id="17-lab-2"] .c17l2-t svg{width:100%;height:26px;display:block}
+[id="17-lab-2"] .c17l2-t polyline{fill:none;stroke:var(--good);stroke-width:2}
+[id="17-lab-2"] .c17l2-t line{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3}
+[id="17-lab-2"] .c17l2-t.mal{border-color:var(--warm);background:var(--warm-soft)}
+[id="17-lab-2"] .c17l2-t.mal b{color:var(--warm)}
+[id="17-lab-2"] .c17l2-t.mal polyline{stroke:var(--warm)}
+</style>
+<div class="c17l2-g"><span>Escenario (ocho semanas)</span>
+<div class="btns" role="group" aria-label="Escenario">
+  <button type="button" data-e="a" aria-pressed="true">Escenario A</button>
+  <button type="button" data-e="b" aria-pressed="false">Escenario B</button>
+  <button type="button" data-e="c" aria-pressed="false">Escenario C</button>
+  <button type="button" data-e="d" aria-pressed="false">Escenario D</button>
+  <button type="button" data-e="e" aria-pressed="false">Escenario E</button>
+  <button type="button" data-e="f" aria-pressed="false">Escenario F</button>
+</div></div>
+<div class="c17l2-tab" id="c17l2-tab" aria-label="Tablero de KPIs por nivel"></div>
+<div class="c17l2-g"><span>¿Qué nivel está fallando?</span>
+<div class="btns" role="group" aria-label="Tu diagnóstico" id="c17l2-resp">
+  <button type="button" data-r="base" aria-pressed="false">Base común</button>
+  <button type="button" data-r="1" aria-pressed="false">Nivel 1</button>
+  <button type="button" data-r="2" aria-pressed="false">Nivel 2</button>
+  <button type="button" data-r="3" aria-pressed="false">Nivel 3</button>
+  <button type="button" data-r="4" aria-pressed="false">Nivel 4</button>
+  <button type="button" data-r="5" aria-pressed="false">Nivel 5</button>
+  <button type="button" data-r="ninguno" aria-pressed="false">Ninguno</button>
+</div></div>
+<div class="readout texto" id="c17l2-out" aria-live="polite"></div></div><figure class="fig fig-arquitectura" id="17-diagrama-2"><div class="lienzo"><svg viewBox="0 0 920 490" style="min-width:740px" role="img" aria-label="Arquitectura de la telemetría: el panel, la API del asistente, la puerta a los modelos y los servidores MCP envían trazas con OpenTelemetry a un colector que enmascara, muestrea y reparte a tres almacenes: trazas y puntajes, métricas, y contenido de mensajes con retención corta y acceso restringido. Arriba, el tablero de KPIs, las alarmas y los jueces en línea, que devuelven puntajes a las trazas y casos nuevos al conjunto dorado.">
+<defs><marker id="c17d2-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker><marker id="c17d2-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker></defs>
+<g transform="translate(0,20)">
+<rect x="14" y="150" width="236" height="306" rx="12" class="d-sis" style="opacity:.55"/>
+<text x="28" y="172" class="t t-xs t-b k-sis">SISTEMAS DEL ASISTENTE</text>
+<rect x="30" y="186" width="204" height="50" rx="9" class="caja"/>
+<text x="44" y="207" class="t t-b" style="font-size:12px">Panel del agente</text>
+<text x="44" y="224" class="t t-s t-m">SDK de OpenTelemetry</text>
+<path d="M234 211 H326" class="ln" style="stroke:var(--d-casa);stroke-width:1.6" marker-end="url(#c17d2-c)"/>
+<rect x="30" y="250" width="204" height="50" rx="9" class="caja"/>
+<text x="44" y="271" class="t t-b" style="font-size:12px">API del asistente</text>
+<text x="44" y="288" class="t t-s t-m">SDK de OpenTelemetry</text>
+<path d="M234 275 H326" class="ln" style="stroke:var(--d-casa);stroke-width:1.6" marker-end="url(#c17d2-c)"/>
+<rect x="30" y="314" width="204" height="50" rx="9" class="caja"/>
+<text x="44" y="335" class="t t-b" style="font-size:12px">Puerta a los modelos</text>
+<text x="44" y="352" class="t t-s t-m">SDK de OpenTelemetry</text>
+<path d="M234 339 H326" class="ln" style="stroke:var(--d-casa);stroke-width:1.6" marker-end="url(#c17d2-c)"/>
+<rect x="30" y="378" width="204" height="50" rx="9" class="caja"/>
+<text x="44" y="399" class="t t-b" style="font-size:12px">Servidores MCP</text>
+<text x="44" y="416" class="t t-s t-m">SDK de OpenTelemetry</text>
+<path d="M234 403 H326" class="ln" style="stroke:var(--d-casa);stroke-width:1.6" marker-end="url(#c17d2-c)"/>
+<rect x="330" y="200" width="200" height="200" rx="12" class="d-casa"/>
+<text x="346" y="228" class="t t-b" style="font-size:14px">Colector</text>
+<text x="346" y="256" class="t t-s">1. enmascara datos personales</text>
+<text x="346" y="280" class="t t-s">2. decide qué se muestrea</text>
+<text x="346" y="304" class="t t-s">3. calcula el costo</text>
+<text x="346" y="328" class="t t-s">4. reparte a cada almacén</text>
+<rect x="620" y="186" width="280" height="72" rx="10" class="caja"/>
+<text x="636" y="210" class="t t-b" style="font-size:13px">Trazas y puntajes</text>
+<text x="636" y="229" class="t t-s t-m">Langfuse, Tempo, Phoenix…</text>
+<text x="636" y="246" class="t t-s">meses · versiones, tokens, tiempos</text>
+<path d="M530 300 C 575 300, 575 222, 616 222" class="ln" style="stroke-width:1.6" marker-end="url(#c17d2-a)"/>
+<rect x="620" y="278" width="280" height="72" rx="10" class="caja"/>
+<text x="636" y="302" class="t t-b" style="font-size:13px">Métricas</text>
+<text x="636" y="321" class="t t-s t-m">Prometheus u otra</text>
+<text x="636" y="338" class="t t-s">agregadas · sin datos personales</text>
+<path d="M530 300 C 575 300, 575 314, 616 314" class="ln" style="stroke-width:1.6" marker-end="url(#c17d2-a)"/>
+<rect x="620" y="370" width="280" height="72" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="636" y="394" class="t t-b k-warm" style="font-size:13px">Contenido de mensajes</text>
+<text x="636" y="413" class="t t-s t-m">almacén aparte</text>
+<text x="636" y="430" class="t t-s">pocos días · acceso restringido</text>
+<path d="M530 300 C 575 300, 575 406, 616 406" class="ln" style="stroke-width:1.6" marker-end="url(#c17d2-a)"/>
+<rect x="330" y="24" width="170" height="56" rx="10" class="c-red"/>
+<text x="344" y="47" class="t t-b" style="font-size:13px">Tablero de KPIs</text>
+<text x="344" y="66" class="t t-s t-m">un número por nivel</text>
+<rect x="520" y="24" width="170" height="56" rx="10" class="c-red"/>
+<text x="534" y="47" class="t t-b" style="font-size:13px">Alarmas</text>
+<text x="534" y="66" class="t t-s t-m">p95, gasto, respaldo</text>
+<rect x="710" y="24" width="170" height="56" rx="10" class="c-red"/>
+<text x="724" y="47" class="t t-b" style="font-size:13px">Jueces en línea</text>
+<text x="724" y="66" class="t t-s t-m">muestra diaria</text>
+<path d="M618 206 C 540 206, 415 170, 415 84" class="ln" style="stroke-width:1.4;stroke-dasharray:4 3" marker-end="url(#c17d2-a)"/>
+<text x="470" y="150" class="t t-s t-m">leen los almacenes</text>
+<path d="M640 182 C 640 130, 605 120, 605 84" class="ln" style="stroke-width:1.4;stroke-dasharray:4 3" marker-end="url(#c17d2-a)"/>
+<path d="M760 182 V84" class="ln" style="stroke-width:1.4;stroke-dasharray:4 3" marker-end="url(#c17d2-a)"/>
+<path d="M840 84 V182" class="ln s-warm" style="stroke-width:1.8" marker-end="url(#c17d2-a)"/>
+<text x="848" y="140" class="t t-s k-warm">puntajes</text>
+<rect x="14" y="24" width="236" height="56" rx="10" class="caja" style="stroke-width:2;stroke-dasharray:5 3"/>
+<text x="28" y="47" class="t t-b" style="font-size:13px">Conjunto dorado</text>
+<text x="28" y="66" class="t t-s t-m">capítulo 16</text>
+<path d="M780 24 V8 H132 V20" class="ln s-warm" style="stroke-width:1.6" marker-end="url(#c17d2-a)"/>
+<text x="270" y="2" class="t t-s k-warm">fallas confirmadas, como casos nuevos</text>
+</g>
+</svg></div><figcaption><b>El camino de la telemetría.</b> A la izquierda, en los sistemas del asistente, cada servicio instrumentado con OpenTelemetry. En el centro, el colector, que recibe todo, enmascara los datos personales, decide qué se muestrea y reparte. A la derecha, tres almacenes con reglas distintas: las trazas y los puntajes, las métricas agregadas y el contenido de los mensajes, con menos días de retención y acceso restringido. Arriba, lo que se construye con ellos: el tablero de KPIs, las alarmas y los jueces en línea, que devuelven sus puntajes a las trazas y sus fallas al conjunto dorado.</figcaption></figure></section>
+<section><h2>Datos personales en los registros</h2><div class="prose"><p>Las trazas son, por diseño, una copia de lo que pasó, y lo que pasó incluye nombres, cuentas, montos y lo que el cliente le contó al agente. Un sistema de observabilidad mal pensado es la mayor base de datos personales de la empresa, con menos controles que el <b>CRM</b> (<i>Customer Relationship Management</i>, gestión de la relación con clientes).</p></div><div class="analogia"><b>Imagínalo así</b><p>Una clínica guarda el historial de cada paciente, pero no lo pega en la cartelera de la sala de espera. El médico ve todo; el que agenda las citas ve el nombre y la hora; el que revisa las estadísticas del mes ve números sin nombres. Es la misma información, con distinto acceso según para qué se usa.</p></div><div class="prose"><p>Las reglas del asistente:</p><ul><li><b>Enmascarar antes de escribir.</b> El enmascarado ocurre en el código o en el colector, antes de que el dato llegue al almacén: cuentas como <code>***17</code>, correos y teléfonos reemplazados, documentos de identidad nunca. Lo que llega sin enmascarar ya se filtró.</li><li><b>Separar lo que sirve para reproducir de lo que dice el cliente.</b> Versiones, tokens, tiempos e identificadores de fragmentos se guardan meses; el texto de los mensajes, menos días y en un almacén con acceso restringido.</li><li><b>Seudónimos para las personas.</b> La traza guarda un identificador del usuario que solo el sistema de identidad sabe a quién corresponde, de modo que se puede contar por persona sin saber quién es.</li><li><b>Acceso por rol y con registro.</b> Ver métricas es amplio; abrir el contenido de una traza es restringido y queda auditado.</li><li><b>Borrado que llega a todas partes.</b> Si un cliente pide que se borren sus datos, el pedido alcanza también a las trazas, al caché semántico y al conjunto dorado, igual que a la memoria del capítulo 7; lo que la ley obliga a conservar para auditoría se conserva enmascarado.</li></ul><p>Cómo se construye la observabilidad de cualquier servicio (métricas, registros, alertas y guardias) está en <a href="https://aaramirez.github.io/devops/temario.html" target="_blank" rel="noopener">DevOps</a>; cómo se arma el registro de auditoría de un agente que actúa, en <a href="https://aaramirez.github.io/arneses/11-registros-y-auditoria.html" target="_blank" rel="noopener">Registros y auditoría</a>.</p></div><div class="caso"><b>Un caso real</b><p><b>El tablero en verde y el índice roto.</b> Un equipo de una empresa de servicios tenía un tablero impecable para su asistente interno: disponibilidad de 99,9 %, latencia p95 de 3 segundos, costo dentro del presupuesto. Durante tres semanas todo estuvo en verde mientras los agentes, en silencio, dejaban de usarlo. Un proceso de ingesta había dejado de correr y el asistente respondía con manuales de hacía dos meses; como las respuestas eran fluidas y llegaban rápido, ningún número técnico se movió. Lo descubrió una supervisora que preguntó por qué el uso había bajado a la mitad. El equipo agregó al tablero tres números que faltaban: la fecha del documento más nuevo del índice, la tasa de corrección de los agentes y el uso semanal por agente. El tablero tenía métricas del servicio, pero ninguna de las promesas que hacía cada nivel.</p></div><div class="ml"><b>En la práctica</b><p><b>El minuto del martes.</b> Después del martes de las 10:40, Lucía agregó dos cosas al asistente. Una alarma sobre la p95 de la latencia por proveedor (no sobre el promedio) que avisa en el chat del equipo cuando la puerta pasa al modelo de respaldo más de cinco minutos seguidos. Y un KPI nuevo en la fila del nivel 1: la antigüedad del documento más nuevo del índice, con meta de menos de 24 horas, que el martes estaba en cuatro días porque la ingesta del manual de visitas había fallado sin avisar. El tablero de la v1.0 quedó con una fila por nivel, catorce números en total, y una regla para la reunión semanal con la jefa de reclamos: se empieza por la fila en rojo y se abre una traza real antes de opinar.</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>Cada respuesta se puede reconstruir y cada nivel tiene su número. Las trazas, con tramos y atributos normalizados con OpenTelemetry, dicen qué entró, qué hizo el modelo, qué herramientas se llamaron y cuánto costó y tardó cada paso. El costo se mira por función y por resultado, la latencia en percentiles, la calidad en señales pegadas a cada traza, y el tablero tiene un KPI por promesa de cada nivel. Los datos personales se enmascaran antes de escribir y el contenido de los mensajes vive aparte, con menos días y menos acceso.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>¿Qué diferencia hay entre una traza, un tramo y una sesión?</summary><p>La traza es el recorrido completo de un pedido; cada paso dentro de ella es un tramo, con duración, atributos y tramo padre; la sesión agrupa las trazas de una misma conversación.</p></details><details><summary>¿Por qué conviene registrar por separado el modelo pedido y el modelo que respondió?</summary><p>Porque un alias puede cambiar de versión sin aviso; si los dos campos difieren, la traza muestra qué versión produjo cada respuesta.</p></details><details><summary>El promedio de latencia es 2,6 segundos y la p95 es 7,9 segundos. ¿Qué significa y cuál se usa para las alarmas?</summary><p>Que la mayoría de las consultas son rápidas, pero una de cada veinte tarda casi 8 segundos o más (por reintentos o el respaldo). Las alarmas usan la p95, porque el promedio esconde las esperas que sienten los usuarios.</p></details><details><summary>¿Por qué la corrección que hace el agente antes de enviar la respuesta es una señal tan valiosa?</summary><p>Porque trae la respuesta correcta junto a la del asistente: es una etiqueta real, ligada a una traza concreta, que se puede convertir en un caso del conjunto dorado.</p></details><details><summary>Suben los rechazos en aprobación y todo lo demás está en verde. ¿Qué nivel miras primero?</summary><p>El nivel 3: la política de decisión o las propuestas del modelo para las acciones con herramientas.</p></details><details><summary>¿Por qué el enmascarado se hace antes de escribir la traza y no después?</summary><p>Porque lo que llega sin enmascarar al almacén ya quedó copiado, con otros accesos y otra retención: enmascarar después no deshace la filtración.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué es el muestreo de cola (<i>tail-based sampling</i>) y por qué permite guardar todas las trazas con error sin guardar todas las trazas?<small>Pista: busca «OpenTelemetry tail sampling processor».</small></li><li>¿Qué es un presupuesto de error (<i>error budget</i>) y cómo se calcula a partir de un SLO de 99,5 %?</li><li>¿Qué es el protocolo OTLP y qué diferencia hay entre enviarlo por gRPC y por HTTP?</li><li>¿Qué dice la ley de protección de datos de tu país sobre cuánto tiempo se pueden guardar los registros que contienen datos personales?</li><li>¿Qué es el reconocimiento de entidades nombradas (<i>named entity recognition</i>, NER) y cómo lo usan herramientas abiertas como Presidio para encontrar nombres en un texto?<small>Pista: busca «Microsoft Presidio PII».</small></li><li>¿Qué es la cardinalidad de una métrica y por qué poner el identificador de cada usuario como etiqueta puede tumbar un sistema de métricas?<small>Pista: busca «high cardinality metrics labels».</small></li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://github.com/open-telemetry/semantic-conventions-genai" target="_blank" rel="noopener">Convenciones semánticas de OpenTelemetry para IA generativa <small>repositorio de la especificación, en inglés</small></a><a class="vid" href="https://langfuse.com/docs/observability/overview" target="_blank" rel="noopener">Langfuse: documentación de trazas <small>herramienta abierta del mercado, en inglés</small></a><a class="vid" href="https://sre.google/sre-book/monitoring-distributed-systems/" target="_blank" rel="noopener">Google SRE: Monitoring Distributed Systems <small>las cuatro señales doradas, en inglés</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const root=document.querySelector('[id="17-lab-1"]');
+  // ini y dur en milisegundos; d = profundidad; tk = [entrada, salida]; c = costo US$
+  const T={
+    cache:{titulo:'consulta · tarifas · agente de reclamos',sp:[
+      {n:'consulta',t:'raiz',ini:0,dur:72,d:0,a:{'app.funcion':'consulta_tarifas','app.nivel':'1','app.rol':'agente','sesión':'s-9f21'}},
+      {n:'guardrail_entrada',t:'guard',ini:0,dur:6,d:1,a:{resultado:'pasa',reglas:'datos personales, largo, temas'}},
+      {n:'cache_semantico',t:'guard',ini:6,dur:58,d:1,c:0.00002,a:{similitud:'0,95 (umbral 0,92)',resultado:'acierto','entrada guardada':'«¿Cuánto cuesta la reconexión?»','plantilla':'respuesta-agente@v5.1'},io:['Precio de la reconexión del servicio','El cargo por reconexión es de US$ 5,00 [politica-reconexion-2026]']},
+      {n:'guardrail_salida',t:'guard',ini:64,dur:5,d:1,a:{resultado:'pasa',revisa:'montos, citas, otras cuentas'}}],
+      nota:'Servida desde el caché: 72 ms y una fracción de centavo, sin llamar al modelo. La traza igual guarda qué entrada del caché se usó y con qué similitud, para poder auditar un falso acierto.'},
+    carmen:{titulo:'consulta · reconexión · cuenta ***17',sp:[
+      {n:'consulta',t:'raiz',ini:0,dur:2650,d:0,a:{'app.funcion':'consulta_cliente','app.nivel':'3','app.rol':'agente','sesión':'s-4b07','puntaje':'voto del agente: arriba'}},
+      {n:'guardrail_entrada',t:'guard',ini:0,dur:8,d:1,a:{resultado:'pasa (cuenta enmascarada en la traza)'}},
+      {n:'cache_semantico',t:'guard',ini:8,dur:1,d:1,a:{resultado:'omitido: pregunta personal'}},
+      {n:'recuperacion',t:'ret',ini:9,dur:190,d:1,a:{'app.indice':'manuales@v12',fragmentos:'politica-reconexion-2026#2, manual-cobros#7, …'}},
+      {n:'embedding',t:'ret',ini:9,dur:40,d:2,c:0.00001,a:{modelo:'modelo de embeddings, versión fija'}},
+      {n:'busqueda_hibrida',t:'ret',ini:49,dur:90,d:2,a:{candidatos:'30',filtros:'permisos, vigencia'}},
+      {n:'reordenar',t:'ret',ini:139,dur:60,d:2,a:{entran:'4 fragmentos'}},
+      {n:'generacion_plan',t:'gen',ini:199,dur:900,d:1,tk:[1540,95],c:0.00192,a:{'gen_ai.request.model':'modelo mediano, versión fija','gen_ai.response.model':'la misma versión','app.plantilla':'plan-consulta@v3',temperatura:'0'},io:['La clienta de la cuenta ***17 pide la reconexión. ¿Cuánto paga hoy?','{"accion":"calcular_total","cuenta":"***17"}']},
+      {n:'calcular_total (MCP)',t:'tool',ini:1099,dur:120,d:1,a:{servidor:'facturacion',efecto:'lectura'},io:['{"cuenta":"***17"}','{"total":35.00,"detalle":["F-88213 30,00","reconexión 5,00"]}']},
+      {n:'generacion_redaccion',t:'gen',ini:1219,dur:1400,d:1,tk:[1700,180],c:0.00242,a:{'app.plantilla':'respuesta-agente@v5.1','TTFT':'600 ms (streaming)'},io:['total=35,00 · fuentes: politica-reconexion-2026','La clienta debe pagar US$ 35,00: la factura de octubre más la reconexión…']},
+      {n:'validacion',t:'val',ini:2619,dur:20,d:1,a:{esquema:'pasa',monto:'coincide con facturación',citas:'existen'}},
+      {n:'guardrail_salida',t:'guard',ini:2639,dur:11,d:1,a:{resultado:'pasa'}}],
+      nota:'Las dos generaciones se llevan el 87 % del tiempo y casi todo el costo. Si la latencia molesta, el lugar para trabajar es la salida del modelo (más corta, o un modelo más pequeño para el plan), no la búsqueda.'},
+    reembolso:{titulo:'acción · reembolso · ticket T-55190',sp:[
+      {n:'accion',t:'raiz',ini:0,dur:1181000,d:0,a:{'app.funcion':'reembolso','app.nivel':'3','monto (del sistema)':'US$ 30,00'}},
+      {n:'generacion_propuesta',t:'gen',ini:0,dur:850,d:1,tk:[1380,60],c:0.00162,a:{'app.plantilla':'proponer-accion@v2'},io:['Ticket T-55190: cobro duplicado de octubre','registrar_reembolso(ticket="T-55190", monto=30.00)']},
+      {n:'politica',t:'val',ini:850,dur:4,d:1,a:{decision:'preguntar',regla:'más de US$ 10,00 y hasta US$ 100,00'}},
+      {n:'espera_aprobacion',t:'hum',ini:854,dur:1179646,d:1,a:{canal:'chat interno',recordatorio:'a los 15 min',resultado:'aprobado por la supervisora'}},
+      {n:'registrar_reembolso',t:'tool',ini:1180500,dur:310,d:1,a:{'Idempotency-Key':'T-55190-reembolso-1',resultado:'R-0001'}},
+      {n:'aviso_agente',t:'val',ini:1180810,dur:90,d:1,a:{tipo:'aviso',canal:'panel'}}],
+      nota:'Casi 20 minutos, pero el sistema trabajó poco más de un segundo: el resto es la espera de la supervisora. Esa espera se mide aparte, con su propio objetivo, y no se mezcla con la latencia del asistente.'},
+    averia:{titulo:'agente · avería zona Norte',sp:[
+      {n:'objetivo',t:'raiz',ini:0,dur:250000,d:0,a:{'app.funcion':'averia','app.nivel':'4',presupuesto:'30 pasos · US$ 0,50',usados:'19 pasos · US$ 0,21'}},
+      {n:'planificar (×2)',t:'gen',ini:0,dur:6200,d:1,tk:[38000,5200],c:0.0588,a:{'app.plantilla':'planificador@v2'}},
+      {n:'revisor (×2)',t:'gen',ini:6200,dur:4100,d:1,tk:[30000,2400],c:0.0396,a:{resultado:'aprueba el plan corregido'}},
+      {n:'buscar_tickets_zona',t:'tool',ini:10300,dur:900,d:1,a:{resultado:'214 tickets abiertos'}},
+      {n:'crear_incidente_maestro',t:'tool',ini:11200,dur:400,d:1,a:{resultado:'INC-77 (ficticio)'}},
+      {n:'agrupar_tickets (×9)',t:'tool',ini:11600,dur:7800,d:1,a:{resultado:'214 tickets enlazados'}},
+      {n:'decidir_paso (×12, entre herramientas)',t:'gen',ini:10300,dur:9100,d:1,tk:[76000,4300],c:0.0932,a:{nota:'una llamada al modelo antes de cada herramienta'}},
+      {n:'redactar_aviso',t:'gen',ini:19400,dur:3300,d:1,tk:[12000,1500],c:0.018,a:{'app.plantilla':'aviso-masivo@v1'}},
+      {n:'punto_de_control',t:'hum',ini:22700,dur:180000,d:1,a:{espera:'aprobación del aviso masivo',resultado:'aprobado por la jefa de turno'}},
+      {n:'enviar_aviso',t:'tool',ini:202700,dur:41000,d:1,a:{resultado:'aviso enviado a los clientes de la zona'}},
+      {n:'crear_tarea_campo',t:'tool',ini:243700,dur:600,d:1,a:{resultado:'23 visitas a coordinación de campo'}},
+      {n:'cerrar (×2)',t:'val',ini:244300,dur:5700,d:1,a:{resultado:'objetivo cumplido dentro del presupuesto'}}],
+      nota:'Para un agente la unidad es el objetivo, no la llamada: 19 pasos y US$ 0,21, dentro del presupuesto de 30 pasos y US$ 0,50. Las llamadas al modelo que deciden cada paso son la mayor parte del costo, y el punto de control humano domina el tiempo.'}
+  };
+  let tr='carmen',sel=0;
+  const fmtMs=ms=>ms<1000?ms+' ms':ms<60000?(ms/1000).toFixed(1).replace('.',',')+' s':Math.floor(ms/60000)+' min '+Math.round(ms%60000/1000)+' s';
+  const fmtUs=v=>'US$ '+v.toFixed(5).replace('.',',');
+  function pintar(){
+    const X=T[tr],raiz=X.sp[0],tot=raiz.dur;
+    const costo=X.sp.reduce((a,s)=>a+(s.c||0),0),tk=X.sp.reduce((a,s)=>a+(s.tk?s.tk[0]+s.tk[1]:0),0);
+    const gen=X.sp.filter(s=>s.t==='gen').reduce((a,s)=>a+s.dur,0);
+    $('#c17l1-k1').textContent=fmtMs(tot);$('#c17l1-k2').textContent=fmtUs(costo);$('#c17l1-k3').textContent=tk.toLocaleString('es');$('#c17l1-k4').textContent=Math.round(gen/tot*100)+' %';
+    $('#c17l1-wf').innerHTML=X.sp.map((s,i)=>'<button type="button" class="c17l1-row" data-i="'+i+'" aria-pressed="'+(i===sel)+'"><span class="nom" style="padding-left:'+(s.d*12)+'px">'+s.n+'</span><span class="c17l1-pista"><span class="c17l1-bar t-'+s.t+'" style="left:'+(s.ini/tot*100)+'%;width:'+(s.dur/tot*100)+'%"></span></span><span class="ms">'+fmtMs(s.dur)+'</span></button>').join('');
+    $('#c17l1-wf').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{sel=+b.dataset.i;pintar();}));
+    const s=X.sp[sel];
+    let dl='<dt>traza</dt><dd>'+X.titulo+'</dd><dt>inicio · duración</dt><dd>+'+fmtMs(s.ini)+' · '+fmtMs(s.dur)+' ('+Math.max(0.1,s.dur/tot*100).toFixed(1).replace('.',',')+' % del total)</dd>';
+    if(s.tk)dl+='<dt>gen_ai.usage</dt><dd>input_tokens '+s.tk[0]+' · output_tokens '+s.tk[1]+'</dd>';
+    if(s.c)dl+='<dt>costo</dt><dd>'+fmtUs(s.c)+'</dd>';
+    Object.keys(s.a||{}).forEach(k=>dl+='<dt>'+k+'</dt><dd>'+s.a[k]+'</dd>');
+    if(s.io)dl+='<dt>entrada</dt><dd>'+s.io[0]+'</dd><dt>salida</dt><dd>'+s.io[1]+'</dd>';
+    $('#c17l1-det').innerHTML='<h5>Tramo: '+s.n+'</h5><dl>'+dl+'</dl>';
+    $('#c17l1-out').innerHTML='<span>'+X.nota+'</span>'+(s.t==='hum'?'<span class="warn">Este tramo es espera de una persona: no es latencia del sistema y tiene su propio objetivo.</span>':'')+(s.io?'<span>La entrada y la salida ya están enmascaradas: la cuenta aparece como ***17. El texto completo vive en un almacén aparte, con acceso restringido.</span>':'');
+  }
+  root.querySelectorAll('[data-t]').forEach(b=>b.addEventListener('click',()=>{tr=b.dataset.t;sel=T[tr].sp.findIndex(s=>s.t==='gen');if(sel<0)sel=1;root.querySelectorAll('[data-t]').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));pintar();}));
+  sel=T[tr].sp.findIndex(s=>s.t==='gen');
+  pintar();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const root=document.querySelector('[id="17-lab-2"]');
+  const NIV=[['base','Base común','var(--grid)','var(--muted)'],['1','Nivel 1','var(--c-fis-s)','var(--c-fis)'],['2','Nivel 2','var(--c-enl-s)','var(--c-enl)'],['3','Nivel 3','var(--c-red-s)','var(--c-red)'],['4','Nivel 4','var(--c-tra-s)','var(--c-tra)'],['5','Nivel 5','var(--c-apl-s)','var(--c-apl)']];
+  // op: '<=' o '>=' o 'rango'; v: meta; b: valor normal; r: ruido; u: formato
+  const K=[
+    {id:'lat',n:'base',t:'Latencia p95',op:'<=',v:6,b:4.2,r:.25,u:'s',dec:1},
+    {id:'cos',n:'base',t:'Costo por consulta',op:'<=',v:.004,b:.0031,r:.0001,u:'US$',dec:4},
+    {id:'dis',n:'base',t:'Disponibilidad',op:'>=',v:99.5,b:99.85,r:.05,u:'%',dec:2},
+    {id:'res',n:'base',t:'Activaciones del respaldo por semana',op:'<=',v:10,b:2,r:1.2,u:'',dec:0},
+    {id:'cor',n:'1',t:'Correctas con fuente (muestra)',op:'>=',v:80,b:88,r:1.2,u:'%',dec:0},
+    {id:'abs',n:'1',t:'Abstención',op:'rango',v:[5,12],b:8,r:.7,u:'%',dec:0},
+    {id:'rep',n:'2',t:'Agentes que repiten datos ya dichos',op:'<=',v:5,b:3,r:.5,u:'%',dec:0},
+    {id:'act',n:'2',t:'Agentes activos por semana (de 90)',op:'>=',v:80,b:84,r:1.2,u:'',dec:0},
+    {id:'acc',n:'3',t:'Acciones correctas en revisión',op:'>=',v:95,b:97,r:.6,u:'%',dec:0},
+    {id:'rec',n:'3',t:'Rechazos en aprobación',op:'<=',v:10,b:6,r:1,u:'%',dec:0},
+    {id:'dup',n:'3',t:'Reembolsos duplicados',op:'<=',v:0,b:0,r:0,u:'',dec:0},
+    {id:'ave',n:'4',t:'Averías sin intervenir fuera de los puntos de control',op:'>=',v:75,b:80,r:2,u:'%',dec:0},
+    {id:'cav',n:'4',t:'Costo por avería',op:'<=',v:.5,b:.24,r:.03,u:'US$',dec:2},
+    {id:'acu',n:'5',t:'Acuerdo del clasificador con el modelo grande',op:'>=',v:92,b:94,r:.5,u:'%',dec:0},
+    {id:'enr',n:'5',t:'Consultas enrutadas al modelo pequeño',op:'>=',v:70,b:76,r:1.2,u:'%',dec:0}
+  ];
+  // escenarios: qué KPI cambia en las semanas 6 a 8
+  const E={
+    a:{falla:'1',cambios:{cor:[80,76,74],abs:[14,17,19],act:[83,82,81]},
+      exp:'La ingesta dejó de borrar los documentos retirados y el índice trae versiones viejas: bajan las correctas con fuente y sube la abstención. Lo primero que mirarías: una traza con voto negativo, en su tramo de recuperación, para ver qué fragmentos entraron y de qué fecha.'},
+    b:{falla:'base',cambios:{lat:[6.9,7.8,8.1],res:[22,35,48],dis:[99.7,99.6,99.6]},
+      exp:'El proveedor principal limita la tasa en la hora pico y la puerta pasa al respaldo: sube la p95 y se disparan las activaciones del respaldo, en todos los niveles a la vez. Mirarías las trazas lentas, filtradas por proveedor, y sus tramos de generación con reintentos.'},
+    c:{falla:'3',cambios:{rec:[15,22,31],acc:[94,92,90]},
+      exp:'Una regla nueva de la política de reembolsos hace que el modelo proponga montos que la supervisora rechaza: suben los rechazos en aprobación y bajan las acciones correctas. Mirarías las trazas de las acciones rechazadas, con el motivo que escribió la supervisora.'},
+    d:{falla:'ninguno',cambios:{},
+      exp:'Semanas tranquilas: todo varía dentro de su meta. El ruido de una semana a otra no es una falla; mover el asistente por una variación normal es otra forma de equivocarse.'},
+    e:{falla:'2',cambios:{rep:[8,10,12],act:[82,81,80]},
+      exp:'Un cambio en el ensamblado de la memoria de sesión dejó afuera lo dicho hace más de tres turnos: los agentes tienen que repetir datos. Mirarías una sesión completa y el contexto ensamblado en el turno donde el agente repitió algo.'},
+    f:{falla:'5',cambios:{acu:[90,88,86]},
+      exp:'Se agregaron dos categorías nuevas de tickets y el clasificador propio no las conoce: cae su acuerdo con el modelo grande. Mirarías los tickets donde discrepan, y la respuesta probablemente sea reentrenar con ejemplos de las categorías nuevas.'}
+  };
+  let esc='a',resp=null;
+  function rnd(seed){let s=seed;return()=>{s=(s*1103515245+12345)%2147483648;return s/2147483648;};}
+  function serie(k,e){
+    const r=rnd(k.id.charCodeAt(0)*31+k.id.charCodeAt(1)*7+e.charCodeAt(0)*101);
+    const out=[];for(let i=0;i<8;i++)out.push(k.b+(r()-.5)*2*k.r);
+    const c=E[e].cambios[k.id];if(c)c.forEach((v,j)=>out[5+j]=v);
+    if(k.id==='dup')return out.map(()=>0);
+    return out;
+  }
+  function malo(k,v){if(k.op==='<=')return v>k.v+1e-9;if(k.op==='>=')return v<k.v-1e-9;return v<k.v[0]||v>k.v[1];}
+  function f(k,v){const n=v.toFixed(k.dec).replace('.',',');return k.u==='US$'?'US$ '+n:n+(k.u?' '+k.u:'');}
+  function meta(k){if(k.op==='rango')return 'meta: '+k.v[0]+' a '+k.v[1]+' %';return 'meta: '+(k.op==='<='?'≤ ':'≥ ')+f(k,k.v);}
+  function spark(k,s){
+    const lo=Math.min(...s,k.op==='rango'?k.v[0]:k.v),hi=Math.max(...s,k.op==='rango'?k.v[1]:k.v);const pad=(hi-lo)*.15||1;
+    const y=v=>24-((v-(lo-pad))/((hi+pad)-(lo-pad)))*22;
+    const pts=s.map((v,i)=>(i*100/7).toFixed(1)+','+y(v).toFixed(1)).join(' ');
+    const ml=(k.op==='rango'?[k.v[0],k.v[1]]:[k.v]).map(m=>'<line x1="0" x2="100" y1="'+y(m).toFixed(1)+'" y2="'+y(m).toFixed(1)+'"/>').join('');
+    return '<svg viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true">'+ml+'<polyline points="'+pts+'"/></svg>';
+  }
+  function pintar(){
+    $('#c17l2-tab').innerHTML=NIV.map(([id,nom,bg,bd])=>{
+      const ks=K.filter(k=>k.n===id);
+      return '<div class="c17l2-fila"><div class="c17l2-niv" style="background:'+bg+';border-color:'+bd+';color:var(--ink)">'+nom+'</div><div class="c17l2-tarjetas">'+ks.map(k=>{
+        const s=serie(k,esc),u=s[7];return '<div class="c17l2-t'+(malo(k,u)?' mal':'')+'"><span>'+k.t+'</span><b>'+f(k,u)+'</b>'+spark(k,s)+'<span>'+meta(k)+'</span></div>';
+      }).join('')+'</div></div>';
+    }).join('');
+    const out=$('#c17l2-out');
+    if(!resp){out.innerHTML='<span>Mira las ocho semanas de cada tarjeta (la línea punteada es la meta) y elige el nivel que está fallando.</span>';return;}
+    const ok=resp===E[esc].falla;
+    const nomR=resp==='ninguno'?'ninguno':(resp==='base'?'la base común':'el nivel '+resp);
+    const nomF=E[esc].falla==='ninguno'?'ninguno':(E[esc].falla==='base'?'la base común':'el nivel '+E[esc].falla);
+    out.innerHTML=(ok?'<span class="ok">Correcto: falla '+nomF+'.</span>':'<span class="warn">Elegiste '+nomR+'; el que falla es '+nomF+'.</span>')+'<span>'+E[esc].exp+'</span>'+(esc==='a'&&!ok?'<span>Fíjate que «agentes activos» también baja un poco, pero sigue en su meta: es una consecuencia, no la causa.</span>':'');
+  }
+  root.querySelectorAll('[data-e]').forEach(b=>b.addEventListener('click',()=>{esc=b.dataset.e;resp=null;root.querySelectorAll('[data-e]').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));root.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed','false'));pintar();}));
+  root.querySelectorAll('[data-r]').forEach(b=>b.addEventListener('click',()=>{resp=b.dataset.r;root.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));pintar();}));
+  pintar();
+})();
+</script>
+</body>
+</html>

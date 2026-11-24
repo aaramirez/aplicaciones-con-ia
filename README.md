@@ -4,7 +4,7 @@ Construir productos con modelos de lenguaje nivel por nivel, de la primera llama
 
 **Ver en línea:** https://aaramirez.github.io/aplicaciones-con-ia/
 
-Este repositorio solo tiene el sitio generado. El curso está en preparación: la tabla de contenido ya está publicada para revisión.
+Este repositorio solo tiene el sitio generado. Curso completo: 20 capítulos con laboratorios interactivos, diagramas y prácticas.
 
 | # | Capítulo |
 |---|---|

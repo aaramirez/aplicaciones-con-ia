@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KX76XF8R');</script>
+<!-- End Google Tag Manager -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flujos de procesos con IA · Aplicaciones con IA · Aplicaciones con IA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Construir productos con modelos de lenguaje nivel por nivel, de la primera llamada a la API a los agentes dentro del producto: contexto, salidas estructuradas, memoria, RAG, herramientas, MCP, aprobación humana, evaluación, observabilidad y seguridad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400;1,8..60,600&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KX76XF8R"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="wrap" data-page="flujos-de-procesos">
+<header class="topbar"><a class="brand" href="index.html">Aplicaciones con <b>IA</b></a><span class="eyebrow">Curso visual e interactivo · Datos e inteligencia artificial</span><a class="al-sitio" href="https://aaramirez.github.io/">← Todos los cursos</a></header>
+<div class="layout">
+<nav class="toc" id="toc" aria-label="Ruta de aprendizaje"></nav>
+<main>
+<header class="page-head"><span class="num">CAPÍTULO 12 DE 20</span><h1>Flujos de procesos con IA</h1><p class="lede">Las herramientas, MCP y las aprobaciones resuelven acciones sueltas; un reclamo o un incidente es una cadena de pasos con responsables y plazos que dura horas o días. Este capítulo modela esos procesos como flujos orquestados, mete al modelo dentro de algunos pasos como cadena o enrutador y muestra cómo la IA ayuda a evaluarlos y mejorarlos sin cambiarlos por su cuenta.</p></header>
+<section><div class="prose"><p>Con la versión 0.9, el asistente propone el reembolso de Carmen Rojas, la política decide y la supervisora aprueba desde el chat interno. Aun así, el ticket T-55190 tardó tres días en cerrarse: esperó un día a que alguien lo clasificara, medio día a que alguien verificara el cobro y otro día porque nadie avisó a Carmen cuando el dinero salió.</p><p>«El asistente hace bien cada paso», dijo la jefa de reclamos, «pero nadie es dueño del proceso». Lucía propuso cerrar el nivel 3 con una pieza más: el <b>flujo orquestado</b>, que conoce todos los pasos del reclamo, sabe en cuál está cada caso, quién lo tiene y cuánto le queda de plazo. Dentro de ese flujo, el modelo hace algunos pasos; no decide el camino.</p></div></section>
+<section><h2>Modelar el flujo: pasos, estados, responsables y plazos</h2><div class="analogia"><b>Imagínalo así</b><p>En la cocina de un restaurante cada pedido viaja en una comanda. La comanda pasa por la parrilla, por la estación de ensaladas y por el pase, donde el jefe revisa el plato antes de que salga. Nadie se pregunta en qué va la mesa 12: la comanda está colgada en la estación donde se encuentra y tiene la hora en que entró. Si un plato se demora, el jefe lo ve en el riel.</p></div><div class="prose"><p>Un <b>flujo de trabajo</b> (<i>workflow</i>) es la descripción de un proceso como pasos con un orden, un responsable y un plazo. La forma más útil de modelarlo es como una <b>máquina de estados</b> (<i>state machine</i>): el caso siempre está en un solo estado («en verificación», «esperando aprobación») y solo pasa a otro cuando ocurre un <b>evento</b> (<i>event</i>) permitido («cobro verificado», «aprobado», «venció el plazo»). Cada estado tiene un responsable, que puede ser una persona, el código o el modelo, y un plazo, que suele salir de un <b>acuerdo de nivel de servicio</b> (<i>service level agreement</i>, SLA), el compromiso de tiempo con el cliente.</p><p>Así quedó el reclamo de cobro:</p><div class="tbl"><table><thead><tr><th>Estado</th><th>Responsable</th><th>Plazo</th><th>Sale con</th></tr></thead><tbody><tr><td>Recibido</td><td>código</td><td>inmediato</td><td>ticket registrado</td></tr><tr><td>Clasificado</td><td>modelo, validado por el código</td><td>1 minuto</td><td>categoría y datos extraídos</td></tr><tr><td>En verificación</td><td>código (consulta facturación por MCP)</td><td>5 minutos</td><td>cobro duplicado sí o no</td></tr><tr><td>Esperando aprobación</td><td>supervisora</td><td>30 minutos, luego escala</td><td>aprobado, rechazado o vencido</td></tr><tr><td>Reembolso registrado</td><td>código, con clave de idempotencia</td><td>10 minutos</td><td>identificador del reembolso</td></tr><tr><td>Cliente avisado</td><td>flujo de avisos</td><td>1 hora</td><td>mensaje entregado</td></tr><tr><td>Cerrado</td><td>código, si se verifica el criterio</td><td>—</td><td>ticket resuelto</td></tr></tbody></table></div><p>Dos estados más, «escalado» y «rechazado», salen de cualquier punto cuando algo no cuadra. El modelo aparece en una sola fila: produce datos y el código decide con ellos a qué estado pasa el caso. La definición del flujo es un dato versionado, no código suelto:</p><div class="code-copia"><pre><code>FLUJO_RECLAMO_COBRO = {
+    "version": 3,
+    "estados": {
+        "recibido": {"resp": "codigo", "plazo_min": 0,
+                     "sigue": {"registrado": "clasificado"}},
+        "clasificado": {"resp": "modelo", "plazo_min": 1,
+                        "sigue": {"cobro": "en_verificacion", "otro": "escalado"}},
+        "en_verificacion": {"resp": "codigo", "plazo_min": 5,
+                            "sigue": {"duplicado": "esperando_aprobacion",
+                                      "no_duplicado": "rechazado"}},
+        "esperando_aprobacion": {"resp": "supervisora", "plazo_min": 30,
+                                 "sigue": {"aprobado": "reembolso_registrado",
+                                           "rechazado": "rechazado",
+                                           "vencido": "escalado"}},
+        # ... reembolso_registrado, cliente_avisado, cerrado
+    },
+}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div></div><figure class="fig fig-esquema" id="12-diagrama-1"><div class="lienzo"><svg viewBox="0 0 940 470" style="min-width:760px" role="img" aria-label="Máquina de estados del reclamo de cobro: recibido, clasificado por el modelo, en verificación por el código, esperando aprobación de la supervisora, reembolso registrado, cliente avisado y cerrado, con plazos en cada estado y una franja de salidas a escalado o rechazado">
+<defs>
+<marker id="c12d1-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c12d1-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+</defs>
+<text x="20" y="34" class="t t-xs t-b t-m">RECLAMO DE COBRO · FLUJO VERSIÓN 3</text>
+
+<rect x="20" y="60" width="170" height="74" rx="10" class="d-casa"/>
+<text x="105" y="86" class="t t-b" text-anchor="middle">Recibido</text>
+<text x="105" y="105" class="t t-s t-m" text-anchor="middle">código</text>
+<text x="105" y="122" class="t t-s t-m" text-anchor="middle">inmediato</text>
+<rect x="260" y="60" width="170" height="74" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2;stroke-dasharray:6 4"/>
+<text x="345" y="86" class="t t-b k-warm" text-anchor="middle">Clasificado</text>
+<text x="345" y="105" class="t t-s t-m" text-anchor="middle">modelo + compuerta</text>
+<text x="345" y="122" class="t t-s t-m" text-anchor="middle">1 minuto</text>
+<rect x="500" y="60" width="170" height="74" rx="10" class="d-casa"/>
+<text x="585" y="86" class="t t-b" text-anchor="middle">En verificación</text>
+<text x="585" y="105" class="t t-s t-m" text-anchor="middle">código · facturación por MCP</text>
+<text x="585" y="122" class="t t-s t-m" text-anchor="middle">5 minutos</text>
+<rect x="740" y="60" width="180" height="74" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="830" y="86" class="t t-b k-warm" text-anchor="middle">Esperando aprobación</text>
+<text x="830" y="105" class="t t-s t-m" text-anchor="middle">supervisora</text>
+<text x="830" y="122" class="t t-s t-m" text-anchor="middle">30 min, luego escala</text>
+<line x1="190" y1="97" x2="257" y2="97" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d1-a)"/>
+<text x="224" y="88" class="t t-s" text-anchor="middle">registrado</text>
+<line x1="430" y1="97" x2="497" y2="97" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d1-a)"/>
+<text x="464" y="88" class="t t-s" text-anchor="middle">cobro</text>
+<line x1="670" y1="97" x2="737" y2="97" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d1-a)"/>
+<text x="704" y="88" class="t t-s" text-anchor="middle">duplicado</text>
+
+<rect x="20" y="196" width="780" height="54" rx="10" class="caja" style="stroke-dasharray:5 4"/>
+<text x="36" y="219" class="t t-xs t-b t-m">SALIDAS</text>
+<text x="36" y="238" class="t t-s">escalado: pasa a una persona · rechazado: se cierra con su motivo</text>
+<line x1="345" y1="134" x2="345" y2="194" class="ln ln-d" marker-end="url(#c12d1-m)"/>
+<text x="352" y="170" class="t t-s t-m">otra categoría o</text>
+<text x="352" y="184" class="t t-s t-m">confianza baja</text>
+<line x1="585" y1="134" x2="585" y2="194" class="ln ln-d" marker-end="url(#c12d1-m)"/>
+<text x="592" y="170" class="t t-s t-m">no duplicado</text>
+<line x1="770" y1="134" x2="770" y2="194" class="ln ln-d" marker-end="url(#c12d1-m)"/>
+<text x="700" y="170" class="t t-s t-m">rechazado</text>
+<text x="700" y="184" class="t t-s t-m">o vencido</text>
+<line x1="880" y1="134" x2="880" y2="293" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d1-a)"/>
+<text x="872" y="230" class="t t-s" text-anchor="end">aprobado</text>
+
+<rect x="740" y="296" width="180" height="74" rx="10" class="d-casa"/>
+<text x="830" y="322" class="t t-b" text-anchor="middle">Reembolso registrado</text>
+<text x="830" y="341" class="t t-s t-m" text-anchor="middle">código · clave de idempotencia</text>
+<text x="830" y="358" class="t t-s t-m" text-anchor="middle">10 minutos</text>
+<rect x="500" y="296" width="170" height="74" rx="10" class="d-casa"/>
+<text x="585" y="322" class="t t-b" text-anchor="middle">Cliente avisado</text>
+<text x="585" y="341" class="t t-s t-m" text-anchor="middle">flujo de avisos (n8n)</text>
+<text x="585" y="358" class="t t-s t-m" text-anchor="middle">1 hora</text>
+<rect x="260" y="296" width="170" height="74" rx="10" class="d-casa"/>
+<text x="345" y="322" class="t t-b" text-anchor="middle">Cerrado</text>
+<text x="345" y="341" class="t t-s t-m" text-anchor="middle">código, si se verifica</text>
+<text x="345" y="358" class="t t-s t-m" text-anchor="middle">el criterio de «hecho»</text>
+<line x1="740" y1="333" x2="673" y2="333" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d1-a)"/>
+<text x="706" y="324" class="t t-s" text-anchor="middle">R-0001</text>
+<line x1="500" y1="333" x2="433" y2="333" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d1-a)"/>
+<text x="466" y="324" class="t t-s" text-anchor="middle">entregado</text>
+
+<rect x="20" y="410" width="22" height="16" rx="4" class="d-casa"/>
+<text x="50" y="423" class="t t-s">código determinista</text>
+<rect x="190" y="410" width="22" height="16" rx="4" class="caja" style="stroke:var(--warm);stroke-width:2;stroke-dasharray:4 3"/>
+<text x="220" y="423" class="t t-s">modelo (con su compuerta)</text>
+<rect x="400" y="410" width="22" height="16" rx="4" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="430" y="423" class="t t-s">persona</text>
+<text x="20" y="452" class="t t-s t-m">El modelo es responsable de un solo estado; los eventos que mueven el caso los decide el código.</text>
+</svg></div><figcaption><b>El reclamo de cobro como máquina de estados.</b> Cada recuadro es un estado; su borde dice quién es el responsable (código en verde azulado, modelo con borde rojo anaranjado y línea punteada, persona con borde rojo anaranjado continuo) y la etiqueta de abajo, su plazo. Las flechas son los eventos que mueven el caso de un estado a otro. En medio, la franja de salidas: «escalado» y «rechazado», a los que se llega desde varios estados. El modelo solo es responsable de un estado: clasificar.</figcaption></figure></section>
+<section><h2>Motores de orquestación: máquinas de estado, flujos durables y n8n</h2><div class="prose"><p>Un flujo que dura tres días no puede vivir en la memoria de un programa: el servidor se reinicia, la red falla a mitad de un paso. Alguien tiene que guardar en qué va cada caso y retomarlo donde quedó: el <b>orquestador</b> (<i>orchestrator</i>).</p></div><div class="analogia"><b>Imagínalo así</b><p>Un mensajero lleva un paquete por cinco oficinas y anota en un cuaderno cada firma que recibe. Si se enferma a mitad de camino, otro mensajero toma el cuaderno, ve que ya pasó por tres oficinas y sigue por la cuarta. No vuelve a la primera ni entrega dos veces el mismo sobre.</p></div><div class="prose"><p>Hay tres familias, y cada una sirve para algo distinto:</p><ul><li><b>La máquina de estados en tu base de datos.</b> Una tabla con el caso, su estado, su versión de flujo y la hora del último cambio, más un proceso que revisa los plazos. Es simple y alcanza para flujos cortos con pocos pasos.</li><li><b>Los motores de ejecución durable</b> (<i>durable execution</i>). Guardan el historial de cada paso, reanudan después de una caída, reintentan con reglas, esperan horas o días por una aprobación sin ocupar un proceso y manejan temporizadores. Temporal, AWS Step Functions, Azure Durable Functions y Restate son ejemplos del mercado. Son para los procesos con dinero, con plazos legales o con muchas esperas.</li><li><b>Las plataformas de automatización visual</b>, como n8n, Make, Zapier o Power Automate. Se arman con nodos, tienen cientos de conectores y nodos con modelos. Brillan en la integración: avisar por cinco canales, copiar datos entre sistemas. En el capítulo 10 viste cómo n8n publica un flujo como una sola herramienta MCP.</li></ul><p>La regla del equipo fue práctica: el reclamo, donde sale dinero y hay plazos, corre en un motor durable; los avisos son un flujo de n8n que el motor llama como un paso más. Cómo un arnés de agente guarda pasos durables y espera aprobaciones de días está en <a href="https://aaramirez.github.io/arneses/06-estado-y-eventos.html" target="_blank" rel="noopener">Sesiones, eventos y ejecución durable</a>.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un flujo durable de juguete que se cae y se reanuda</h3></div><p>Vas a correr el reclamo T-55190 como un flujo de seis pasos que guarda su estado en un archivo después de cada paso, a tumbarlo a propósito y a ver cómo se reanuda sin repetir el reembolso. No necesitas Ollama. Guarda este programa como <code>flujo_durable.py</code>:</p><div class="code-copia"><pre><code>import json, sys, time
+from pathlib import Path
+
+ESTADO = Path("reclamo_T-55190.json")   # el «cuaderno» del orquestador
+EFECTOS = Path("efectos.log")           # lo que sale del sistema: aquí se ve si algo se repite
+PASOS = ["clasificar", "verificar_cobro", "pedir_aprobacion",
+         "registrar_reembolso", "avisar_clienta", "cerrar_ticket"]
+
+def ejecutar(paso, clave):
+    """Cada paso es idempotente: si su clave ya está en los efectos, no se repite."""
+    hechos = EFECTOS.read_text(encoding="utf-8").splitlines() if EFECTOS.exists() else []
+    if clave in hechos:
+        return "ya estaba hecho, no se repite"
+    time.sleep(0.4)
+    with EFECTOS.open("a", encoding="utf-8") as f:
+        f.write(clave + "\n")
+    return "hecho"
+
+if ESTADO.exists():
+    estado = json.loads(ESTADO.read_text(encoding="utf-8"))
+    print(f"Reanudando el flujo en el paso {estado['siguiente'] + 1} de {len(PASOS)}")
+else:
+    estado = {"ticket": "T-55190", "version_flujo": 3, "siguiente": 0, "historial": []}
+    print("Flujo nuevo para el ticket T-55190")
+
+caer_en = int(sys.argv[1]) if len(sys.argv) &gt; 1 else None
+for i in range(estado["siguiente"], len(PASOS)):
+    paso = PASOS[i]
+    resultado = ejecutar(paso, f"{estado['ticket']}-{paso}")
+    if caer_en == i + 1:
+        print(f"  {i + 1}. {paso}: {resultado}")
+        print("*** El proceso se cae justo después del efecto y antes de guardar el estado ***")
+        raise SystemExit(1)
+    estado["historial"].append({"paso": paso, "resultado": resultado, "hora": time.strftime("%H:%M:%S")})
+    estado["siguiente"] = i + 1
+    ESTADO.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"  {i + 1}. {paso}: {resultado}")
+print("Flujo terminado. Efectos registrados:", len(EFECTOS.read_text(encoding="utf-8").splitlines()))</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>python flujo_durable.py 4</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python flujo_durable.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Get-Content efectos.log</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Get-Content reclamo_T-55190.json</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Remove-Item reclamo_T-55190.json, efectos.log</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 flujo_durable.py 4</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 flujo_durable.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>cat efectos.log</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>cat reclamo_T-55190.json</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>rm reclamo_T-55190.json efectos.log</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Corre la primera línea: el flujo se cae en el paso 4, después de registrar el reembolso y antes de anotarlo en su estado.</span></li><li><span>Corre la segunda línea, sin número: el flujo se reanuda. Mira qué dice del paso 4.</span></li><li><span>Mira los dos archivos. Cuenta cuántas veces aparece <code>T-55190-registrar_reembolso</code> en los efectos.</span></li><li><span>Con la última línea borras los dos archivos para empezar de cero. Prueba a tumbarlo en otro paso.</span></li></ol><p><b>Qué observar:</b> al reanudar, el flujo no vuelve al principio: lee el estado y sigue en el paso 4. Como se cayó después del efecto y antes de guardar, el paso 4 se intenta otra vez, pero su clave ya está en los efectos y el reembolso no se repite. Estado guardado después de cada paso más pasos idempotentes: eso hace confiable a un orquestador. Un motor durable real lo hace por ti, con el historial en una base de datos.</p></div></section>
+<section><h2>Patrones canónicos: escalamiento, aprobación en cadena y trabajo en paralelo</h2><div class="prose"><p>Casi todos los procesos se arman con tres patrones, y los motores de orquestación los traen resueltos.</p></div><div class="analogia"><b>Imagínalo así</b><p>En una carrera de relevos, cada corredor espera el testigo del anterior. En la parada de una carrera de autos, cuatro mecánicos cambian las cuatro ruedas al mismo tiempo y el auto sale cuando el último levanta la mano. El primero es una cadena; el segundo, trabajo en paralelo con una espera al final.</p></div><div class="prose"><ul><li><b>Escalamiento por plazo</b> (<i>escalation</i>). Un temporizador corre desde que el caso entra a un estado; si vence, el caso pasa al siguiente responsable. Es la regla de los 30 minutos del capítulo 11, pero ahora vive en el flujo y vale para cualquier estado.</li><li><b>Aprobación en cadena</b> (<i>approval chain</i>). Varias personas aprueban en orden y cualquiera puede rechazar. Un reembolso de más de US$ 100,00 ya no se niega sin más: primero aprueba la supervisora y después Finanzas, cada una con su plazo.</li><li><b>Trabajo en paralelo</b> (<i>fan-out / fan-in</i>). Registrado el reembolso, el flujo lanza a la vez el aviso a Carmen, la actualización del ticket y la nota en el CRM, y espera a que terminen todas antes de cerrar. Si una falla, se reintenta sola, con su clave; si no se puede, se compensa, como en la saga del capítulo 11.</li></ul></div></section>
+<section><h2>Cadenas y enrutadores: pasos con modelo dentro del flujo</h2><div class="prose"><p>Hay pasos que sí conviene darle al modelo: entender el texto libre del cliente, resumir un caso para quien aprueba, redactar un aviso. Dentro de un flujo se usa de dos formas.</p><p>Una <b>cadena de prompts</b> (<i>prompt chaining</i>) parte una tarea en varias llamadas pequeñas, cada una con su plantilla y su esquema de salida, y entre una y otra pone una <b>compuerta</b> (<i>gate</i>): código que valida el resultado antes de pasarlo al siguiente paso. Tres llamadas cortas y verificables son más confiables que una larga que intenta todo.</p><p>Un <b>enrutador</b> (<i>router</i>) es un paso de clasificación cuya salida, una enumeración cerrada, elige la rama del flujo. El modelo dice «esto es un cobro duplicado» y el flujo, no el modelo, toma la rama de cobros. Si la salida no pasa la validación o la confianza es baja, la rama por defecto es una persona.</p><p>Cada paso con modelo tiene su esquema de entrada y de salida, un tiempo límite, reintentos y un camino de respaldo: el flujo nunca queda colgado porque el modelo respondió algo raro. En el capítulo 14 verás otro enrutador, que elige entre modelos; este elige entre caminos del proceso.</p></div><figure class="fig fig-esquema" id="12-diagrama-2"><div class="lienzo"><svg viewBox="0 0 980 450" style="min-width:780px" role="img" aria-label="Cadena con enrutador: el ticket pasa por un paso con modelo que clasifica, una compuerta en código que valida, y un enrutador que manda a las ramas de cobros, visitas, averías o la cola humana; en cobros, un segundo paso con modelo resume para la supervisora y otra compuerta lo revisa antes de esperar la aprobación">
+<defs>
+<marker id="c12d2-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c12d2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+<marker id="c12d2-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
+</defs>
+
+<rect x="16" y="190" width="104" height="54" rx="10" class="caja"/>
+<text x="68" y="213" class="t t-b" text-anchor="middle">Ticket</text>
+<text x="68" y="231" class="t t-s t-m" text-anchor="middle">texto libre</text>
+<rect x="150" y="182" width="140" height="70" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2;stroke-dasharray:6 4"/>
+<text x="220" y="206" class="t t-xs t-b k-warm" text-anchor="middle">PASO 1 · MODELO</text>
+<text x="220" y="224" class="t t-b" text-anchor="middle">clasificar</text>
+<text x="220" y="241" class="t t-s t-m" text-anchor="middle">con esquema JSON</text>
+<rect x="320" y="182" width="136" height="70" rx="10" class="d-casa"/>
+<text x="388" y="206" class="t t-xs t-b k-casa" text-anchor="middle">COMPUERTA · CÓDIGO</text>
+<text x="388" y="224" class="t t-b" text-anchor="middle">¿válido?</text>
+<text x="388" y="241" class="t t-s t-m" text-anchor="middle">lista · confianza ≥ 0,6</text>
+<rect x="486" y="182" width="136" height="70" rx="10" class="d-casa"/>
+<text x="554" y="206" class="t t-xs t-b k-casa" text-anchor="middle">ENRUTADOR · CÓDIGO</text>
+<text x="554" y="224" class="t t-b" text-anchor="middle">tabla de ramas</text>
+<text x="554" y="241" class="t t-s t-m" text-anchor="middle">categoría → flujo</text>
+<line x1="120" y1="217" x2="147" y2="217" class="ln" style="stroke:var(--warm);stroke-width:2" marker-end="url(#c12d2-w)"/>
+<line x1="290" y1="217" x2="317" y2="217" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d2-a)"/>
+<line x1="456" y1="217" x2="483" y2="217" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d2-a)"/>
+
+<rect x="670" y="30" width="134" height="50" rx="10" class="c-red"/>
+<text x="737" y="52" class="t t-b k-red" text-anchor="middle">Cobros</text>
+<text x="737" y="69" class="t t-s t-m" text-anchor="middle">cobro_duplicado</text>
+<rect x="670" y="112" width="134" height="50" rx="10" class="c-red"/>
+<text x="737" y="134" class="t t-b k-red" text-anchor="middle">Visitas</text>
+<text x="737" y="151" class="t t-s t-m" text-anchor="middle">flujo sin modelo</text>
+<rect x="670" y="194" width="134" height="50" rx="10" class="c-red"/>
+<text x="737" y="216" class="t t-b k-red" text-anchor="middle">Averías</text>
+<text x="737" y="233" class="t t-s t-m" text-anchor="middle">se agrupa por zona</text>
+<rect x="670" y="334" width="134" height="56" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="737" y="357" class="t t-b k-warm" text-anchor="middle">Cola humana</text>
+<text x="737" y="375" class="t t-s t-m" text-anchor="middle">rama por defecto</text>
+<path d="M622 205 L668 58" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d2-a)"/>
+<path d="M622 212 L668 140" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d2-a)"/>
+<path d="M622 219 L668 219" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d2-a)"/>
+<path d="M622 230 L668 350" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d2-a)"/>
+<text x="634" y="300" class="t t-s t-m">otro</text>
+
+<rect x="830" y="22" width="136" height="66" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2;stroke-dasharray:6 4"/>
+<text x="898" y="44" class="t t-xs t-b k-warm" text-anchor="middle">PASO 2 · MODELO</text>
+<text x="898" y="62" class="t t-b" text-anchor="middle">resumir</text>
+<text x="898" y="78" class="t t-s t-m" text-anchor="middle">para la supervisora</text>
+<rect x="830" y="112" width="136" height="66" rx="10" class="d-casa"/>
+<text x="898" y="134" class="t t-xs t-b k-casa" text-anchor="middle">COMPUERTA 2</text>
+<text x="898" y="152" class="t t-s" text-anchor="middle">¿cita el ticket y</text>
+<text x="898" y="168" class="t t-s" text-anchor="middle">el monto del sistema?</text>
+<rect x="830" y="204" width="136" height="48" rx="10" class="d-casa"/>
+<text x="898" y="224" class="t t-s t-b" text-anchor="middle">esperando</text>
+<text x="898" y="240" class="t t-s t-b" text-anchor="middle">aprobación</text>
+<line x1="804" y1="55" x2="827" y2="55" class="ln" style="stroke:var(--warm);stroke-width:2" marker-end="url(#c12d2-w)"/>
+<line x1="898" y1="88" x2="898" y2="109" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d2-a)"/>
+<line x1="898" y1="178" x2="898" y2="201" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d2-a)"/>
+
+<path d="M388 252 V362 H666" class="ln ln-d" marker-end="url(#c12d2-m)"/>
+<text x="398" y="300" class="t t-s t-m">no pasa: JSON roto,</text>
+<text x="398" y="315" class="t t-s t-m">fuera de la lista o</text>
+<text x="398" y="330" class="t t-s t-m">confianza baja</text>
+<path d="M966 145 H974 V372 H807" class="ln ln-d" marker-end="url(#c12d2-m)"/>
+<text x="822" y="300" class="t t-s t-m">no cita</text>
+<text x="822" y="315" class="t t-s t-m">los datos</text>
+
+<rect x="16" y="414" width="22" height="16" rx="4" class="caja" style="stroke:var(--warm);stroke-width:2;stroke-dasharray:4 3"/>
+<text x="46" y="427" class="t t-s">paso con modelo</text>
+<rect x="170" y="414" width="22" height="16" rx="4" class="d-casa"/>
+<text x="200" y="427" class="t t-s">código</text>
+<rect x="270" y="414" width="22" height="16" rx="4" class="c-red"/>
+<text x="300" y="427" class="t t-s">rama del flujo (nivel 3)</text>
+<rect x="470" y="414" width="22" height="16" rx="4" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="500" y="427" class="t t-s">persona</text>
+</svg></div><figcaption><b>Una cadena con un enrutador dentro del flujo.</b> De izquierda a derecha: el ticket entra; el paso 1, con modelo (borde rojo anaranjado), lo clasifica con un esquema; la compuerta, en código (verde azulado), valida la categoría y la confianza; el enrutador manda cada caso a su rama: cobros, visitas, averías o la cola humana. En la rama de cobros, el paso 2 con modelo resume el caso para la supervisora y una segunda compuerta revisa que el resumen cite el ticket y el monto del sistema. Las flechas grises punteadas son la salida a una persona cuando algo no pasa.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Una cadena con enrutador sobre tu modelo local</h3></div><p>Vas a pasar tres tickets por una cadena: el modelo los clasifica con un esquema, una compuerta en código los valida, el enrutador elige la rama y, solo en la rama de cobros, una segunda llamada resume el caso. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>cadena.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
+
+URL = "http://localhost:11434/v1/chat/completions"
+MODELO = "llama3.2:3b"
+RAMAS = ["cobro_duplicado", "reconexion", "visita_tecnica", "averia", "otro"]
+ESQUEMA = {"type": "object", "properties": {
+    "categoria": {"type": "string", "enum": RAMAS},
+    "confianza": {"type": "number"}},
+    "required": ["categoria", "confianza"]}
+TICKETS = {
+    "T-55190": "Me cobraron dos veces los US$ 30,00 de octubre en la cuenta 20417.",
+    "T-55204": "El técnico no vino ayer a la visita y nadie me avisó. Cuenta 40981.",
+    "T-55231": "Desde las 7 de la mañana no tengo servicio y mis vecinos tampoco.",
+}
+MONTOS_DEL_SISTEMA = {"T-55190": 30.00}   # facturación: el monto nunca sale del modelo
+
+def llamar(mensajes, esquema=None):
+    cuerpo = {"model": MODELO, "temperature": 0, "messages": mensajes}
+    if esquema:
+        cuerpo["response_format"] = {"type": "json_schema",
+                                     "json_schema": {"name": "paso", "schema": esquema}}
+    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido, timeout=60) as r:
+        return json.load(r)["choices"][0]["message"]["content"]
+
+def paso_clasificar(texto):
+    return llamar([{"role": "system", "content": "Clasifica el ticket. Responde solo el JSON. "
+                    "La confianza va de 0 a 1."},
+                   {"role": "user", "content": texto}], ESQUEMA)
+
+def compuerta(salida):
+    """Código, no modelo: valida antes de dejar pasar."""
+    try:
+        d = json.loads(salida)
+    except json.JSONDecodeError:
+        return None, "la salida no es JSON"
+    if d.get("categoria") not in RAMAS:
+        return None, "categoría fuera de la lista"
+    if float(d.get("confianza", 0)) &lt; 0.6:
+        return None, f"confianza baja ({d.get('confianza')})"
+    return d["categoria"], "ok"
+
+def rama_cobros(ticket, texto):
+    monto = MONTOS_DEL_SISTEMA.get(ticket)
+    if monto is None:
+        return "cola humana: no hay cobro registrado para verificar"
+    resumen = llamar([{"role": "system", "content": "Resume el caso para la supervisora en dos frases. "
+                       f"Usa el ticket {ticket} y el monto US$ {monto:.2f} del sistema."},
+                      {"role": "user", "content": texto}])
+    if ticket not in resumen:
+        return "cola humana: el resumen no cita el ticket"
+    return "flujo de reembolso -&gt; esperando_aprobacion\n      " + resumen.strip()
+
+ENRUTADOR = {"cobro_duplicado": rama_cobros,
+             "visita_tecnica": lambda t, x: "flujo de visitas (sin modelo)",
+             "averia": lambda t, x: "flujo de incidentes: se agrupa con otros tickets de la zona"}
+
+for ticket, texto in TICKETS.items():
+    salida = paso_clasificar(texto)
+    categoria, motivo = compuerta(salida)
+    print(f"{ticket}: modelo -&gt; {salida}")
+    if categoria is None:
+        print(f"   compuerta: {motivo} -&gt; cola humana\n")
+        continue
+    rama = ENRUTADOR.get(categoria, lambda t, x: "cola humana: rama sin flujo automático")
+    print(f"   compuerta: ok -&gt; {rama(ticket, texto)}\n")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python cadena.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 cadena.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota la categoría, la confianza y la rama de cada ticket.</span></li><li><span>Sube el umbral de la compuerta de <code>0.6</code> a <code>0.9</code> y vuelve a correrlo.</span></li><li><span>Escribe un cuarto ticket ambiguo («quiero hablar con alguien») y mira a qué rama va.</span></li></ol><p><b>Qué observar:</b> el modelo solo produce una categoría y una confianza; la rama la elige el diccionario <code>ENRUTADOR</code>, y lo que no pasa la compuerta termina en una persona. El segundo paso con modelo corre solo en la rama de cobros, con el monto del sistema, y su salida también se revisa. Con el umbral en 0,9 más casos van a la cola humana: la compuerta es una perilla de riesgo. Un modelo pequeño suele dar confianzas altas aunque se equivoque, así que en producción el umbral se calibra con casos etiquetados. Los resultados cambian según el modelo.</p></div></section>
+<section><h2>La IA en el flujo: asistir, evaluar y optimizar</h2><div class="prose"><p>La cadena y el enrutador son la IA <b>dentro</b> de un paso. Pero el modelo puede ayudar al proceso de dos formas más, desde afuera.</p></div><div class="analogia"><b>Imagínalo así</b><p>En un equipo de fútbol hay jugadores, un árbitro y un cuerpo técnico que mira el video del partido el lunes. Los jugadores hacen las jugadas, el árbitro revisa que se cumplan las reglas y el cuerpo técnico decide qué cambiar para el próximo partido. Nadie cambia el reglamento a mitad del juego.</p></div><div class="prose"><ul><li><b>Asistir.</b> El modelo hace parte del trabajo de un paso: clasifica, extrae, resume, redacta un borrador. Es lo que viste en la cadena.</li><li><b>Evaluar.</b> El modelo revisa casos cerrados: ¿la respuesta citó la política vigente?, ¿se cumplió el plazo?, ¿el monto coincide con facturación? Las personas revisan el 5 % de los casos; el evaluador con modelo, todos, y marca los dudosos para que una persona los mire. El capítulo 16 trata cómo se confía en un modelo como juez.</li><li><b>Optimizar.</b> Cada transición de estado deja un registro con su hora. Con miles de casos, ese <b>registro de eventos</b> (<i>event log</i>) dice dónde se pierde el tiempo. La <b>minería de procesos</b> (<i>process mining</i>) reconstruye el proceso real desde esos registros; Celonis, Apromore y la biblioteca abierta PM4Py son ejemplos del mercado. El modelo ayuda a leer el resultado y a proponer cambios, pero no los aplica.</li></ul><p>El caso más exigente es un <b>incidente crítico</b> (<i>critical incident</i>): una falla que afecta a muchos clientes a la vez. Un martes a las 7:40, el sistema de monitoreo marca una alarma en la zona Norte y en diez minutos llegan 40 tickets que dicen lo mismo con otras palabras. El flujo de incidentes tiene seis etapas, y en cada una hay que decidir qué hace la IA y qué decide una persona.</p></div><figure class="fig fig-flujo" id="12-diagrama-3"><div class="lienzo"><svg viewBox="0 0 1000 640" style="min-width:800px" role="img" aria-label="Diagrama de secuencia de un incidente crítico: el monitoreo manda la alarma y los tickets al orquestador; el modelo agrupa y propone severidad; la jefa de turno confirma; el modelo redacta el aviso y la jefa lo aprueba; el orquestador lo envía por los canales; al despejarse la alarma el código verifica y cierra; el modelo redacta el informe posterior y el comité aprueba los cambios">
+<defs>
+<marker id="c12d3-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
+<marker id="c12d3-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
+<marker id="c12d3-i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-sis"/></marker>
+<marker id="c12d3-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker>
+</defs>
+<rect x="20" y="14" width="120" height="50" rx="10" class="d-sis"/>
+<text x="80" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Monitoreo</text>
+<text x="80" y="52" class="t t-s t-m" text-anchor="middle">alarmas y tickets</text>
+<line x1="80" y1="64" x2="80" y2="620" class="vida"/>
+<rect x="190" y="14" width="120" height="50" rx="10" class="d-casa"/>
+<text x="250" y="35" class="t t-b" text-anchor="middle" style="font-size:12px">Orquestador</text>
+<text x="250" y="52" class="t t-s t-m" text-anchor="middle">flujo de incidentes</text>
+<line x1="250" y1="64" x2="250" y2="620" class="vida"/>
+<rect x="360" y="14" width="120" height="50" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2;stroke-dasharray:6 4"/>
+<text x="420" y="35" class="t t-b k-warm" text-anchor="middle" style="font-size:12px">Modelo</text>
+<text x="420" y="52" class="t t-s t-m" text-anchor="middle">pasos con IA</text>
+<line x1="420" y1="64" x2="420" y2="620" class="vida"/>
+<rect x="530" y="14" width="120" height="50" rx="10" class="caja" style="stroke:var(--warm);stroke-width:2"/>
+<text x="590" y="35" class="t t-b k-warm" text-anchor="middle" style="font-size:12px">Jefa de turno</text>
+<text x="590" y="52" class="t t-s t-m" text-anchor="middle">y comité</text>
+<line x1="590" y1="64" x2="590" y2="620" class="vida"/>
+<rect x="700" y="14" width="120" height="50" rx="10" class="c-enl"/>
+<text x="760" y="35" class="t t-b k-enl" text-anchor="middle" style="font-size:12px">Canales</text>
+<text x="760" y="52" class="t t-s t-m" text-anchor="middle">SMS, correo, web</text>
+<line x1="760" y1="64" x2="760" y2="620" class="vida"/>
+
+<line x1="80" y1="104" x2="248" y2="104" class="ln" style="stroke:var(--d-sis);stroke-width:2" marker-end="url(#c12d3-i)"/>
+<text x="88" y="96" class="t t-s">① alarma + 40 tickets</text>
+<line x1="250" y1="148" x2="418" y2="148" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d3-s)"/>
+<text x="258" y="140" class="t t-s">② agrupa y propone</text>
+<line x1="420" y1="192" x2="252" y2="192" class="ln" style="stroke:var(--warm);stroke-width:2;stroke-dasharray:6 4" marker-end="url(#c12d3-w)"/>
+<text x="268" y="184" class="t t-s">③ un grupo · severidad 2</text>
+<line x1="590" y1="238" x2="252" y2="238" class="ln s-warm" style="stroke-width:2" marker-end="url(#c12d3-w)"/>
+<text x="436" y="230" class="t t-s t-b">④ confirma: severidad 1</text>
+<line x1="420" y1="284" x2="588" y2="284" class="ln" style="stroke:var(--warm);stroke-width:2;stroke-dasharray:6 4" marker-end="url(#c12d3-w)"/>
+<text x="428" y="276" class="t t-s">⑤ borrador del aviso</text>
+<line x1="590" y1="330" x2="252" y2="330" class="ln s-warm" style="stroke-width:2" marker-end="url(#c12d3-w)"/>
+<text x="300" y="322" class="t t-s">⑥ aprueba, sin hora estimada inventada</text>
+<line x1="250" y1="376" x2="758" y2="376" class="ln s-enl" style="stroke-width:2" marker-end="url(#c12d3-e)"/>
+<text x="258" y="368" class="t t-s">⑦ aviso a los clientes de la zona Norte</text>
+<line x1="80" y1="424" x2="248" y2="424" class="ln" style="stroke:var(--d-sis);stroke-width:2" marker-end="url(#c12d3-i)"/>
+<text x="88" y="416" class="t t-s">alarma despejada</text>
+<path d="M250 440 h44 v26 h-42" class="ln" style="stroke:var(--d-casa);stroke-width:2" marker-end="url(#c12d3-s)"/>
+<text x="302" y="452" class="t t-s">⑧ verifica el servicio</text>
+<text x="302" y="466" class="t t-s">y cierra los tickets</text>
+<line x1="420" y1="514" x2="588" y2="514" class="ln" style="stroke:var(--warm);stroke-width:2;stroke-dasharray:6 4" marker-end="url(#c12d3-w)"/>
+<text x="428" y="506" class="t t-s">⑨ borrador del informe</text>
+<line x1="590" y1="562" x2="252" y2="562" class="ln s-warm" style="stroke-width:2" marker-end="url(#c12d3-w)"/>
+<text x="300" y="554" class="t t-s">⑩ cambios aprobados: flujo versión 4</text>
+
+<path d="M860 90v114" class="ln" style="stroke:var(--d-sis);stroke-width:3"/>
+<text x="872" y="140" class="t t-xs t-b k-sis">DETECTAR</text>
+<text x="872" y="156" class="t t-s t-m">la IA agrupa</text>
+<path d="M860 222v24" class="ln s-warm" style="stroke-width:3"/>
+<text x="872" y="238" class="t t-xs t-b k-warm">DECIDIR</text>
+<path d="M860 268v120" class="ln s-enl" style="stroke-width:3"/>
+<text x="872" y="320" class="t t-xs t-b k-enl">COMUNICAR</text>
+<text x="872" y="336" class="t t-s t-m">la IA redacta,</text>
+<text x="872" y="350" class="t t-s t-m">la jefa aprueba</text>
+<path d="M860 410v62" class="ln" style="stroke:var(--d-casa);stroke-width:3"/>
+<text x="872" y="438" class="t t-xs t-b k-casa">RESOLVER</text>
+<text x="872" y="454" class="t t-s t-m">el código verifica</text>
+<path d="M860 500v74" class="ln s-warm" style="stroke-width:3"/>
+<text x="872" y="530" class="t t-xs t-b k-warm">APRENDER</text>
+<text x="872" y="546" class="t t-s t-m">la IA propone,</text>
+<text x="872" y="560" class="t t-s t-m">el comité decide</text>
+<text x="20" y="606" class="t t-s t-m">Flechas punteadas: salidas del modelo, siempre propuestas. Flechas continuas rojas: decisiones de una persona.</text>
+</svg></div><figcaption><b>Un incidente crítico, de la alarma a la lección aprendida.</b> Participantes: el sistema de monitoreo, el orquestador del flujo, el modelo, la jefa de turno y los canales de aviso. ① La alarma y los primeros tickets llegan al orquestador; ② el orquestador abre el incidente y le pide al modelo que agrupe los tickets; ③ el modelo devuelve el grupo y una severidad propuesta; ④ la jefa de turno confirma la severidad 1; ⑤ el modelo redacta el aviso a los clientes de la zona; ⑥ la jefa lo aprueba, sin hora estimada inventada; ⑦ el orquestador lo manda por todos los canales; ⑧ cuando la alarma se despeja, el código verifica el servicio cliente por cliente y cierra los tickets; ⑨ el modelo redacta el borrador del informe posterior y ⑩ el comité aprueba los cambios. A la derecha, las fases: detectar, decidir, comunicar, resolver y aprender.</figcaption></figure><div class="lab" id="12-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Un incidente crítico paso a paso</h3></div><p class="hint">Recorre las seis etapas del incidente de la zona Norte con «Siguiente». En cada etapa, elige quién decide: la IA sola, la IA propone y una persona decide, o una persona sola. Mira cuánto tarda el primer aviso a los clientes, cuántos minutos de trabajo humano cuesta y qué errores llegan al cliente con cada reparto. Prueba los tres repartos de ejemplo.</p><style>
+[id="12-lab-1"] .c12l1-tabs{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,118px),1fr));gap:6px}
+[id="12-lab-1"] .c12l1-tabs button{width:100%;text-align:left;border:1px solid var(--line);border-left-width:5px;border-radius:8px;padding:6px 8px;background:var(--card);color:var(--ink);font:600 .78rem/1.25 var(--f-display);cursor:pointer}
+[id="12-lab-1"] .c12l1-tabs button small{display:block;font-weight:500;color:var(--muted);font-size:.7rem}
+[id="12-lab-1"] .c12l1-tabs button.actual{outline:2px solid var(--accent);outline-offset:1px}
+[id="12-lab-1"] .c12l1-tabs button[data-m="ia"]{border-left-color:var(--warm)}
+[id="12-lab-1"] .c12l1-tabs button[data-m="mix"]{border-left-color:var(--accent)}
+[id="12-lab-1"] .c12l1-tabs button[data-m="per"]{border-left-color:var(--muted)}
+[id="12-lab-1"] .c12l1-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper);display:grid;gap:6px;font:500 .84rem/1.4 var(--f-display);color:var(--ink)}
+[id="12-lab-1"] .c12l1-card h4{margin:0;font:700 .95rem var(--f-display)}
+[id="12-lab-1"] .c12l1-card p{margin:0}
+[id="12-lab-1"] .c12l1-card b.ia{color:var(--warm)}
+[id="12-lab-1"] .c12l1-card b.per{color:var(--accent)}
+[id="12-lab-1"] .c12l1-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,130px),1fr));gap:8px}
+[id="12-lab-1"] .c12l1-k{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card)}
+[id="12-lab-1"] .c12l1-k span{display:block;font:600 .72rem var(--f-display);color:var(--muted)}
+[id="12-lab-1"] .c12l1-k output{font:700 1.05rem var(--f-mono);color:var(--ink)}
+[id="12-lab-1"] .c12l1-barras{display:grid;gap:4px}
+[id="12-lab-1"] .c12l1-fila{display:grid;grid-template-columns:minmax(0,12em) 1fr;gap:8px;align-items:center;font:500 .76rem var(--f-display);color:var(--ink)}
+[id="12-lab-1"] .c12l1-pista{height:14px;background:var(--grid);border-radius:4px;position:relative;overflow:hidden}
+[id="12-lab-1"] .c12l1-pista i{position:absolute;top:0;bottom:0;left:0;border-radius:4px}
+[id="12-lab-1"] .c12l1-pista i.ret{background:repeating-linear-gradient(45deg,var(--warm) 0 4px,transparent 4px 8px);opacity:.75}
+[id="12-lab-1"] .c12l1-ley i{border-radius:3px}
+</style>
+<div class="btns" role="group" aria-label="Repartos de ejemplo">
+  <button type="button" data-p="rec" aria-pressed="true">Reparto recomendado</button>
+  <button type="button" data-p="ia" aria-pressed="false">Todo lo decide la IA</button>
+  <button type="button" data-p="per" aria-pressed="false">Todo lo hacen personas</button>
+</div>
+<ol class="c12l1-tabs" id="c12l1-tabs" aria-label="Etapas del incidente"></ol>
+<div class="c12l1-card" id="c12l1-card" aria-live="polite"></div>
+<div class="btns" role="group" aria-label="Quién decide en esta etapa" id="c12l1-modos">
+  <button type="button" data-m="ia" aria-pressed="false">IA sola</button>
+  <button type="button" data-m="mix" aria-pressed="false">IA propone, persona decide</button>
+  <button type="button" data-m="per" aria-pressed="false">Persona sola</button>
+</div>
+<div class="btns"><button type="button" id="c12l1-ant">← Anterior</button><button type="button" class="primary" id="c12l1-sig">Siguiente →</button></div>
+<div class="legend c12l1-ley"><span><i style="background:var(--warm)"></i>IA sola</span><span><i style="background:var(--accent)"></i>IA propone, persona decide</span><span><i style="background:var(--muted)"></i>persona sola</span><span><i class="ret" style="background:repeating-linear-gradient(45deg,var(--warm) 0 3px,transparent 3px 6px)"></i>tiempo perdido por un error</span></div>
+<div class="c12l1-barras" id="c12l1-barras" aria-label="Minutos por etapa"></div>
+<div class="c12l1-kpis">
+  <div class="c12l1-k"><span>Primer aviso a clientes</span><output id="c12l1-k1"></output></div>
+  <div class="c12l1-k"><span>Cuadrilla en el nodo correcto</span><output id="c12l1-k2"></output></div>
+  <div class="c12l1-k"><span>Trabajo humano</span><output id="c12l1-k3"></output></div>
+  <div class="c12l1-k"><span>Errores que se escapan</span><output id="c12l1-k4"></output></div>
+</div>
+<div class="readout texto" id="c12l1-out" aria-live="polite"></div></div></section>
+<section><h2>El ciclo de lecciones aprendidas</h2><div class="prose"><p>Un flujo que nunca cambia envejece; uno que cambia sin método se rompe. El puente es el <b>ciclo de lecciones aprendidas</b>: después de cada incidente, y una vez al mes para los procesos repetidos, se mira lo que pasó y se decide qué cambiar.</p><p>La pieza central es la <b>revisión posterior al incidente</b> (<i>post-incident review</i>), escrita <b>sin culpas</b> (<i>blameless</i>): describe qué pasó y qué condiciones lo permitieron, no quién se equivocó. La IA ahorra la parte pesada:</p><ol class="steps"><li><span><b>Arma la línea de tiempo</b> desde el registro de eventos, las trazas del asistente y los mensajes enviados.</span></li><li><span><b>Redacta el borrador</b> con el impacto (clientes y horas sin servicio) y las preguntas abiertas.</span></li><li><span><b>Propone cambios</b>, cada uno con su efecto esperado: «con una plantilla de aviso sin hora estimada, el aviso sale 12 minutos antes».</span></li><li><span><b>Una persona decide</b>: el comité acepta, cambia o descarta cada propuesta.</span></li><li><span><b>Se simula y se mide</b>: el cambio se prueba con los casos del último mes antes de publicarlo.</span></li></ol><p>El paso 5 es el que el laboratorio siguiente pone en tus manos.</p></div><div class="lab" id="12-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Cambia una regla del flujo y mira los tiempos simulados</h3></div><p class="hint">Mueve el límite de reembolso automático y el plazo de escalamiento, y decide si la clasificación la hace el modelo o una persona y si los avisos salen en paralelo. El laboratorio repite el mes con los mismos 300 reclamos simulados y muestra el tiempo de cierre, cuántas aprobaciones recibe la supervisora y cuánto dinero sale sin que nadie lo revise.</p><style>
+[id="12-lab-2"] .c12l2-chk{display:flex;gap:8px;align-items:flex-start;font:500 .84rem/1.35 var(--f-display);color:var(--ink);cursor:pointer}
+[id="12-lab-2"] .c12l2-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,132px),1fr));gap:8px}
+[id="12-lab-2"] .c12l2-k{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--paper)}
+[id="12-lab-2"] .c12l2-k span{display:block;font:600 .72rem var(--f-display);color:var(--muted)}
+[id="12-lab-2"] .c12l2-k output{font:700 1.05rem var(--f-mono);color:var(--ink)}
+[id="12-lab-2"] .c12l2-k small{display:block;font:500 .7rem var(--f-mono);color:var(--muted)}
+[id="12-lab-2"] .c12l2-hist{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;align-items:end;height:150px;border-bottom:1px solid var(--line);padding-top:16px}
+[id="12-lab-2"] .c12l2-col{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;gap:2px}
+[id="12-lab-2"] .c12l2-col b{font:700 .72rem var(--f-mono);color:var(--ink)}
+[id="12-lab-2"] .c12l2-col i{display:block;width:100%;border-radius:5px 5px 0 0;background:var(--c-red);transition:height .25s}
+[id="12-lab-2"] .c12l2-col i.lento{background:var(--warm)}
+[id="12-lab-2"] .c12l2-ejes{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;font:500 .7rem var(--f-display);color:var(--muted);text-align:center}
+[id="12-lab-2"] .c12l2-tit{font:600 .78rem var(--f-display);color:var(--muted)}
+@media (prefers-reduced-motion:reduce){[id="12-lab-2"] .c12l2-col i{transition:none}}
+</style>
+<div class="ctls">
+  <label class="ctl">Límite de reembolso automático <output id="c12l2-lim-o"></output>
+    <input id="c12l2-lim" type="range" min="0" max="50" step="5" value="10"></label>
+  <label class="ctl">Plazo antes de escalar a la jefa <output id="c12l2-pla-o"></output>
+    <input id="c12l2-pla" type="range" min="10" max="120" step="5" value="30"></label>
+</div>
+<label class="c12l2-chk"><input type="checkbox" id="c12l2-ia" checked><span>El modelo clasifica el ticket (si no, espera en la cola de clasificación manual)</span></label>
+<label class="c12l2-chk"><input type="checkbox" id="c12l2-par" checked><span>Los avisos (clienta, ticket y CRM) salen en paralelo</span></label>
+<div class="btns"><button type="button" id="c12l2-base">Volver a las reglas actuales</button></div>
+<div class="c12l2-kpis">
+  <div class="c12l2-k"><span>Tiempo medio de cierre</span><output id="c12l2-k1"></output><small id="c12l2-k1b"></small></div>
+  <div class="c12l2-k"><span>Percentil 90 del cierre</span><output id="c12l2-k2"></output><small id="c12l2-k2b"></small></div>
+  <div class="c12l2-k"><span>Aprobaciones por día (supervisora)</span><output id="c12l2-k3"></output><small id="c12l2-k3b"></small></div>
+  <div class="c12l2-k"><span>Escaladas a la jefa</span><output id="c12l2-k4"></output><small id="c12l2-k4b"></small></div>
+  <div class="c12l2-k"><span>Dinero que sale sin revisión</span><output id="c12l2-k5"></output><small id="c12l2-k5b"></small></div>
+  <div class="c12l2-k"><span>Devuelto por error</span><output id="c12l2-k6"></output><small id="c12l2-k6b"></small></div>
+</div>
+<div class="c12l2-tit">Reclamos según su tiempo de cierre (300 reclamos del mes)</div>
+<div class="c12l2-hist" id="c12l2-hist" aria-hidden="true"></div>
+<div class="c12l2-ejes"><span>&lt; 1 h</span><span>1 a 4 h</span><span>4 a 8 h</span><span>8 a 24 h</span><span>1 a 2 días</span><span>&gt; 2 días</span></div>
+<div class="readout texto" id="c12l2-out" aria-live="polite"></div></div></section>
+<section><h2>Gobierno del flujo: quién cambia qué y con qué control</h2><div class="prose"><p>Cada pieza del flujo tiene su dueño. Mezclarlas es la forma más rápida de que alguien cambie un monto creyendo que cambiaba un texto.</p><div class="tbl"><table><thead><tr><th>Pieza del flujo</th><th>Quién la cambia</th><th>Control antes de publicar</th></tr></thead><tbody><tr><td>Umbrales de dinero (límite automático, cadena de aprobación)</td><td>jefa de reclamos con Finanzas</td><td>simulación con el último mes y firma de las dos</td></tr><tr><td>Plazos y destinos de escalamiento</td><td>jefa de reclamos</td><td>simulación de tiempos</td></tr><tr><td>Plantillas de mensajes a clientes</td><td>equipo de atención</td><td>revisión de texto y de canal</td></tr><tr><td>Prompts y esquemas de los pasos con modelo</td><td>equipo de IA</td><td>batería de evaluación del capítulo 16</td></tr><tr><td>Estructura del flujo (estados y transiciones)</td><td>equipo de IA con la dueña del proceso</td><td>pruebas del flujo y revisión de las dos partes</td></tr></tbody></table></div><p>Tres reglas completan el gobierno. La definición del flujo está <b>versionada</b> y cada cambio pasa por una revisión con la simulación adjunta. Los casos en curso <b>terminan con la versión con que empezaron</b>: un reclamo abierto a las 9:00 no cambia sus reglas porque el plazo cambió a las 10:00; los motores durables traen mecanismos de versión para esto. Y cada cambio queda en el registro de auditoría con quién lo pidió y quién lo aprobó. La mirada de negocio sobre los procesos que la IA ayuda a mejorar, con revisión antes de cambiar, está en <a href="https://aaramirez.github.io/adopcion-de-ia/14-de-ux-a-ax.html" target="_blank" rel="noopener">De UX a AX</a>.</p></div><div class="ml"><b>En la práctica</b><p><b>El reclamo de cobro, como flujo.</b> En la versión 0.9 final, el reclamo corre en un motor durable y los avisos son un flujo de n8n que el motor llama en paralelo. El modelo trabaja en dos pasos, clasificar y resumir, cada uno con su compuerta. En el primer mes, la minería de procesos mostró que la espera más larga ya no era la aprobación sino la verificación del cobro, porque facturación respondía lento a fin de mes. La mejora que salió de la revisión no tocó la IA: fue un índice nuevo en la base de facturación. Con el nivel 3 cerrado, el equipo ya tenía lo que un agente necesita: herramientas, MCP, aprobaciones y flujos.</p></div></section>
+<section><h2>La idea clave</h2><div class="prose"><p>Cadenas y enrutadores dentro de un flujo orquestado. El proceso se modela como una máquina de estados con responsables y plazos, y corre en un orquestador que guarda el estado y reanuda sin repetir. El modelo hace pasos concretos (clasificar, resumir, redactar), siempre detrás de una compuerta en código y con una persona como rama por defecto. Afuera de los pasos, la IA evalúa casos cerrados y propone mejoras; las personas deciden, simulan y publican cada cambio con su versión.</p></div></section>
+<section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>¿Qué diferencia hay entre un estado y un evento en una máquina de estados?</summary><p>El estado es dónde está el caso en un momento («esperando aprobación»); el evento es lo que ocurre y lo mueve a otro estado («aprobado», «venció el plazo»). Solo los eventos permitidos para ese estado lo mueven.</p></details><details><summary>¿Por qué el orquestador guarda el estado después de cada paso y, además, cada paso debe ser idempotente?</summary><p>Guardar el estado permite reanudar donde quedó; la idempotencia cubre el caso en que el proceso se cae después del efecto y antes de guardar, cuando el paso se repite al reanudar.</p></details><details><summary>¿Qué hace una compuerta en una cadena de prompts?</summary><p>Es código que valida la salida de un paso con modelo (formato, valores permitidos, confianza, datos que debe citar) antes de pasarla al siguiente; si no pasa, el caso va a una persona.</p></details><details><summary>En un enrutador, ¿quién decide la rama: el modelo o el flujo?</summary><p>El flujo. El modelo produce una categoría de una lista cerrada y el código, con una tabla, elige la rama; lo que no se reconoce va a la rama por defecto, que es una persona.</p></details><details><summary>La IA propone bajar el plazo de escalamiento de 30 a 20 minutos. ¿Qué pasa antes de que el cambio llegue a producción?</summary><p>Una persona con autoridad sobre esa pieza lo acepta o lo descarta; se simula con los casos del último mes, se publica como una versión nueva del flujo y los casos en curso terminan con la versión anterior.</p></details></div></section>
+<section><h2>Para investigar</h2><div class="investiga"><h3>Para investigar</h3><p class="hint">Estas preguntas no se responden en el capítulo: búscalas por tu cuenta.</p><ol><li>¿Qué es BPMN 2.0 y qué representan sus compuertas exclusivas y paralelas?<small>Pista: busca «BPMN gateway exclusive parallel».</small></li><li>¿Qué es DMN (<i>Decision Model and Notation</i>) y cómo se escribe una tabla de decisión?</li><li>¿Qué diferencia hay entre orquestación y coreografía en un sistema de microservicios?</li><li>¿Qué es la ley de Little y cómo relaciona los casos en curso, el tiempo de ciclo y el ritmo de llegada?</li><li>¿Qué es el <i>event sourcing</i> y en qué se parece al historial que guarda un motor de ejecución durable?</li></ol></div></section>
+<section><h2>Para saber más</h2><div class="vids"><span>Para saber más</span><a class="vid" href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Building effective agents <small>flujos, cadenas, enrutadores y agentes, en inglés</small></a><a class="vid" href="https://docs.temporal.io/workflows" target="_blank" rel="noopener">Flujos en Temporal <small>documentación de un motor durable del mercado, en inglés</small></a><a class="vid" href="https://docs.n8n.io/flow-logic/waiting/" target="_blank" rel="noopener">Esperas en los flujos de n8n <small>documentación, en inglés</small></a><a class="vid" href="https://sre.google/sre-book/postmortem-culture/" target="_blank" rel="noopener">Postmortem culture <small>la revisión sin culpas, en inglés</small></a></div></section>
+<label class="got"><input type="checkbox" id="got"> Lo tengo claro</label>
+<nav class="pager" id="pager" aria-label="Capítulo anterior y siguiente"></nav>
+</main>
+</div>
+<footer><span>Curso abierto de aaramirez.github.io.</span><span>Sitio publicado: <a href="https://github.com/aaramirez/aplicaciones-con-ia" target="_blank" rel="noopener">github.com/aaramirez/aplicaciones-con-ia</a></span></footer>
+</div>
+<script src="assets/lab.js"></script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  const root=document.querySelector('[id="12-lab-1"]');
+  const ET=[
+    {n:'Detectar',s:'agrupar alarma y tickets',
+     ia:'Agrupa los 40 tickets por zona y por texto y los une a la alarma del nodo de la zona Norte.',
+     per:'Confirma que es un solo incidente y no varios.',
+     m:{ia:{t:2,h:0},mix:{t:6,h:4},per:{t:25,h:25}},rec:'ia',
+     nota:'Es una lectura: agrupar no cambia nada en ningún sistema. Si la IA se equivoca, una persona lo nota en la etapa siguiente.'},
+    {n:'Severidad',s:'decidir cuán grave es',
+     ia:'Propone la severidad con el número de clientes afectados y la duración de la alarma.',
+     per:'Confirma o corrige la severidad: de ella dependen los avisos, las cuadrillas y el escalamiento.',
+     m:{ia:{t:1,h:0,e:{txt:'La IA propuso severidad 2 porque la alarma era intermitente; el incidente se trató como menor durante 40 minutos.',ret:40}},mix:{t:5,h:3},per:{t:15,h:15}},rec:'mix',
+     nota:'Una decisión con consecuencias en cadena: la IA aporta los datos en segundos y una persona firma.'},
+    {n:'Comunicar',s:'avisar a los clientes',
+     ia:'Redacta el aviso para los clientes de la zona con la plantilla aprobada de averías.',
+     per:'Aprueba el texto: nada de horas estimadas que nadie calculó.',
+     m:{ia:{t:2,h:0,e:{txt:'El aviso salió solo y prometió «servicio restablecido en una hora», una hora que nadie había estimado.',cli:true}},mix:{t:8,h:5},per:{t:30,h:30}},rec:'mix',
+     nota:'Un mensaje a miles de clientes no se deshace. La IA ahorra la redacción; la aprobación cuesta cinco minutos.'},
+    {n:'Diagnosticar',s:'despachar cuadrillas',
+     ia:'Cruza la alarma con el inventario y propone a qué nodo mandar la cuadrilla más cercana.',
+     per:'La jefa de turno confirma el nodo con el equipo de red y despacha.',
+     m:{ia:{t:3,h:0,e:{txt:'La IA despachó dos cuadrillas a un nodo equivocado: la ubicación venía de un inventario desactualizado.',ret:50}},mix:{t:12,h:8},per:{t:20,h:20}},rec:'mix',
+     nota:'Mover personas en la calle es una acción cara de revertir; la propuesta de la IA acelera, la confirmación evita el viaje perdido.'},
+    {n:'Cerrar',s:'cerrar y compensar',
+     ia:'Cuando la alarma se despeja, el código verifica el servicio cliente por cliente, cierra los tickets y aplica el crédito de la política.',
+     per:'Revisa a mano cada ticket y calcula cada crédito.',
+     m:{ia:{t:5,h:0},mix:{t:30,h:30},per:{t:180,h:180}},rec:'ia',
+     nota:'Aquí la IA sola es lo correcto porque el criterio de «hecho» lo verifica el sistema y el crédito sale de una regla, no de una opinión.'},
+    {n:'Aprender',s:'revisión posterior',
+     ia:'Arma la línea de tiempo, redacta el borrador del informe y propone cambios al flujo.',
+     per:'El comité acepta o descarta cada cambio; se simula antes de publicarlo.',
+     m:{ia:{t:10,h:0,e:{txt:'La IA cambió por su cuenta el plazo de escalamiento del flujo: nadie lo simuló ni lo aprobó.',gob:true}},mix:{t:60,h:45},per:{t:240,h:240}},rec:'mix',
+     nota:'La IA hace el trabajo pesado del informe; el cambio al proceso lo decide una persona.'}
+  ];
+  const NOM={ia:'IA sola',mix:'IA propone, persona decide',per:'persona sola'};
+  let modo=ET.map(e=>e.rec),cur=0,preset='rec';
+  function datos(i){return ET[i].m[modo[i]];}
+  function hm(min){min=Math.round(min);return min<60?min+' min':Math.floor(min/60)+' h '+String(min%60).padStart(2,'0')+' min';}
+  function pintar(){
+    $('#c12l1-tabs').innerHTML=ET.map((e,i)=>'<li><button type="button" data-i="'+i+'" data-m="'+modo[i]+'" class="'+(i===cur?'actual':'')+'" aria-current="'+(i===cur?'step':'false')+'">'+(i+1)+'. '+e.n+'<small>'+NOM[modo[i]]+'</small></button></li>').join('');
+    const e=ET[cur],d=datos(cur);
+    let h='<h4>Etapa '+(cur+1)+' de 6 · '+e.n+' ('+e.s+')</h4><p><b class="ia">Lo que hace la IA:</b> '+e.ia+'</p><p><b class="per">Lo que decide una persona:</b> '+e.per+'</p>';
+    h+='<p><b>Con «'+NOM[modo[cur]]+'»:</b> '+d.t+' min'+(d.h?' · '+d.h+' min de trabajo humano':' · sin trabajo humano')+(d.e?' · <span style="color:var(--warm);font-weight:700">'+d.e.txt+'</span>':'')+'</p>';
+    h+='<p style="color:var(--muted)">Reparto recomendado: '+NOM[e.rec]+'. '+e.nota+'</p>';
+    $('#c12l1-card').innerHTML=h;
+    root.querySelectorAll('#c12l1-modos button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.m===modo[cur])));
+    root.querySelectorAll('[data-p]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p===preset)));
+    $('#c12l1-ant').disabled=cur===0;$('#c12l1-sig').disabled=cur===ET.length-1;
+    const COL={ia:'var(--warm)',mix:'var(--accent)',per:'var(--muted)'};
+    $('#c12l1-barras').innerHTML=ET.map((e,i)=>{const d=datos(i),ret=d.e&&d.e.ret?d.e.ret:0;const w=x=>Math.min(100,x/240*100);
+      return '<div class="c12l1-fila"><span>'+(i+1)+'. '+e.n+' · '+hm(d.t+ret)+'</span><div class="c12l1-pista"><i class="ret" style="width:'+w(d.t+ret)+'%"></i><i style="width:'+w(d.t)+'%;background:'+COL[modo[i]]+'"></i></div></div>';}).join('');
+    let aviso=0,desp=0,hum=0;const err=[];
+    ET.forEach((e,i)=>{const d=datos(i),ret=d.e&&d.e.ret?d.e.ret:0;if(i<=2)aviso+=d.t+ret;if(i<=3)desp+=d.t+ret;hum+=d.h;if(d.e)err.push(d.e);});
+    $('#c12l1-k1').textContent=hm(aviso);$('#c12l1-k2').textContent=hm(desp);$('#c12l1-k3').textContent=hm(hum);$('#c12l1-k4').textContent=err.length;
+    let r;
+    const todosIA=modo.every(m=>m==='ia'),todosPer=modo.every(m=>m==='per'),rec=modo.every((m,i)=>m===ET[i].rec);
+    if(rec)r='<span class="ok">Reparto recomendado: la IA sola donde lee o donde el sistema verifica el resultado (detectar y cerrar), y propone donde la decisión tiene consecuencias que no se deshacen. Primer aviso en '+hm(aviso)+', ningún error escapado y '+hm(hum)+' de trabajo humano.</span>';
+    else if(todosIA)r='<span class="warn">Todo con la IA sola parece rapidísimo, pero '+err.length+' errores se escapan: una severidad mal puesta, un aviso con una promesa falsa, cuadrillas en el nodo equivocado y un cambio al proceso sin revisión. Lo que se ahorró en minutos se pagó en confianza y en tiempo perdido.</span>';
+    else if(todosPer)r='<span class="warn">Todo con personas no tiene errores de IA, pero el primer aviso tarda '+hm(aviso)+' y el incidente consume '+hm(hum)+' de trabajo: horas que la IA podía ahorrar en las etapas que solo leen o que el sistema verifica.</span>';
+    else r='<span>Reparto mixto: primer aviso en '+hm(aviso)+', '+hm(hum)+' de trabajo humano y '+err.length+' error'+(err.length===1?'':'es')+' escapado'+(err.length===1?'':'s')+'.'+(err.length?' '+err.map(x=>x.txt).join(' '):' Compáralo con el reparto recomendado.')+'</span>';
+    $('#c12l1-out').innerHTML=r;
+  }
+  root.addEventListener('click',ev=>{
+    const t=ev.target.closest('button');if(!t||!root.contains(t))return;
+    if(t.dataset.i!==undefined){cur=+t.dataset.i;}
+    else if(t.dataset.p){preset=t.dataset.p;modo=ET.map(e=>preset==='rec'?e.rec:preset);}
+    else if(t.dataset.m&&t.closest('#c12l1-modos')){modo[cur]=t.dataset.m;preset=modo.every((m,i)=>m===ET[i].rec)?'rec':modo.every(m=>m==='ia')?'ia':modo.every(m=>m==='per')?'per':'';}
+    else if(t.id==='c12l1-ant'){cur=Math.max(0,cur-1);}
+    else if(t.id==='c12l1-sig'){cur=Math.min(ET.length-1,cur+1);}
+    else return;
+    pintar();
+  });
+  pintar();
+})();
+</script>
+<script>
+(function(){
+  const {$}=window.Lab;
+  function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  const r=rng(1207),N=300,DIAS=22;
+  const ex=(u,m)=>-Math.log(1-u)*m;
+  // Los mismos 300 reclamos para todas las reglas: cada uno guarda sus números al azar.
+  const C=[];
+  for(let i=0;i<N;i++){
+    const u=r();let monto=u<.7?5+r()*25:u<.92?30+r()*70:100+r()*80;monto=Math.round(monto);
+    C.push({monto,invalido:r()<.04,atrapa:r()<.5,sup:ex(r(),22),fuera:r()<.15?60+r()*540:0,jefa:ex(r(),50),fin:600+r()*900,
+      malcl:r()<.04,colaManual:ex(r(),300),avisos:[2+r()*18,2+r()*18,2+r()*18],ver:3+r()*4});
+  }
+  const BASE={lim:10,pla:30,ia:true,par:true};
+  function sim(p){
+    const t=[];let aprob=0,esc=0,auto=0,error=0,autoN=0;
+    C.forEach(c=>{
+      let m=0;
+      m+=p.ia?(1+(c.malcl?60:0)):c.colaManual;     // clasificar
+      m+=c.ver;                                      // verificar el cobro
+      if(c.invalido&&c.atrapa){t.push(m);return;}    // la verificación lo descarta: se cierra sin reembolso
+      if(c.monto<=p.lim){auto+=c.monto;autoN++;if(c.invalido)error+=c.monto;}
+      else{
+        aprob++;
+        let a=c.fuera+(c.sup>p.pla?(esc++,p.pla+c.jefa):c.sup);
+        if(c.monto>100)a+=c.fin;                     // cadena: después de la supervisora, Finanzas
+        m+=a;
+        if(c.invalido){t.push(m);return;}            // una persona lo rechaza
+      }
+      m+=2;                                          // registrar el reembolso con su clave
+      m+=p.par?Math.max(...c.avisos):c.avisos.reduce((x,y)=>x+y,0);
+      t.push(m);
+    });
+    const s=t.slice().sort((a,b)=>a-b);
+    return {media:t.reduce((a,b)=>a+b,0)/N,p90:s[Math.floor(.9*N)],aprobDia:aprob/DIAS,esc,auto,autoN,error,t};
+  }
+  const hm=min=>min<60?Math.round(min)+' min':min<48*60?(min/60).toFixed(1).replace('.',',')+' h':(min/1440).toFixed(1).replace('.',',')+' días';
+  const us=v=>'US$ '+v.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  const base=sim(BASE);
+  function dif(a,b,inv){const d=a-b;if(Math.abs(d)<1e-6)return 'igual que hoy';return (d>0?'+':'−')+(inv?inv(Math.abs(d)):Math.abs(d).toFixed(1).replace('.',','))+' frente a hoy';}
+  function leer(){return {lim:+$('#c12l2-lim').value,pla:+$('#c12l2-pla').value,ia:$('#c12l2-ia').checked,par:$('#c12l2-par').checked};}
+  function pintar(){
+    const p=leer(),s=sim(p);
+    $('#c12l2-lim-o').textContent=p.lim===0?'ninguno':us(p.lim);
+    $('#c12l2-pla-o').textContent=p.pla+' min';
+    $('#c12l2-k1').textContent=hm(s.media);$('#c12l2-k1b').textContent=dif(s.media,base.media,hm);
+    $('#c12l2-k2').textContent=hm(s.p90);$('#c12l2-k2b').textContent=dif(s.p90,base.p90,hm);
+    $('#c12l2-k3').textContent=s.aprobDia.toFixed(1).replace('.',',');$('#c12l2-k3b').textContent=dif(s.aprobDia,base.aprobDia);
+    $('#c12l2-k4').textContent=s.esc;$('#c12l2-k4b').textContent=dif(s.esc,base.esc,v=>String(Math.round(v)));
+    $('#c12l2-k5').textContent=us(s.auto);$('#c12l2-k5b').textContent=s.autoN+' reembolsos automáticos';
+    $('#c12l2-k6').textContent=us(s.error);$('#c12l2-k6b').textContent=dif(s.error,base.error,us);
+    const B=[60,240,480,1440,2880,Infinity],cnt=[0,0,0,0,0,0];
+    s.t.forEach(x=>{cnt[B.findIndex(b=>x<b)]++;});
+    const mx=Math.max(...cnt,1);
+    $('#c12l2-hist').innerHTML=cnt.map((c,i)=>'<div class="c12l2-col"><b>'+c+'</b><i class="'+(i>=4?'lento':'')+'" style="height:'+(c/mx*100*0.85)+'%"></i></div>').join('');
+    const msgs=[];
+    if(!p.ia)msgs.push('<span class="warn">Sin el modelo en la clasificación, cada reclamo espera horas en la cola manual: es la espera más larga del proceso y la que más sube el tiempo medio.</span>');
+    if(p.lim>BASE.lim)msgs.push('Subir el límite automático a '+us(p.lim)+' baja las aprobaciones de la supervisora, pero sale más dinero sin revisión y crece lo devuelto por error: la verificación del sistema atrapa la mitad de los cobros que no eran duplicados, la supervisora atrapa el resto.');
+    if(p.lim<BASE.lim)msgs.push('Con un límite menor, casi todo pasa por la supervisora: el dinero devuelto por error baja a cero, pero ella recibe más aprobaciones por día y el tiempo de cierre sube.');
+    if(p.pla<BASE.pla)msgs.push('Un plazo de escalamiento más corto saca antes los casos de la supervisora, pero manda más casos a la jefa de reclamos, que también tiene su propio tiempo de respuesta.');
+    if(p.pla>BASE.pla)msgs.push('Con un plazo más largo, menos casos llegan a la jefa, pero los que la supervisora no ve esperan más.');
+    if(!p.par)msgs.push('Con los avisos en serie, cada reclamo suma las tres esperas en vez de la más larga.');
+    if(!msgs.length)msgs.push('<span>Reglas actuales del flujo, versión 3. Mueve una regla y compara: así se ensaya un cambio con los casos del último mes antes de publicarlo. Los reclamos de más de US$ 100,00 pasan por la cadena con Finanzas: son la mayoría de los que tardan más de 8 horas.</span>');
+    $('#c12l2-out').innerHTML=msgs.map(m=>m.startsWith('<span')?m:'<span>'+m+'</span>').join('');
+  }
+  ['#c12l2-lim','#c12l2-pla'].forEach(id=>$(id).addEventListener('input',pintar));
+  ['#c12l2-ia','#c12l2-par'].forEach(id=>$(id).addEventListener('change',pintar));
+  $('#c12l2-base').addEventListener('click',()=>{$('#c12l2-lim').value=BASE.lim;$('#c12l2-pla').value=BASE.pla;$('#c12l2-ia').checked=true;$('#c12l2-par').checked=true;pintar();});
+  pintar();
+})();
+</script>
+</body>
+</html>
