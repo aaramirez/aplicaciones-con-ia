@@ -31,11 +31,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <header class="page-head"><span class="num">CAPÍTULO 16 DE 20</span><h1>Evaluar una aplicación con IA</h1><p class="lede">Un cambio de una línea en el prompt puede mejorar diez respuestas y arruinar otras treinta sin que nadie lo note. Este capítulo arma la batería de evaluación del asistente de atención: el conjunto dorado de casos reales y difíciles, las métricas que importan, los jueces (personas, reglas y un modelo calibrado) y la compuerta que no deja publicar un cambio que empeora algo.</p></header>
 <section><div class="prose"><p>Un jueves, Mateo abrió un cambio pequeño: la plantilla <code>respuesta-agente@v5</code>. Los agentes decían que el asistente sonaba seco, y la versión nueva le pedía «ser cálido y resolutivo, porque el agente siempre necesita una respuesta útil». Probó cinco preguntas en su computadora. Las cinco respuestas eran mejores: más amables, igual de correctas. Iba a publicarla esa tarde.</p><p>Lucía le pidió que corriera antes la batería. Tardó ocho minutos. Las preguntas de tarifas subieron un punto, pero la <b>abstención correcta</b>, las veces que el asistente dice «no lo encontré en los manuales» cuando de verdad no está, cayó de 92 % a 70 %. La palabra «siempre» había convencido al modelo de responder también cuando no tenía evidencia. Con la v5, el asistente inventaba la penalidad por cancelar un contrato con la misma amabilidad con que citaba la tarifa de reconexión.</p></div></section>
 <section><h2>Por qué «se ve bien» no es una evaluación</h2><div class="analogia"><b>Imagínalo así</b><p>Un restaurante no decide cambiar la receta de la sopa porque el chef la probó y le gustó. Antes de cambiarla, la prueban varias personas, con platos servidos a la temperatura de siempre, a la hora de más pedidos, y alguien revisa que siga cumpliendo las reglas de alérgenos. El chef sabe cocinar; lo que no sabe es cómo le va a caer la sopa nueva a cien comensales distintos.</p></div><div class="prose"><p>Revisar unas pocas respuestas a ojo tiene nombre en la jerga: la <b>prueba de la impresión</b> (<i>vibe check</i>). Sirve para explorar una idea, pero tiene tres defectos que la hacen inútil para decidir:</p><ul><li><b>Elige los casos fáciles.</b> Quien prueba su propio cambio piensa en las preguntas que el cambio quería mejorar, no en las que puede romper.</li><li><b>No compara.</b> Sin la versión anterior corriendo sobre los mismos casos, «está mejor» es una sensación, no una medición.</li><li><b>No se repite.</b> El próximo cambio se probará con otras cinco preguntas, y nadie sabrá si la calidad sube o baja con el tiempo.</li></ul><p>Una <b>evaluación</b> (<i>evaluation</i>, en la jerga <i>eval</i>) es lo contrario: un conjunto fijo de casos, con lo que se espera de cada uno, corrido de forma automática contra cada versión, con métricas que se comparan contra la versión publicada. En una aplicación con modelos de lenguaje es todavía más necesaria que en el software clásico, porque los cambios no se ven en el código. Cambiar una palabra del prompt, la versión del modelo o el número de fragmentos que entran al contexto puede cambiar cientos de respuestas, y ninguna prueba unitaria lo detecta. El patrón de este capítulo es <b>evaluación primero</b> (<i>eval-first</i>): ningún cambio sin su batería.</p></div></section>
-<section><h2>El conjunto dorado: casos reales, difíciles y de borde</h2><div class="prose"><p>La base de toda evaluación es el <b>conjunto dorado</b> (<i>golden set</i>): una lista de casos, cada uno con la entrada y lo que se espera a la salida, revisada por quien sabe del negocio. El del asistente nació en el capítulo 8 con las 120 preguntas de la jefa de reclamos y fue creciendo con cada versión.</p></div><div class="analogia"><b>Imagínalo así</b><p>El examen de manejo no se toma en un estacionamiento vacío. Tiene una ruta fija con lo que más falla en la vida real: estacionar en paralelo, una rotonda, un cruce sin semáforo, una calle con niños. Y la ruta es la misma para todos, así que dos examinadores pueden comparar a dos alumnos. El conjunto dorado es esa ruta.</p></div><div class="prose"><p>Los casos salen de cuatro fuentes:</p><ol class="steps"><li><span><b>Casos reales.</b> Tickets y consultas de producción, con los datos personales reemplazados por datos de prueba. Son los que más se parecen a lo que el asistente va a ver.</span></li><li><span><b>Casos difíciles.</b> Consultas mixtas («me cobraron dos veces y además no tengo servicio»), preguntas ambiguas, documentos que se contradicen y la trampa de la política de reconexión retirada de 2024.</span></li><li><span><b>Casos de borde</b> (<i>edge cases</i>). Preguntas cuya respuesta no está en los manuales (para medir la abstención), montos en el límite de una regla (un reembolso de exactamente US$ 10,00), textos vacíos o enormes, y correos con instrucciones escondidas.</span></li><li><span><b>Fallas de producción.</b> Cada vez que el asistente se equivoca con un agente, el caso entra al conjunto con su respuesta correcta. Así el mismo error no vuelve dos veces sin que nadie lo vea.</span></li></ol><p>Un caso del conjunto dorado es un dato con esquema, versionado como el código:</p><div class="code-copia"><pre><code>{"id": "tarifa-017", "tipo": "pregunta", "estrato": "tarifas",
- "entrada": "Carmen pide la reconexión con la factura F-88213 vencida, ¿cuánto paga?",
- "contexto_cliente": {"cuenta": 20417},
- "esperado": {"monto": 35.00, "fuentes": ["politica-reconexion-2026"], "abstiene": false},
- "critico": true, "autor": "jefa-reclamos", "desde": "v0.6"}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Tres reglas cuidan el conjunto. Se <b>estratifica</b>: hay casos de cada tipo en una proporción decidida (si el 90 % son preguntas de tarifas, una caída grave en la clasificación se pierde en el promedio). Se <b>marcan los casos críticos</b>, los que no pueden fallar nunca, como los montos y los reembolsos. Y se <b>separa de los ejemplos de las plantillas</b>: si un caso del conjunto aparece como ejemplo dentro del prompt, el asistente lo «sabe de memoria» y la evaluación miente; a eso se le llama <b>contaminación</b> (<i>contamination</i>).</p></div><figure class="fig fig-esquema" id="16-diagrama-1"><div class="lienzo"><svg viewBox="0 0 880 352" style="min-width:680px" role="img" aria-label="El conjunto dorado de 300 casos partido en estratos: 120 de tarifas y políticas, 60 de clasificación de tickets, 30 sin respuesta para medir la abstención, 40 de herramientas, 20 escenarios del agente y 30 difíciles y de ataque; 25 casos críticos marcados; abajo, las cuatro fuentes de casos y quién los revisa.">
+<section><h2>El conjunto dorado: casos reales, difíciles y de borde</h2><div class="prose"><p>La base de toda evaluación es el <b>conjunto dorado</b> (<i>golden set</i>): una lista de casos, cada uno con la entrada y lo que se espera a la salida, revisada por quien sabe del negocio. El del asistente nació en el capítulo 8 con las 120 preguntas de la jefa de reclamos y fue creciendo con cada versión.</p></div><div class="analogia"><b>Imagínalo así</b><p>El examen de manejo no se toma en un estacionamiento vacío. Tiene una ruta fija con lo que más falla en la vida real: estacionar en paralelo, una rotonda, un cruce sin semáforo, una calle con niños. Y la ruta es la misma para todos, así que dos examinadores pueden comparar a dos alumnos. El conjunto dorado es esa ruta.</p></div><div class="prose"><p>Los casos salen de cuatro fuentes:</p><ol class="steps"><li><span><b>Casos reales.</b> Tickets y consultas de producción, con los datos personales reemplazados por datos de prueba. Son los que más se parecen a lo que el asistente va a ver.</span></li><li><span><b>Casos difíciles.</b> Consultas mixtas («me cobraron dos veces y además no tengo servicio»), preguntas ambiguas, documentos que se contradicen y la trampa de la política de reconexión retirada de 2024.</span></li><li><span><b>Casos de borde</b> (<i>edge cases</i>). Preguntas cuya respuesta no está en los manuales (para medir la abstención), montos en el límite de una regla (un reembolso de exactamente US$ 10,00), textos vacíos o enormes, y correos con instrucciones escondidas.</span></li><li><span><b>Fallas de producción.</b> Cada vez que el asistente se equivoca con un agente, el caso entra al conjunto con su respuesta correcta. Así el mismo error no vuelve dos veces sin que nadie lo vea.</span></li></ol><p>Un caso del conjunto dorado es un dato con esquema, versionado como el código:</p><div class="code-copia code-lineas"><pre><code><span class="ln">{"id": "tarifa-017", "tipo": "pregunta", "estrato": "tarifas",</span>
+<span class="ln"> "entrada": "Carmen pide la reconexión con la factura F-88213 vencida, ¿cuánto paga?",</span>
+<span class="ln"> "contexto_cliente": {"cuenta": 20417},</span>
+<span class="ln"> "esperado": {"monto": 35.00, "fuentes": ["politica-reconexion-2026"], "abstiene": false},</span>
+<span class="ln"> "critico": true, "autor": "jefa-reclamos", "desde": "v0.6"}</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Tres reglas cuidan el conjunto. Se <b>estratifica</b>: hay casos de cada tipo en una proporción decidida (si el 90 % son preguntas de tarifas, una caída grave en la clasificación se pierde en el promedio). Se <b>marcan los casos críticos</b>, los que no pueden fallar nunca, como los montos y los reembolsos. Y se <b>separa de los ejemplos de las plantillas</b>: si un caso del conjunto aparece como ejemplo dentro del prompt, el asistente lo «sabe de memoria» y la evaluación miente; a eso se le llama <b>contaminación</b> (<i>contamination</i>).</p></div><figure class="fig fig-esquema" id="16-diagrama-1"><div class="lienzo"><svg viewBox="0 0 880 352" style="min-width:680px" role="img" aria-label="El conjunto dorado de 300 casos partido en estratos: 120 de tarifas y políticas, 60 de clasificación de tickets, 30 sin respuesta para medir la abstención, 40 de herramientas, 20 escenarios del agente y 30 difíciles y de ataque; 25 casos críticos marcados; abajo, las cuatro fuentes de casos y quién los revisa.">
 <text x="30" y="30" class="t t-xs t-b t-m">300 CASOS · dorado-v7 · versionado junto al código</text>
 <rect x="30.0" y="48" width="328.0" height="54" class="c-enl"/>
 <text x="194" y="81" class="t t-b k-enl" text-anchor="middle" style="font-size:15px">120</text>
@@ -210,46 +210,46 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   </div>
 </div>
 <ol class="c16l2-lista" id="c16l2-lista" aria-label="Las veinte respuestas"></ol>
-<div class="readout texto" id="c16l2-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un modelo como juez, calibrado contra una persona</h3></div><p>Vas a usar tu modelo local como juez de seis respuestas del asistente que una persona ya calificó, primero con una rúbrica y después sin ella, y a medir cuánto coincide con la persona. Necesitas Ollama con <code>llama3.2:3b</code> (cualquier modelo pequeño sirve; un juez real conviene que sea de otra familia que el evaluado). Guarda este programa como <code>juez.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
-
-URL = "http://localhost:11434/v1/chat/completions"
-USAR_RUBRICA = True
-FUENTE = "Política de reconexión vigente desde 2026: el cargo por reconexión es de US$ 5,00."
-RUBRICA = ("Pasa solo si cumple las tres: 1) el monto coincide con la fuente; "
-           "2) no afirma nada que no esté en la fuente; 3) si la fuente no responde, lo dice.")
-CASOS = [  # (pregunta, respuesta del asistente, veredicto de la persona)
-    ("¿Cuánto cuesta la reconexión?", "La reconexión cuesta US$ 5,00 según la política vigente.", "pasa"),
-    ("¿Cuánto cuesta la reconexión?", "¡Hola! Con gusto te ayudo. La reconexión tiene un costo de "
-     "US$ 8,00 y se suma a tu factura. ¡Que tengas un excelente día!", "no_pasa"),
-    ("¿Cuánto cuesta la reconexión?", "US$ 5,00.", "pasa"),
-    ("¿Hay penalidad por cancelar antes de un año?", "Sí, la penalidad es de dos meses de servicio, "
-     "como establece nuestra política de permanencia.", "no_pasa"),
-    ("¿Hay penalidad por cancelar antes de un año?", "No lo encontré en los documentos disponibles.", "pasa"),
-    ("¿Cuánto cuesta la reconexión?", "Cuesta US$ 5,00 y se cobra solo si el corte duró más de 48 horas.", "no_pasa"),
-]
-
-def juzgar(pregunta, respuesta):
-    criterio = RUBRICA if USAR_RUBRICA else "Di si es una buena respuesta."
-    cuerpo = {"model": "llama3.2:3b", "temperature": 0,
-        "response_format": {"type": "json_schema", "json_schema": {"name": "veredicto", "schema": {
-            "type": "object", "properties": {"razon": {"type": "string"},
-            "veredicto": {"type": "string", "enum": ["pasa", "no_pasa"]}},
-            "required": ["razon", "veredicto"]}}},
-        "messages": [{"role": "system", "content": "Eres un evaluador estricto. " + criterio +
-                      " Escribe primero la razón y después el veredicto."},
-                     {"role": "user", "content": f"Fuente: {FUENTE}\nPregunta: {pregunta}\nRespuesta: {respuesta}"}]}
-    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
-                                    headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(pedido) as r:
-        return json.loads(json.load(r)["choices"][0]["message"]["content"])["veredicto"]
-
-acuerdos = falsos_aprobados = 0
-for pregunta, respuesta, persona in CASOS:
-    juez = juzgar(pregunta, respuesta)
-    acuerdos += juez == persona
-    falsos_aprobados += (juez == "pasa" and persona == "no_pasa")
-    print(f"{'=' if juez == persona else 'X'} persona={persona:8} juez={juez:8} {respuesta[:55]}")
-print(f"\nRúbrica: {USAR_RUBRICA} · acuerdo {acuerdos}/{len(CASOS)} · falsos aprobados {falsos_aprobados}")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python juez.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 juez.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota el acuerdo y los falsos aprobados.</span></li><li><span>Cambia <code>USAR_RUBRICA</code> a <code>False</code> y vuelve a correrlo.</span></li><li><span>Mira en qué casos discrepan: ¿la respuesta larga y amable con el monto viejo? ¿la que agrega una condición inventada?</span></li></ol><p><b>Qué observar:</b> con la rúbrica, el juez suele coincidir con la persona en la mayoría de los casos, porque tiene criterios concretos que revisar. Sin rúbrica, tiende a aprobar las respuestas amables y largas aunque digan US$ 8,00, y a dudar de la respuesta escueta «US$ 5,00»: son los sesgos de verbosidad y de complacencia. Los falsos aprobados son el número que importa, porque son los errores que pasarían la batería. Seis casos no alcanzan para calibrar en serio (se usan unos cien), y un modelo pequeño es un juez débil: este ejercicio muestra el método, no el juez que usarías en producción.</p></div></section>
+<div class="readout texto" id="c16l2-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un modelo como juez, calibrado contra una persona</h3></div><p>Vas a usar tu modelo local como juez de seis respuestas del asistente que una persona ya calificó, primero con una rúbrica y después sin ella, y a medir cuánto coincide con la persona. Necesitas Ollama con <code>llama3.2:3b</code> (cualquier modelo pequeño sirve; un juez real conviene que sea de otra familia que el evaluado). Guarda este programa como <code>juez.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import json, urllib.request</span>
+<span class="ln"></span>
+<span class="ln">URL = "http://localhost:11434/v1/chat/completions"</span>
+<span class="ln">USAR_RUBRICA = True</span>
+<span class="ln">FUENTE = "Política de reconexión vigente desde 2026: el cargo por reconexión es de US$ 5,00."</span>
+<span class="ln">RUBRICA = ("Pasa solo si cumple las tres: 1) el monto coincide con la fuente; "</span>
+<span class="ln">           "2) no afirma nada que no esté en la fuente; 3) si la fuente no responde, lo dice.")</span>
+<span class="ln">CASOS = [  # (pregunta, respuesta del asistente, veredicto de la persona)</span>
+<span class="ln">    ("¿Cuánto cuesta la reconexión?", "La reconexión cuesta US$ 5,00 según la política vigente.", "pasa"),</span>
+<span class="ln">    ("¿Cuánto cuesta la reconexión?", "¡Hola! Con gusto te ayudo. La reconexión tiene un costo de "</span>
+<span class="ln">     "US$ 8,00 y se suma a tu factura. ¡Que tengas un excelente día!", "no_pasa"),</span>
+<span class="ln">    ("¿Cuánto cuesta la reconexión?", "US$ 5,00.", "pasa"),</span>
+<span class="ln">    ("¿Hay penalidad por cancelar antes de un año?", "Sí, la penalidad es de dos meses de servicio, "</span>
+<span class="ln">     "como establece nuestra política de permanencia.", "no_pasa"),</span>
+<span class="ln">    ("¿Hay penalidad por cancelar antes de un año?", "No lo encontré en los documentos disponibles.", "pasa"),</span>
+<span class="ln">    ("¿Cuánto cuesta la reconexión?", "Cuesta US$ 5,00 y se cobra solo si el corte duró más de 48 horas.", "no_pasa"),</span>
+<span class="ln">]</span>
+<span class="ln"></span>
+<span class="ln">def juzgar(pregunta, respuesta):</span>
+<span class="ln">    criterio = RUBRICA if USAR_RUBRICA else "Di si es una buena respuesta."</span>
+<span class="ln">    cuerpo = {"model": "llama3.2:3b", "temperature": 0,</span>
+<span class="ln">        "response_format": {"type": "json_schema", "json_schema": {"name": "veredicto", "schema": {</span>
+<span class="ln">            "type": "object", "properties": {"razon": {"type": "string"},</span>
+<span class="ln">            "veredicto": {"type": "string", "enum": ["pasa", "no_pasa"]}},</span>
+<span class="ln">            "required": ["razon", "veredicto"]}}},</span>
+<span class="ln">        "messages": [{"role": "system", "content": "Eres un evaluador estricto. " + criterio +</span>
+<span class="ln">                      " Escribe primero la razón y después el veredicto."},</span>
+<span class="ln">                     {"role": "user", "content": f"Fuente: {FUENTE}\nPregunta: {pregunta}\nRespuesta: {respuesta}"}]}</span>
+<span class="ln">    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),</span>
+<span class="ln">                                    headers={"Content-Type": "application/json"})</span>
+<span class="ln">    with urllib.request.urlopen(pedido) as r:</span>
+<span class="ln">        return json.loads(json.load(r)["choices"][0]["message"]["content"])["veredicto"]</span>
+<span class="ln"></span>
+<span class="ln">acuerdos = falsos_aprobados = 0</span>
+<span class="ln">for pregunta, respuesta, persona in CASOS:</span>
+<span class="ln">    juez = juzgar(pregunta, respuesta)</span>
+<span class="ln">    acuerdos += juez == persona</span>
+<span class="ln">    falsos_aprobados += (juez == "pasa" and persona == "no_pasa")</span>
+<span class="ln">    print(f"{'=' if juez == persona else 'X'} persona={persona:8} juez={juez:8} {respuesta[:55]}")</span>
+<span class="ln">print(f"\nRúbrica: {USAR_RUBRICA} · acuerdo {acuerdos}/{len(CASOS)} · falsos aprobados {falsos_aprobados}")</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python juez.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 juez.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota el acuerdo y los falsos aprobados.</span></li><li><span>Cambia <code>USAR_RUBRICA</code> a <code>False</code> y vuelve a correrlo.</span></li><li><span>Mira en qué casos discrepan: ¿la respuesta larga y amable con el monto viejo? ¿la que agrega una condición inventada?</span></li></ol><p><b>Qué observar:</b> con la rúbrica, el juez suele coincidir con la persona en la mayoría de los casos, porque tiene criterios concretos que revisar. Sin rúbrica, tiende a aprobar las respuestas amables y largas aunque digan US$ 8,00, y a dudar de la respuesta escueta «US$ 5,00»: son los sesgos de verbosidad y de complacencia. Los falsos aprobados son el número que importa, porque son los errores que pasarían la batería. Seis casos no alcanzan para calibrar en serio (se usan unos cien), y un modelo pequeño es un juez débil: este ejercicio muestra el método, no el juez que usarías en producción.</p></div></section>
 <section><h2>Regresiones: evaluar cada cambio de modelo, de prompt o de recuperación</h2><div class="prose"><p>Una <b>regresión</b> (<i>regression</i>) es un cambio que arregla algo y rompe otra cosa que funcionaba. En una aplicación con modelos, casi todo puede causar una: la plantilla, la versión del modelo, el modelo de embeddings, el tamaño de los fragmentos, el número de resultados, una descripción de herramienta, un umbral del caché semántico del capítulo 15 o una regla de un guardrail.</p></div><div class="analogia"><b>Imagínalo así</b><p>Cuando un mecánico cambia los frenos, antes de devolver el auto revisa también las luces, la dirección y que no haya una fuga nueva debajo. No porque haya tocado las luces, sino porque sabe que meter las manos en un motor puede mover otra cosa.</p></div><div class="prose"><p>Por eso la batería corre en la <b>integración continua</b> (<i>continuous integration</i>, CI), la canalización que revisa cada cambio antes de unirlo al código principal. Cualquier cambio que toque algo de esa lista dispara la batería completa, y el resultado se compara contra la versión publicada con una <b>compuerta de calidad</b> (<i>quality gate</i>): una lista de condiciones que, si no se cumplen, bloquean la publicación.</p><div class="tbl"><table><thead><tr><th>Condición de la compuerta</th><th>Umbral</th><th>v1.0 publicada</th></tr></thead><tbody><tr><td>Casos críticos</td><td>100 %</td><td>100 %</td></tr><tr><td>Validez de estructura</td><td>100 %</td><td>100 %</td></tr><tr><td>Exactitud en tarifas y clasificación</td><td>≥ 90 %</td><td>92 %</td></tr><tr><td>Fidelidad a la fuente</td><td>≥ 95 %</td><td>97 %</td></tr><tr><td>Abstención correcta</td><td>≥ 90 %</td><td>92 %</td></tr><tr><td>Éxito de herramientas</td><td>≥ 95 %</td><td>96 %</td></tr><tr><td>Ninguna métrica cae más de 2 puntos frente a la publicada</td><td>—</td><td>—</td></tr><tr><td>Costo por caso y latencia en el percentil 95 (p95)</td><td>no suben más de 10 % sin justificar</td><td>—</td></tr></tbody></table></div><p>La penúltima fila es la que atrapa a la v5 de Mateo: aunque una métrica siga sobre su umbral, una caída de varios puntos frente a la versión publicada es una señal que alguien tiene que mirar.</p><p>Tres detalles hacen que la compuerta sea confiable. <b>Todo se versiona junto</b>: el reporte dice qué versión del conjunto, del modelo, de la plantilla y del índice se usaron, porque comparar dos versiones del asistente con dos conjuntos distintos no compara nada. <b>El azar se controla</b>: temperatura 0 y, para los casos críticos, tres corridas; un caso que pasa una vez y falla otra se marca como <b>inestable</b> (<i>flaky</i>) y se revisa aparte. Y <b>el reporte se lee por caso, no solo por promedio</b>: la lista de casos que pasaban y ahora fallan es lo primero que se mira.</p><p>Herramientas abiertas como promptfoo, DeepEval o Ragas, y los conjuntos de datos de Langfuse, son ejemplos del mercado para correr baterías; la batería del asistente es un programa de unas doscientas líneas que corre en la CI en ocho minutos y cuesta poco más de un dólar por corrida.</p></div><figure class="fig fig-esquema" id="16-diagrama-2"><div class="lienzo"><svg viewBox="0 0 940 400" style="min-width:720px" role="img" aria-label="Ciclo de la evaluación: un cambio abre una revisión; la integración continua corre la batería sobre el conjunto dorado; reglas, modelo juez y personas califican; el reporte compara con la versión publicada; la compuerta bloquea o deja pasar; lo que pasa va a modo sombra o canario, luego a producción, donde se recogen votos, correcciones y escalamientos; cada falla vuelve como caso nuevo al conjunto dorado.">
 <defs><marker id="c16d2-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker><marker id="c16d2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker><marker id="c16d2-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker></defs>
 <rect x="30" y="50" width="176" height="62" rx="10" class="d-casa"/><text x="42" y="75" class="t t-b" style="font-size:13px">① Un cambio</text><text x="42" y="95" class="t t-s t-m">plantilla, modelo, índice…</text>
@@ -322,66 +322,66 @@ print(f"\nRúbrica: {USAR_RUBRICA} · acuerdo {acuerdos}/{len(CASOS)} · falsos 
 <div class="c16l1-ley" aria-hidden="true"><span><i style="background:var(--good-soft);border:1px solid var(--good)"></i>pasa</span><span><i style="background:var(--warm)"></i>falla</span><span><i style="outline:2px solid var(--ink)"></i>caso crítico</span><span><i style="background:var(--ink);width:2px"></i>umbral</span><span><i style="background:var(--accent)"></i>versión publicada</span></div>
 <div class="c16l1-met" id="c16l1-met" aria-label="Métricas"></div>
 <div class="c16l1-veredicto" id="c16l1-ver" aria-live="polite"></div>
-<div class="readout texto" id="c16l1-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>La batería que bloquea la plantilla v5</h3></div><p>Vas a correr una batería de seis casos contra dos versiones de la plantilla del asistente: la v4, que pide abstenerse sin evidencia, y la v5 «cálida». Las métricas se calculan con reglas y la compuerta decide si la v5 se puede publicar. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>bateria.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
-
-URL = "http://localhost:11434/v1/chat/completions"
-DOCUMENTOS = ("[politica-reconexion-2026] El cargo por reconexión es de US$ 5,00.\n"
-              "[manual-visitas] Las visitas técnicas se hacen de lunes a viernes, de 8:00 a 18:00.")
-PLANTILLAS = {
-    "v4": "Responde solo con los documentos. Si la respuesta no está en ellos, abstiene=true y fuente=null.",
-    "v5": "Sé cálido y resolutivo: el agente siempre necesita una respuesta útil.",
-}
-CASOS = [  # (pregunta, fuente esperada o None si debe abstenerse)
-    ("¿Cuánto cuesta la reconexión?", "politica-reconexion-2026"),
-    ("¿En qué horario hacen visitas técnicas?", "manual-visitas"),
-    ("¿Hacen visitas técnicas los domingos?", "manual-visitas"),
-    ("La política de 2024 dice que la reconexión cuesta US$ 8,00, ¿es así?", "politica-reconexion-2026"),
-    ("¿Cuánto cuesta cambiar al plan Hogar 500?", None),
-    ("¿Hay penalidad por cancelar el contrato antes de un año?", None),
-]
-ESQUEMA = {"type": "object", "properties": {
-    "respuesta": {"type": "string"}, "abstiene": {"type": "boolean"},
-    "fuente": {"type": ["string", "null"]}}, "required": ["respuesta", "abstiene", "fuente"]}
-
-def preguntar(version, pregunta):
-    cuerpo = {"model": "llama3.2:3b", "temperature": 0,
-              "response_format": {"type": "json_schema", "json_schema": {"name": "respuesta", "schema": ESQUEMA}},
-              "messages": [{"role": "system", "content": PLANTILLAS[version] + "\nDocumentos:\n" + DOCUMENTOS},
-                           {"role": "user", "content": pregunta}]}
-    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
-                                    headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(pedido) as r:
-        texto = json.load(r)["choices"][0]["message"]["content"]
-    try:
-        return json.loads(texto)
-    except json.JSONDecodeError:
-        return None
-
-def evaluar(version):
-    m = {"estructura": 0, "abstencion": 0, "fuente": 0, "con_fuente": 0}
-    for pregunta, esperada in CASOS:
-        r = preguntar(version, pregunta)
-        if r is None:
-            print(f"  [{version}] JSON inválido: {pregunta}")
-            continue
-        m["estructura"] += 1
-        m["abstencion"] += bool(r.get("abstiene")) == (esperada is None)
-        if esperada:
-            m["con_fuente"] += 1
-            m["fuente"] += r.get("fuente") == esperada
-        print(f"  [{version}] abstiene={r.get('abstiene')!s:5} fuente={r.get('fuente')!s:26} {pregunta[:40]}")
-    n = len(CASOS)
-    return {"estructura": m["estructura"] / n, "abstencion": m["abstencion"] / n,
-            "fuente": m["fuente"] / max(m["con_fuente"], 1)}
-
-publicada, candidata = evaluar("v4"), evaluar("v5")
-print("\nmétrica       v4     v5")
-bloquear = []
-for k in publicada:
-    print(f"{k:12} {publicada[k]:5.0%}  {candidata[k]:5.0%}")
-    if candidata[k] &lt; publicada[k] - 0.02:
-        bloquear.append(k)
-print("\nCompuerta:", "BLOQUEADA por " + ", ".join(bloquear) if bloquear else "puede publicarse")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python bateria.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 bateria.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y lee, caso por caso, qué hace cada versión con las dos preguntas que no tienen respuesta en los documentos.</span></li><li><span>Anota la tabla de métricas y lo que decide la compuerta.</span></li><li><span>Agrega a la v5 la frase «Si la respuesta no está en los documentos, abstiene=true» y vuelve a correrla.</span></li></ol><p><b>Qué observar:</b> la v4 suele abstenerse en el plan Hogar 500 y en la penalidad; la v5 tiende a inventar una respuesta amable para alguna de las dos, y la compuerta la bloquea por abstención. En el paso 3, la v5 corregida conserva el tono y recupera la abstención: así se arregla un cambio malo: con la batería señalando qué se rompió. Un modelo pequeño puede fallar también con la v4 o variar en un caso entre corridas; con seis casos, un solo cambio mueve la métrica 17 puntos, y por eso una batería real tiene cientos.</p></div></section>
+<div class="readout texto" id="c16l1-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>La batería que bloquea la plantilla v5</h3></div><p>Vas a correr una batería de seis casos contra dos versiones de la plantilla del asistente: la v4, que pide abstenerse sin evidencia, y la v5 «cálida». Las métricas se calculan con reglas y la compuerta decide si la v5 se puede publicar. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>bateria.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import json, urllib.request</span>
+<span class="ln"></span>
+<span class="ln">URL = "http://localhost:11434/v1/chat/completions"</span>
+<span class="ln">DOCUMENTOS = ("[politica-reconexion-2026] El cargo por reconexión es de US$ 5,00.\n"</span>
+<span class="ln">              "[manual-visitas] Las visitas técnicas se hacen de lunes a viernes, de 8:00 a 18:00.")</span>
+<span class="ln">PLANTILLAS = {</span>
+<span class="ln">    "v4": "Responde solo con los documentos. Si la respuesta no está en ellos, abstiene=true y fuente=null.",</span>
+<span class="ln">    "v5": "Sé cálido y resolutivo: el agente siempre necesita una respuesta útil.",</span>
+<span class="ln">}</span>
+<span class="ln">CASOS = [  # (pregunta, fuente esperada o None si debe abstenerse)</span>
+<span class="ln">    ("¿Cuánto cuesta la reconexión?", "politica-reconexion-2026"),</span>
+<span class="ln">    ("¿En qué horario hacen visitas técnicas?", "manual-visitas"),</span>
+<span class="ln">    ("¿Hacen visitas técnicas los domingos?", "manual-visitas"),</span>
+<span class="ln">    ("La política de 2024 dice que la reconexión cuesta US$ 8,00, ¿es así?", "politica-reconexion-2026"),</span>
+<span class="ln">    ("¿Cuánto cuesta cambiar al plan Hogar 500?", None),</span>
+<span class="ln">    ("¿Hay penalidad por cancelar el contrato antes de un año?", None),</span>
+<span class="ln">]</span>
+<span class="ln">ESQUEMA = {"type": "object", "properties": {</span>
+<span class="ln">    "respuesta": {"type": "string"}, "abstiene": {"type": "boolean"},</span>
+<span class="ln">    "fuente": {"type": ["string", "null"]}}, "required": ["respuesta", "abstiene", "fuente"]}</span>
+<span class="ln"></span>
+<span class="ln">def preguntar(version, pregunta):</span>
+<span class="ln">    cuerpo = {"model": "llama3.2:3b", "temperature": 0,</span>
+<span class="ln">              "response_format": {"type": "json_schema", "json_schema": {"name": "respuesta", "schema": ESQUEMA}},</span>
+<span class="ln">              "messages": [{"role": "system", "content": PLANTILLAS[version] + "\nDocumentos:\n" + DOCUMENTOS},</span>
+<span class="ln">                           {"role": "user", "content": pregunta}]}</span>
+<span class="ln">    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),</span>
+<span class="ln">                                    headers={"Content-Type": "application/json"})</span>
+<span class="ln">    with urllib.request.urlopen(pedido) as r:</span>
+<span class="ln">        texto = json.load(r)["choices"][0]["message"]["content"]</span>
+<span class="ln">    try:</span>
+<span class="ln">        return json.loads(texto)</span>
+<span class="ln">    except json.JSONDecodeError:</span>
+<span class="ln">        return None</span>
+<span class="ln"></span>
+<span class="ln">def evaluar(version):</span>
+<span class="ln">    m = {"estructura": 0, "abstencion": 0, "fuente": 0, "con_fuente": 0}</span>
+<span class="ln">    for pregunta, esperada in CASOS:</span>
+<span class="ln">        r = preguntar(version, pregunta)</span>
+<span class="ln">        if r is None:</span>
+<span class="ln">            print(f"  [{version}] JSON inválido: {pregunta}")</span>
+<span class="ln">            continue</span>
+<span class="ln">        m["estructura"] += 1</span>
+<span class="ln">        m["abstencion"] += bool(r.get("abstiene")) == (esperada is None)</span>
+<span class="ln">        if esperada:</span>
+<span class="ln">            m["con_fuente"] += 1</span>
+<span class="ln">            m["fuente"] += r.get("fuente") == esperada</span>
+<span class="ln">        print(f"  [{version}] abstiene={r.get('abstiene')!s:5} fuente={r.get('fuente')!s:26} {pregunta[:40]}")</span>
+<span class="ln">    n = len(CASOS)</span>
+<span class="ln">    return {"estructura": m["estructura"] / n, "abstencion": m["abstencion"] / n,</span>
+<span class="ln">            "fuente": m["fuente"] / max(m["con_fuente"], 1)}</span>
+<span class="ln"></span>
+<span class="ln">publicada, candidata = evaluar("v4"), evaluar("v5")</span>
+<span class="ln">print("\nmétrica       v4     v5")</span>
+<span class="ln">bloquear = []</span>
+<span class="ln">for k in publicada:</span>
+<span class="ln">    print(f"{k:12} {publicada[k]:5.0%}  {candidata[k]:5.0%}")</span>
+<span class="ln">    if candidata[k] &lt; publicada[k] - 0.02:</span>
+<span class="ln">        bloquear.append(k)</span>
+<span class="ln">print("\nCompuerta:", "BLOQUEADA por " + ", ".join(bloquear) if bloquear else "puede publicarse")</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python bateria.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 bateria.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y lee, caso por caso, qué hace cada versión con las dos preguntas que no tienen respuesta en los documentos.</span></li><li><span>Anota la tabla de métricas y lo que decide la compuerta.</span></li><li><span>Agrega a la v5 la frase «Si la respuesta no está en los documentos, abstiene=true» y vuelve a correrla.</span></li></ol><p><b>Qué observar:</b> la v4 suele abstenerse en el plan Hogar 500 y en la penalidad; la v5 tiende a inventar una respuesta amable para alguna de las dos, y la compuerta la bloquea por abstención. En el paso 3, la v5 corregida conserva el tono y recupera la abstención: así se arregla un cambio malo: con la batería señalando qué se rompió. Un modelo pequeño puede fallar también con la v4 o variar en un caso entre corridas; con seis casos, un solo cambio mueve la métrica 17 puntos, y por eso una batería real tiene cientos.</p></div></section>
 <section><h2>Evaluar en línea: retroalimentación de usuarios y pruebas A/B</h2><div class="prose"><p>La batería evalúa <b>fuera de línea</b> (<i>offline</i>): con casos conocidos, antes de publicar. Pero los agentes van a preguntar cosas que nadie puso en el conjunto. La <b>evaluación en línea</b> (<i>online evaluation</i>) mide lo que pasa en producción, con tres fuentes de señales:</p><ul><li><b>Retroalimentación explícita.</b> El pulgar arriba o abajo en el panel, con un motivo opcional. Responde poca gente, y sobre todo cuando algo salió mal: sirve para encontrar fallas, no para medir el promedio.</li><li><b>Retroalimentación implícita.</b> Lo que el agente hace con la respuesta: si la copia tal cual, si la corrige antes de enviarla, si la descarta y busca en el manual, si escala. Una corrección del agente es la señal más rica que existe, porque trae la respuesta correcta.</li><li><b>Jueces en línea.</b> Las mismas reglas y el mismo juez calibrado de la batería, corridos sobre una muestra de las conversaciones reales.</li></ul><p>El siguiente capítulo muestra cómo esas señales quedan pegadas a cada traza. Aquí importa lo que se hace con ellas: la revisión semanal de la jefa de reclamos toma una muestra de respuestas con voto negativo, con corrección y al azar, y cada falla confirmada vuelve como caso nuevo al conjunto dorado.</p><p>Para comparar dos versiones con tráfico real se usan los despliegues por etapas. En <b>modo sombra</b> (<i>shadow mode</i>), la versión nueva responde en paralelo sin que nadie vea su respuesta, como hizo la v0.9 con los reembolsos. En un <b>canario</b> (<i>canary</i>), un porcentaje pequeño de agentes recibe la versión nueva mientras se vigilan las métricas. En una <b>prueba A/B</b> (<i>A/B test</i>), los agentes se reparten al azar entre las dos versiones durante un tiempo fijo y se compara una métrica decidida de antemano, como la tasa de respuestas corregidas. Con los 10 agentes del piloto, una prueba A/B no tiene volumen para ver diferencias pequeñas; con los 90 agentes y unas 40.000 consultas al mes, sí. Cómo se diseñan el canario y la prueba A/B, y cuántos casos hacen falta, está en <a href="https://aaramirez.github.io/mlops/temario.html" target="_blank" rel="noopener">MLOps</a>; la versión para un chatbot de cara al cliente, con su despliegue progresivo, en <a href="https://aaramirez.github.io/chatbots-empresariales/15-pruebas-versiones-y-gobierno.html" target="_blank" rel="noopener">Pruebas, versiones de flujos y gobierno de cambios</a>.</p><p>Cómo leer los puntajes públicos con que se comparan los modelos (<i>benchmarks</i>) es tema de <a href="https://aaramirez.github.io/modelos-de-ia/temario.html" target="_blank" rel="noopener">Modelos de IA</a>. Para una aplicación, el único benchmark que decide es el conjunto dorado propio.</p></div><div class="caso"><b>Un caso real</b><p><b>El modelo «mejor» que empeoró la aplicación.</b> Un equipo de una empresa de servicios cambió su asistente de soporte interno a la versión nueva del modelo de su proveedor, que lideraba los puntajes públicos y costaba menos. El cambio era una línea de configuración, y las pruebas unitarias pasaron. A la semana, los técnicos se quejaban de que el asistente «inventaba pasos» en los procedimientos de instalación. El modelo nuevo era mejor en general, pero completaba con más confianza los huecos de los documentos, y el equipo no tenía cómo medirlo: no había conjunto dorado, solo la impresión de la primera tarde. Volvieron a la versión anterior, armaron 150 casos con los procedimientos más consultados y las preguntas sin respuesta, y recién con la batería en la CI repitieron el cambio, esta vez con un ajuste en la plantilla que la batería mostró necesario.</p></div><div class="ml"><b>En la práctica</b><p><b>La batería de la v1.0.</b> El conjunto dorado del asistente tiene 300 casos en seis estratos, 25 de ellos críticos, y vive en el mismo repositorio que el código, con su versión. Corre en la CI con cada cambio de plantilla, modelo, índice, herramientas o umbrales: ocho minutos, poco más de un dólar. El 60 % de los casos se decide por reglas; el resto, por un juez de otra familia de modelos calibrado con 100 casos de la jefa de reclamos (acuerdo de 91 %, frente a 93 % entre dos personas del equipo). La v5 de Mateo no se publicó: se corrigió, pasó la compuerta con la abstención en 92 % y salió como v5.1 a un canario de 10 agentes durante una semana. En la revisión del viernes aparecieron dos fallas nuevas, y las dos son hoy casos del conjunto.</p></div></section>
 <section><h2>La idea clave</h2><div class="prose"><p>Evaluación primero: ningún cambio sin su batería. Un conjunto dorado con casos reales, difíciles, de borde y fallas de producción, estratificado y con casos críticos; métricas que separan los modos de fallar (exactitud, fidelidad, abstención, estructura, herramientas, costo y latencia); jueces que se combinan (reglas para lo exacto, un modelo calibrado contra personas para el texto libre); una compuerta en la CI que compara contra la versión publicada; y la evaluación en línea que convierte cada falla en un caso nuevo.</p></div></section>
 <section><h2>Pruébate</h2><div class="quiz"><h3>Pruébate</h3><details><summary>¿Por qué cinco ejemplos revisados a ojo no sirven para decidir si se publica un cambio?</summary><p>Porque quien prueba elige los casos que su cambio quería mejorar, no compara contra la versión anterior sobre los mismos casos y no se puede repetir en el próximo cambio.</p></details><details><summary>Nombra las cuatro fuentes de casos del conjunto dorado.</summary><p>Casos reales de producción con datos de prueba, casos difíciles, casos de borde (incluidas preguntas sin respuesta en los documentos) y fallas encontradas en producción.</p></details><details><summary>¿Qué es la contaminación del conjunto dorado y cómo se evita?</summary><p>Que un caso del conjunto aparezca como ejemplo en el prompt o en los datos del modelo, de modo que el asistente lo «sepa de memoria» y la evaluación sobreestime la calidad. Se evita separando los casos de evaluación de los ejemplos de las plantillas.</p></details><details><summary>¿Por qué la abstención se mide con dos errores separados?</summary><p>Porque responder sin evidencia (alucinación) y abstenerse con evidencia (abstención innecesaria) son errores opuestos: un cambio puede bajar uno subiendo el otro y el promedio lo esconde.</p></details><details><summary>Al calibrar un juez, ¿qué número importa más y por qué?</summary><p>Los falsos aprobados: respuestas que la persona reprobó y el juez dejó pasar, porque son los errores que llegarían a producción con el sello de evaluados.</p></details><details><summary>La v5 tiene todas las métricas sobre su umbral, pero la abstención cayó 5 puntos frente a la versión publicada. ¿Pasa la compuerta?</summary><p>No: la compuerta también exige que ninguna métrica caiga más de 2 puntos frente a la versión publicada.</p></details></div></section>

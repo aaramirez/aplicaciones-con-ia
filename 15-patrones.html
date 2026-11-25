@@ -127,39 +127,39 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <ul class="c15l1-mapa" id="c15l1-mapa" aria-label="Catálogo de patrones"></ul>
 <div class="readout texto c15l1-out" id="c15l1-out" aria-live="polite"></div></div></section>
 <section><h2>MCP primero y aprobación humana</h2><div class="prose"><p><b>MCP primero</b> (<i>MCP-first</i>, capítulo 10). <i>Problema:</i> N aplicaciones por M sistemas son N × M integraciones, cada una con su forma de autenticar y de describir las operaciones. <i>Solución:</i> cada sistema se publica una vez como servidor del <b>MCP</b> (<i>Model Context Protocol</i>, protocolo de contexto de modelos), con herramientas, recursos y prompts, y cualquier cliente compatible lo usa. <i>Cuándo no:</i> una operación interna de una sola aplicación, que nunca va a tener otro cliente, puede quedarse como función local. <i>Nivel:</i> 3.</p><p><b>Aprobación humana y tarjetas «Haz esto»</b> (<i>human in the loop</i>, HITL, capítulo 11). <i>Problema:</i> una acción con efecto irreversible, como devolver dinero, no puede depender de la opinión del modelo. <i>Solución:</i> una política en código decide actuar, preguntar o negarse con datos del sistema; las aprobaciones viajan como tarjetas con enlaces firmados; cada escritura lleva una <b>clave de idempotencia</b> (<i>idempotency key</i>) y lo que no se puede deshacer se compensa. <i>Cuándo no:</i> si todo pide aprobación, la supervisora aprueba sin leer y el control se vuelve un trámite. <i>Nivel:</i> 3.</p><p>Estos dos patrones se combinan casi siempre: el servidor MCP de facturación anuncia <code>registrar_reembolso</code>, pero la política y la aprobación viven del lado del cliente, en el asistente, porque es el que sabe quién pide y por qué.</p></div></section>
-<section><h2><i>Guardrails</i> de entrada y de salida</h2><div class="prose"><p>Hasta aquí, cada control vivía dentro de su capítulo: el validador de esquema en el 5, el verificador de citas en el 8, la política en el 11. Un <b>guardrail</b> (<i>guardrail</i>, baranda de protección) es un control que se aplica a todo lo que entra o sale del modelo, con independencia de la función que lo pidió.</p></div><div class="analogia"><b>Imagínalo así</b><p>En una carretera de montaña la baranda no maneja el auto ni decide la ruta. Está en las curvas peligrosas para que un error del conductor no termine en el barranco. Nadie la pone en medio del camino, y nadie confía en ella para manejar: es la última línea, no la primera.</p></div><div class="prose"><p>Los <b>guardrails de entrada</b> revisan lo que llega antes de que el modelo lo lea: datos personales que no deben salir hacia el proveedor (se enmascaran), textos de tamaño anormal, temas fuera del alcance del asistente, e instrucciones escondidas en un correo o un documento. Los <b>guardrails de salida</b> revisan lo que el modelo produjo antes de que alguien lo use: que no aparezcan datos de otro cliente, que los montos del texto coincidan con los del sistema, que las citas existan y que el tono cumpla las reglas de la empresa. Y los <b>guardrails de acción</b>, que ya conoces, revisan cada llamada a herramienta contra la política.</p><p>El patrón tiene tres reglas de arquitectura. Los guardrails viven <b>fuera del prompt</b>, en código, porque un prompt se puede convencer y el código no. Se aplican <b>en la puerta</b>, no en cada función, para que una función nueva no nazca sin ellos. Y se combinan los baratos (reglas y expresiones regulares, en milisegundos) con los caros (un clasificador o un modelo pequeño que juzga), de modo que el caro solo corre cuando el barato no alcanza. Marcos abiertos como Guardrails AI, NeMo Guardrails o Llama Guard son ejemplos del mercado. Cómo se ataca una aplicación y cómo se defiende en capas es el tema del capítulo 18; aquí basta con su lugar en la arquitectura.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un guardrail de salida que no se deja convencer</h3></div><p>Vas a escribir un guardrail de salida que revisa tres respuestas del asistente antes de mostrarlas: que el monto del texto sea el del sistema, que cada cita exista en los documentos que entraron al contexto y que no aparezca una cuenta distinta de la que se atiende. No necesitas Ollama: las respuestas vienen escritas, como si las hubiera producido el modelo. Guarda este programa como <code>guardrail_salida.py</code>:</p><div class="code-copia"><pre><code>import re
-
-SISTEMA = {"cuenta": "20417", "total": "35,00"}            # lo que dice facturación
-DOCUMENTOS = {"politica-reconexion-2026", "manual-cobros"}  # lo que entró al contexto
-
-RESPUESTAS = [
-    "Carmen debe pagar US$ 35,00: la factura F-88213 más la reconexión "
-    "[politica-reconexion-2026].",
-    "El total es US$ 38,00, porque la reconexión cuesta US$ 8,00 "
-    "[politica-reconexion-2024].",
-    "Carmen debe US$ 35,00 [manual-cobros]. Ojo: la cuenta 31552 también tiene "
-    "una factura vencida.",
-]
-
-def revisar(texto):
-    problemas = []
-    montos = re.findall(r"US\$ ?(\d+,\d{2})", texto)
-    if montos and montos[0] != SISTEMA["total"]:
-        problemas.append(f"monto {montos[0]} distinto del sistema ({SISTEMA['total']})")
-    for cita in re.findall(r"\[([a-z0-9-]+)\]", texto):
-        if cita not in DOCUMENTOS:
-            problemas.append(f"cita a un documento que no entró al contexto: {cita}")
-    for cuenta in re.findall(r"cuenta (\d{5})", texto):
-        if cuenta != SISTEMA["cuenta"]:
-            problemas.append(f"menciona otra cuenta: {cuenta}")
-    return problemas
-
-for i, texto in enumerate(RESPUESTAS, 1):
-    problemas = revisar(texto)
-    estado = "PASA" if not problemas else "BLOQUEADA"
-    print(f"Respuesta {i}: {estado}")
-    for p in problemas:
-        print("   -", p)</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python guardrail_salida.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 guardrail_salida.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota qué respuestas pasan y por qué se bloquean las otras.</span></li><li><span>En la segunda respuesta, cambia <code>38,00</code> por <code>35,00</code> y vuelve a correrlo: ¿pasa?</span></li><li><span>Agrega una cuarta respuesta que diga el monto con letras («treinta y cinco dólares») y mira qué hace el guardrail.</span></li></ol><p><b>Qué observar:</b> la primera respuesta pasa; la segunda se bloquea dos veces, por el monto y por citar la política retirada de 2024 (la trampa del capítulo 4); la tercera, por mencionar a otro cliente. En el paso 2 el monto ya cuadra, pero la cita vieja la sigue bloqueando: cada regla revisa una cosa distinta. El paso 3 muestra el límite de las reglas baratas: el monto escrito con letras se escapa. Por eso el monto nunca debería salir del texto del modelo, sino del campo <code>monto</code> que llena el sistema, y por eso este guardrail es la última línea y no la única.</p></div></section>
+<section><h2><i>Guardrails</i> de entrada y de salida</h2><div class="prose"><p>Hasta aquí, cada control vivía dentro de su capítulo: el validador de esquema en el 5, el verificador de citas en el 8, la política en el 11. Un <b>guardrail</b> (<i>guardrail</i>, baranda de protección) es un control que se aplica a todo lo que entra o sale del modelo, con independencia de la función que lo pidió.</p></div><div class="analogia"><b>Imagínalo así</b><p>En una carretera de montaña la baranda no maneja el auto ni decide la ruta. Está en las curvas peligrosas para que un error del conductor no termine en el barranco. Nadie la pone en medio del camino, y nadie confía en ella para manejar: es la última línea, no la primera.</p></div><div class="prose"><p>Los <b>guardrails de entrada</b> revisan lo que llega antes de que el modelo lo lea: datos personales que no deben salir hacia el proveedor (se enmascaran), textos de tamaño anormal, temas fuera del alcance del asistente, e instrucciones escondidas en un correo o un documento. Los <b>guardrails de salida</b> revisan lo que el modelo produjo antes de que alguien lo use: que no aparezcan datos de otro cliente, que los montos del texto coincidan con los del sistema, que las citas existan y que el tono cumpla las reglas de la empresa. Y los <b>guardrails de acción</b>, que ya conoces, revisan cada llamada a herramienta contra la política.</p><p>El patrón tiene tres reglas de arquitectura. Los guardrails viven <b>fuera del prompt</b>, en código, porque un prompt se puede convencer y el código no. Se aplican <b>en la puerta</b>, no en cada función, para que una función nueva no nazca sin ellos. Y se combinan los baratos (reglas y expresiones regulares, en milisegundos) con los caros (un clasificador o un modelo pequeño que juzga), de modo que el caro solo corre cuando el barato no alcanza. Marcos abiertos como Guardrails AI, NeMo Guardrails o Llama Guard son ejemplos del mercado. Cómo se ataca una aplicación y cómo se defiende en capas es el tema del capítulo 18; aquí basta con su lugar en la arquitectura.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un guardrail de salida que no se deja convencer</h3></div><p>Vas a escribir un guardrail de salida que revisa tres respuestas del asistente antes de mostrarlas: que el monto del texto sea el del sistema, que cada cita exista en los documentos que entraron al contexto y que no aparezca una cuenta distinta de la que se atiende. No necesitas Ollama: las respuestas vienen escritas, como si las hubiera producido el modelo. Guarda este programa como <code>guardrail_salida.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import re</span>
+<span class="ln"></span>
+<span class="ln">SISTEMA = {"cuenta": "20417", "total": "35,00"}            # lo que dice facturación</span>
+<span class="ln">DOCUMENTOS = {"politica-reconexion-2026", "manual-cobros"}  # lo que entró al contexto</span>
+<span class="ln"></span>
+<span class="ln">RESPUESTAS = [</span>
+<span class="ln">    "Carmen debe pagar US$ 35,00: la factura F-88213 más la reconexión "</span>
+<span class="ln">    "[politica-reconexion-2026].",</span>
+<span class="ln">    "El total es US$ 38,00, porque la reconexión cuesta US$ 8,00 "</span>
+<span class="ln">    "[politica-reconexion-2024].",</span>
+<span class="ln">    "Carmen debe US$ 35,00 [manual-cobros]. Ojo: la cuenta 31552 también tiene "</span>
+<span class="ln">    "una factura vencida.",</span>
+<span class="ln">]</span>
+<span class="ln"></span>
+<span class="ln">def revisar(texto):</span>
+<span class="ln">    problemas = []</span>
+<span class="ln">    montos = re.findall(r"US\$ ?(\d+,\d{2})", texto)</span>
+<span class="ln">    if montos and montos[0] != SISTEMA["total"]:</span>
+<span class="ln">        problemas.append(f"monto {montos[0]} distinto del sistema ({SISTEMA['total']})")</span>
+<span class="ln">    for cita in re.findall(r"\[([a-z0-9-]+)\]", texto):</span>
+<span class="ln">        if cita not in DOCUMENTOS:</span>
+<span class="ln">            problemas.append(f"cita a un documento que no entró al contexto: {cita}")</span>
+<span class="ln">    for cuenta in re.findall(r"cuenta (\d{5})", texto):</span>
+<span class="ln">        if cuenta != SISTEMA["cuenta"]:</span>
+<span class="ln">            problemas.append(f"menciona otra cuenta: {cuenta}")</span>
+<span class="ln">    return problemas</span>
+<span class="ln"></span>
+<span class="ln">for i, texto in enumerate(RESPUESTAS, 1):</span>
+<span class="ln">    problemas = revisar(texto)</span>
+<span class="ln">    estado = "PASA" if not problemas else "BLOQUEADA"</span>
+<span class="ln">    print(f"Respuesta {i}: {estado}")</span>
+<span class="ln">    for p in problemas:</span>
+<span class="ln">        print("   -", p)</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python guardrail_salida.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 guardrail_salida.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota qué respuestas pasan y por qué se bloquean las otras.</span></li><li><span>En la segunda respuesta, cambia <code>38,00</code> por <code>35,00</code> y vuelve a correrlo: ¿pasa?</span></li><li><span>Agrega una cuarta respuesta que diga el monto con letras («treinta y cinco dólares») y mira qué hace el guardrail.</span></li></ol><p><b>Qué observar:</b> la primera respuesta pasa; la segunda se bloquea dos veces, por el monto y por citar la política retirada de 2024 (la trampa del capítulo 4); la tercera, por mencionar a otro cliente. En el paso 2 el monto ya cuadra, pero la cita vieja la sigue bloqueando: cada regla revisa una cosa distinta. El paso 3 muestra el límite de las reglas baratas: el monto escrito con letras se escapa. Por eso el monto nunca debería salir del texto del modelo, sino del campo <code>monto</code> que llena el sistema, y por eso este guardrail es la última línea y no la única.</p></div></section>
 <section><h2><i>Caching</i> semántico</h2><div class="prose"><p>Este es el patrón nuevo del capítulo. En la semana de mayor volumen, la traza mostró que una de cada cinco consultas al asistente era alguna forma de «¿cuánto cuesta la reconexión?». Cada una pagaba una llamada completa al modelo, unos US$ 0,0027 y dos o tres segundos, para producir la misma respuesta con la misma cita.</p></div><div class="analogia"><b>Imagínalo así</b><p>En la recepción de un edificio, la primera vez que alguien pregunta «¿a qué hora cierra la farmacia del primer piso?», el recepcionista llama a la farmacia. La quinta vez ya no llama: responde de memoria, aunque cada persona lo pregunte con otras palabras. Pero si alguien pregunta «¿a qué hora cierra la ferretería?», no le da la hora de la farmacia porque «suena parecido». Y el día que la farmacia cambia de horario, se olvida de lo que sabía.</p></div><div class="prose"><p>Un <b>caché</b> (<i>cache</i>) guarda respuestas ya calculadas para no calcularlas otra vez. El caché clásico usa una clave exacta: si el texto es idéntico, devuelve lo guardado. Con lenguaje natural casi nunca hay dos pedidos idénticos. El <b>caché semántico</b> (<i>semantic cache</i>) compara por significado: calcula el <b>embedding</b> (vector de significado) de la pregunta, busca la pregunta guardada más parecida con la <b>similitud del coseno</b> (<i>cosine similarity</i>) y, si supera un <b>umbral</b> (<i>threshold</i>), devuelve la respuesta guardada sin llamar al modelo.</p><p>No hay que confundirlo con el <b>caché de prompts</b> (<i>prompt caching</i>) del capítulo 3. Aquel lo ofrece el proveedor: cobra menos por la parte del contexto que se repite igual entre llamadas, pero el modelo igual genera la respuesta. El caché semántico lo construyes tú y evita la llamada entera. Se pueden usar los dos a la vez.</p></div><figure class="fig fig-flujo" id="15-diagrama-2"><div class="lienzo"><svg viewBox="0 0 980 620" style="min-width:780px" role="img" aria-label="Diagrama de secuencia de una consulta con caché semántico: el panel manda la pregunta; la puerta revisa si es personal; pide el embedding; busca la más parecida en el caché; con similitud 0,96 devuelve la respuesta guardada en unos 60 milisegundos. Si la similitud es 0,81, llama al modelo con el RAG en unos 2,4 segundos y guarda la respuesta con sus fuentes. Al cambiar un documento citado se borran las respuestas que lo citan.">
 <defs><marker id="c15d2-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker><marker id="c15d2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker><marker id="c15d2-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker><marker id="c15d2-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-enl"/></marker></defs>
 <rect x="18" y="14" width="124" height="50" rx="10" class="caja"/>
@@ -242,50 +242,50 @@ for i, texto in enumerate(RESPUESTAS, 1):
   <div class="c15l2-k"><span>Costo de las 12</span><output id="c15l2-k3">US$ 0</output></div>
   <div class="c15l2-k"><span>Tiempo medio</span><output id="c15l2-k4">0 ms</output></div>
 </div>
-<div class="readout texto" id="c15l2-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un caché semántico con tu modelo local</h3></div><p>Vas a poner un caché semántico delante de tu modelo local y a mandarle cinco preguntas: dos dicen lo mismo con otras palabras y una se parece pero pregunta otra cosa. Necesitas Ollama con <code>llama3.2:3b</code> y el modelo de embeddings <code>nomic-embed-text</code> del capítulo 8 (cualquier modelo pequeño sirve). Guarda este programa como <code>cache_semantico.py</code>:</p><div class="code-copia"><pre><code>import json, math, time, urllib.request
-
-BASE = "http://localhost:11434/v1"
-UMBRAL = 0.90
-POLITICA = ("Política de reconexión vigente desde 2026: el cargo por reconexión es de "
-            "US$ 5,00 y se suma a la factura vencida. La instalación nueva cuesta US$ 20,00.")
-CACHE = []  # (pregunta, embedding, respuesta)
-
-def post(ruta, cuerpo):
-    pedido = urllib.request.Request(BASE + ruta, data=json.dumps(cuerpo).encode("utf-8"),
-                                    headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(pedido) as r:
-        return json.load(r)
-
-def embedding(texto):
-    return post("/embeddings", {"model": "nomic-embed-text", "input": [texto]})["data"][0]["embedding"]
-
-def coseno(a, b):
-    punto = sum(x * y for x, y in zip(a, b))
-    return punto / (math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b)))
-
-def preguntar(pregunta):
-    inicio = time.perf_counter()
-    vector = embedding(pregunta)
-    mejor = max(CACHE, key=lambda e: coseno(vector, e[1]), default=None)
-    similitud = coseno(vector, mejor[1]) if mejor else 0.0
-    if mejor and similitud &gt;= UMBRAL:
-        origen, respuesta = f"CACHÉ (parecida a «{mejor[0]}»)", mejor[2]
-    else:
-        datos = post("/chat/completions", {"model": "llama3.2:3b", "temperature": 0,
-            "messages": [{"role": "system", "content": "Responde en una frase solo con este contexto: " + POLITICA},
-                         {"role": "user", "content": pregunta}]})
-        respuesta = datos["choices"][0]["message"]["content"].strip()
-        CACHE.append((pregunta, vector, respuesta))
-        origen = "MODELO"
-    ms = (time.perf_counter() - inicio) * 1000
-    print(f"\n{pregunta}\n  similitud {similitud:.3f} -&gt; {origen}, {ms:.0f} ms\n  {respuesta[:110]}")
-
-for p in ["¿Cuánto cuesta la reconexión del servicio?",
-          "¿Cuánto me cobran por reconectar el servicio?",
-          "Precio de la reconexión",
-          "¿Cuánto cuesta la instalación del servicio?",
-          "¿Me cobran reconexión si pago la factura hoy?"]:
-    preguntar(p)</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>ollama pull nomic-embed-text</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python cache_semantico.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>ollama pull nomic-embed-text</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 cache_semantico.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota, para cada pregunta, la similitud, si salió del caché o del modelo y los milisegundos.</span></li><li><span>Fíjate en la cuarta pregunta: ¿qué similitud tuvo con la primera? ¿Se sirvió del caché?</span></li><li><span>Cambia <code>UMBRAL</code> a <code>0.75</code> y luego a <code>0.97</code>, y vuelve a correrlo cada vez.</span></li></ol><p><b>Qué observar:</b> las respuestas del caché tardan una fracción de lo que tarda el modelo, porque solo cuestan un embedding. Las dos reformulaciones de la reconexión deberían servirse del caché; la instalación y la pregunta con condición tienen similitudes altas aunque piden otra cosa. Con umbral 0,75 aparecen falsos aciertos (la instalación recibe el precio de la reconexión); con 0,97 casi todo va al modelo. Las similitudes exactas dependen del modelo de embeddings: el umbral se calibra con tus propias preguntas, nunca se copia de otro sistema.</p></div><div class="caso"><b>Un caso real</b><p><b>La respuesta de una clienta servida a otra.</b> Un equipo de una empresa de servicios puso un caché semántico delante de su asistente interno para bajar costos. La clave era solo el embedding de la pregunta. Durante una semana todo fue bien: un tercio de las consultas se servía del caché. Entonces un agente preguntó «¿cuál es el saldo pendiente de este cliente?» con la ficha de un cliente abierta, y el asistente respondió en milisegundos con el saldo de otro cliente, el de la primera vez que alguien había hecho esa pregunta. La pregunta era idéntica; el contexto, no. La corrección fue la regla de esta sección: las respuestas que usan datos de un cliente no se guardan, la clave incluye las versiones y los permisos, y el caché tiene su propia métrica de falsos aciertos en la revisión semanal.</p></div></section>
+<div class="readout texto" id="c15l2-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un caché semántico con tu modelo local</h3></div><p>Vas a poner un caché semántico delante de tu modelo local y a mandarle cinco preguntas: dos dicen lo mismo con otras palabras y una se parece pero pregunta otra cosa. Necesitas Ollama con <code>llama3.2:3b</code> y el modelo de embeddings <code>nomic-embed-text</code> del capítulo 8 (cualquier modelo pequeño sirve). Guarda este programa como <code>cache_semantico.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import json, math, time, urllib.request</span>
+<span class="ln"></span>
+<span class="ln">BASE = "http://localhost:11434/v1"</span>
+<span class="ln">UMBRAL = 0.90</span>
+<span class="ln">POLITICA = ("Política de reconexión vigente desde 2026: el cargo por reconexión es de "</span>
+<span class="ln">            "US$ 5,00 y se suma a la factura vencida. La instalación nueva cuesta US$ 20,00.")</span>
+<span class="ln">CACHE = []  # (pregunta, embedding, respuesta)</span>
+<span class="ln"></span>
+<span class="ln">def post(ruta, cuerpo):</span>
+<span class="ln">    pedido = urllib.request.Request(BASE + ruta, data=json.dumps(cuerpo).encode("utf-8"),</span>
+<span class="ln">                                    headers={"Content-Type": "application/json"})</span>
+<span class="ln">    with urllib.request.urlopen(pedido) as r:</span>
+<span class="ln">        return json.load(r)</span>
+<span class="ln"></span>
+<span class="ln">def embedding(texto):</span>
+<span class="ln">    return post("/embeddings", {"model": "nomic-embed-text", "input": [texto]})["data"][0]["embedding"]</span>
+<span class="ln"></span>
+<span class="ln">def coseno(a, b):</span>
+<span class="ln">    punto = sum(x * y for x, y in zip(a, b))</span>
+<span class="ln">    return punto / (math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b)))</span>
+<span class="ln"></span>
+<span class="ln">def preguntar(pregunta):</span>
+<span class="ln">    inicio = time.perf_counter()</span>
+<span class="ln">    vector = embedding(pregunta)</span>
+<span class="ln">    mejor = max(CACHE, key=lambda e: coseno(vector, e[1]), default=None)</span>
+<span class="ln">    similitud = coseno(vector, mejor[1]) if mejor else 0.0</span>
+<span class="ln">    if mejor and similitud &gt;= UMBRAL:</span>
+<span class="ln">        origen, respuesta = f"CACHÉ (parecida a «{mejor[0]}»)", mejor[2]</span>
+<span class="ln">    else:</span>
+<span class="ln">        datos = post("/chat/completions", {"model": "llama3.2:3b", "temperature": 0,</span>
+<span class="ln">            "messages": [{"role": "system", "content": "Responde en una frase solo con este contexto: " + POLITICA},</span>
+<span class="ln">                         {"role": "user", "content": pregunta}]})</span>
+<span class="ln">        respuesta = datos["choices"][0]["message"]["content"].strip()</span>
+<span class="ln">        CACHE.append((pregunta, vector, respuesta))</span>
+<span class="ln">        origen = "MODELO"</span>
+<span class="ln">    ms = (time.perf_counter() - inicio) * 1000</span>
+<span class="ln">    print(f"\n{pregunta}\n  similitud {similitud:.3f} -&gt; {origen}, {ms:.0f} ms\n  {respuesta[:110]}")</span>
+<span class="ln"></span>
+<span class="ln">for p in ["¿Cuánto cuesta la reconexión del servicio?",</span>
+<span class="ln">          "¿Cuánto me cobran por reconectar el servicio?",</span>
+<span class="ln">          "Precio de la reconexión",</span>
+<span class="ln">          "¿Cuánto cuesta la instalación del servicio?",</span>
+<span class="ln">          "¿Me cobran reconexión si pago la factura hoy?"]:</span>
+<span class="ln">    preguntar(p)</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>ollama pull nomic-embed-text</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python cache_semantico.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>ollama pull nomic-embed-text</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 cache_semantico.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota, para cada pregunta, la similitud, si salió del caché o del modelo y los milisegundos.</span></li><li><span>Fíjate en la cuarta pregunta: ¿qué similitud tuvo con la primera? ¿Se sirvió del caché?</span></li><li><span>Cambia <code>UMBRAL</code> a <code>0.75</code> y luego a <code>0.97</code>, y vuelve a correrlo cada vez.</span></li></ol><p><b>Qué observar:</b> las respuestas del caché tardan una fracción de lo que tarda el modelo, porque solo cuestan un embedding. Las dos reformulaciones de la reconexión deberían servirse del caché; la instalación y la pregunta con condición tienen similitudes altas aunque piden otra cosa. Con umbral 0,75 aparecen falsos aciertos (la instalación recibe el precio de la reconexión); con 0,97 casi todo va al modelo. Las similitudes exactas dependen del modelo de embeddings: el umbral se calibra con tus propias preguntas, nunca se copia de otro sistema.</p></div><div class="caso"><b>Un caso real</b><p><b>La respuesta de una clienta servida a otra.</b> Un equipo de una empresa de servicios puso un caché semántico delante de su asistente interno para bajar costos. La clave era solo el embedding de la pregunta. Durante una semana todo fue bien: un tercio de las consultas se servía del caché. Entonces un agente preguntó «¿cuál es el saldo pendiente de este cliente?» con la ficha de un cliente abierta, y el asistente respondió en milisegundos con el saldo de otro cliente, el de la primera vez que alguien había hecho esa pregunta. La pregunta era idéntica; el contexto, no. La corrección fue la regla de esta sección: las respuestas que usan datos de un cliente no se guardan, la clave incluye las versiones y los permisos, y el caché tiene su propia métrica de falsos aciertos en la revisión semanal.</p></div></section>
 <section><h2>Respaldo entre modelos</h2><div class="prose"><p><b>Respaldo entre modelos</b> (<i>model fallback</i>, capítulos 3 y 14). <i>Problema:</i> el proveedor se cae, responde con lentitud o limita la tasa justo en la hora pico. <i>Solución:</i> la puerta a los modelos tiene configurado de antemano un segundo modelo, idealmente de otro proveedor o local, que pasó la misma batería de evaluación; ante errores transitorios agotados o un tiempo de espera superado, la llamada pasa al respaldo y la traza lo marca. Si tampoco hay respaldo, se degrada con honestidad: «el asistente no está disponible». <i>Cuándo no:</i> un respaldo que nunca se evaluó es peor que ninguno, porque falla en silencio con otro formato o con menos calidad.</p><p>El respaldo tiene un primo: el <b>enrutado al modelo más pequeño que cumple</b> del capítulo 14. Los dos usan la misma lista de modelos evaluados; el enrutador elige por costo en el camino normal, el respaldo elige por disponibilidad cuando el camino normal falla. Un <b>cortacircuitos</b> (<i>circuit breaker</i>) completa el patrón: si el proveedor principal falla muchas veces seguidas, la puerta deja de intentarlo durante un rato y manda todo al respaldo, en vez de pagar un tiempo de espera en cada pedido.</p></div></section>
 <section><h2>Cómo combinarlos según el nivel</h2><div class="prose"><p>Ningún patrón trabaja solo, y no todos hacen falta desde el primer día. La regla es la misma de la escalera: cada nivel agrega patrones y conserva los de abajo, y los de la base común empiezan con la primera llamada.</p></div><figure class="fig fig-capas" id="15-diagrama-3"><div class="lienzo"><svg viewBox="0 0 880 434" style="min-width:680px" role="img" aria-label="Patrones del asistente por nivel, de abajo hacia arriba: base común con envoltorio determinista, guardrails, respaldo, evaluación, trazas y caché semántico; nivel 1 salidas estructuradas, plantillas y RAG simple; nivel 2 memoria, RAG con permisos y adaptadores de canal; nivel 3 herramientas, MCP, aprobación humana, cadenas y enrutadores; nivel 4 el agente como cliente; nivel 5 enrutado y ajuste. A la derecha la versión del asistente donde entró cada fila.">
 <rect x="20" y="20" width="840" height="54" rx="10" class="c-apl"/>

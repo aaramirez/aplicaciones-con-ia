@@ -76,11 +76,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <text x="40" y="430" class="t t-s">3 × 4</text><text x="300" y="430" class="t t-s">12 adaptadores</text><text x="560" y="430" class="t t-s">7 piezas</text>
 <text x="40" y="447" class="t t-s">10 × 20</text><text x="300" y="447" class="t t-s">200 adaptadores</text><text x="560" y="447" class="t t-s">30 piezas</text>
 </svg></div><figcaption><b>N × M frente a N + M.</b> A la izquierda, tres aplicaciones con IA (el asistente de atención, la aplicación de técnicos y el asistente de finanzas) conectadas a cuatro sistemas con un adaptador propio por cada par: doce líneas que se cruzan. A la derecha, las mismas aplicaciones, cada una con un cliente MCP, y los mismos sistemas, cada uno con un servidor MCP: siete piezas. Abajo, cuántas piezas hay que mantener en cada caso cuando crecen las aplicaciones y los sistemas.</figcaption></figure></section>
-<section><h2>Cliente, servidor y transporte</h2><div class="prose"><p>MCP define tres papeles:</p><ul><li><b>Anfitrión</b> (<i>host</i>): la aplicación que tiene el modelo y habla con la persona. El asistente de atención es un anfitrión; también lo son un asistente de escritorio o un entorno de programación.</li><li><b>Cliente</b> (<i>client</i>): el conector que vive dentro del anfitrión y habla con <b>un</b> servidor. Un anfitrión conectado a tres servidores tiene tres clientes.</li><li><b>Servidor</b> (<i>server</i>): el programa que expone lo que sabe hacer un sistema: sus herramientas, sus recursos y sus prompts. Hay un servidor de facturación, otro de órdenes de trabajo, otro de documentos.</li></ul></div><div class="analogia"><b>Imagínalo así</b><p>Piensa en una central telefónica de las antiguas. El anfitrión es la oficina que quiere hablar con muchos proveedores; cada cliente es una línea dedicada a un proveedor; cada servidor es el proveedor que atiende esa línea. El idioma de la conversación es el mismo en todas las líneas, aunque cada proveedor venda algo distinto.</p></div><div class="prose"><p>Los mensajes siguen <b>JSON-RPC 2.0</b>, un formato simple para llamadas remotas con JSON: un <b>pedido</b> (<i>request</i>) lleva un <code>id</code>, un <code>method</code> y unos <code>params</code>; la <b>respuesta</b> (<i>response</i>) repite el <code>id</code> y trae un <code>result</code> o un <code>error</code>; y una <b>notificación</b> (<i>notification</i>) es un mensaje de ida, sin <code>id</code> y sin respuesta.</p><p>Los mensajes viajan por un <b>transporte</b> (<i>transport</i>). La especificación define dos:</p><ul><li><b>stdio</b> (entrada y salida estándar): el anfitrión lanza el servidor como un proceso hijo en la misma computadora y le escribe un mensaje JSON por línea en su entrada; el servidor responde una línea por mensaje en su salida y usa la salida de errores solo para sus registros. Es lo usual para servidores locales.</li><li><b>HTTP transmisible</b> (<i>Streamable HTTP</i>): el servidor ofrece una sola dirección (por ejemplo <code>https://mcp.ejemplo.com/mcp</code>) que recibe cada mensaje como un <code>POST</code>. Responde con un JSON o, si la tarea manda avisos de progreso, con un flujo <b>SSE</b> (<i>Server-Sent Events</i>, eventos enviados por el servidor) que termina con la respuesta final. Es lo usual para servidores compartidos en la red de la empresa.</li></ul><p>La revisión vigente de la especificación, la <code>2026-07-28</code>, hizo el protocolo <b>sin estado</b> (<i>stateless</i>): cada pedido lleva en su campo <code>_meta</code> la versión del protocolo, quién es el cliente y qué capacidades tiene, y el servidor responde cada pedido por separado. Por HTTP, la versión y el método también van en encabezados (<code>MCP-Protocol-Version</code>, <code>Mcp-Method</code>, <code>Mcp-Name</code>), para que un balanceador o un cortafuegos pueda leerlos sin abrir el cuerpo. El método <code>server/discover</code> permite preguntarle al servidor, antes de nada, qué versiones habla, qué ofrece y cómo se llama. Las revisiones anteriores (hasta la <code>2025-11-25</code>) empezaban con un saludo <code>initialize</code> que abría una sesión; muchos servidores y SDK todavía hablan esa forma, y la especificación explica cómo convivir con las dos.</p><p>Así se ve una llamada a una herramienta por stdio:</p><div class="code-copia"><pre><code>{"jsonrpc": "2.0", "id": 5, "method": "tools/call",
- "params": {"name": "consultar_facturas", "arguments": {"cuenta": 20417},
-            "_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28",
-                      "io.modelcontextprotocol/clientInfo": {"name": "asistente-de-atencion", "version": "0.8"},
-                      "io.modelcontextprotocol/clientCapabilities": {}}}}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>En la práctica va en una sola línea, porque stdio separa los mensajes por saltos de línea.</p></div><figure class="fig fig-flujo" id="10-diagrama-2"><div class="lienzo"><svg viewBox="0 0 960 600" style="min-width:760px" role="img" aria-label="Diagrama de secuencia de MCP: el cliente pide server/discover y recibe versiones y capacidades; pide tools/list y recibe las herramientas permitidas; el anfitrión pasa las definiciones al modelo; el modelo propone consultar_facturas; el anfitrión aprueba y el cliente manda tools/call; el servidor valida y consulta facturación, que responde con las filas; el resultado vuelve con structuredContent y el anfitrión se lo pasa al modelo">
+<section><h2>Cliente, servidor y transporte</h2><div class="prose"><p>MCP define tres papeles:</p><ul><li><b>Anfitrión</b> (<i>host</i>): la aplicación que tiene el modelo y habla con la persona. El asistente de atención es un anfitrión; también lo son un asistente de escritorio o un entorno de programación.</li><li><b>Cliente</b> (<i>client</i>): el conector que vive dentro del anfitrión y habla con <b>un</b> servidor. Un anfitrión conectado a tres servidores tiene tres clientes.</li><li><b>Servidor</b> (<i>server</i>): el programa que expone lo que sabe hacer un sistema: sus herramientas, sus recursos y sus prompts. Hay un servidor de facturación, otro de órdenes de trabajo, otro de documentos.</li></ul></div><div class="analogia"><b>Imagínalo así</b><p>Piensa en una central telefónica de las antiguas. El anfitrión es la oficina que quiere hablar con muchos proveedores; cada cliente es una línea dedicada a un proveedor; cada servidor es el proveedor que atiende esa línea. El idioma de la conversación es el mismo en todas las líneas, aunque cada proveedor venda algo distinto.</p></div><div class="prose"><p>Los mensajes siguen <b>JSON-RPC 2.0</b>, un formato simple para llamadas remotas con JSON: un <b>pedido</b> (<i>request</i>) lleva un <code>id</code>, un <code>method</code> y unos <code>params</code>; la <b>respuesta</b> (<i>response</i>) repite el <code>id</code> y trae un <code>result</code> o un <code>error</code>; y una <b>notificación</b> (<i>notification</i>) es un mensaje de ida, sin <code>id</code> y sin respuesta.</p><p>Los mensajes viajan por un <b>transporte</b> (<i>transport</i>). La especificación define dos:</p><ul><li><b>stdio</b> (entrada y salida estándar): el anfitrión lanza el servidor como un proceso hijo en la misma computadora y le escribe un mensaje JSON por línea en su entrada; el servidor responde una línea por mensaje en su salida y usa la salida de errores solo para sus registros. Es lo usual para servidores locales.</li><li><b>HTTP transmisible</b> (<i>Streamable HTTP</i>): el servidor ofrece una sola dirección (por ejemplo <code>https://mcp.ejemplo.com/mcp</code>) que recibe cada mensaje como un <code>POST</code>. Responde con un JSON o, si la tarea manda avisos de progreso, con un flujo <b>SSE</b> (<i>Server-Sent Events</i>, eventos enviados por el servidor) que termina con la respuesta final. Es lo usual para servidores compartidos en la red de la empresa.</li></ul><p>La revisión vigente de la especificación, la <code>2026-07-28</code>, hizo el protocolo <b>sin estado</b> (<i>stateless</i>): cada pedido lleva en su campo <code>_meta</code> la versión del protocolo, quién es el cliente y qué capacidades tiene, y el servidor responde cada pedido por separado. Por HTTP, la versión y el método también van en encabezados (<code>MCP-Protocol-Version</code>, <code>Mcp-Method</code>, <code>Mcp-Name</code>), para que un balanceador o un cortafuegos pueda leerlos sin abrir el cuerpo. El método <code>server/discover</code> permite preguntarle al servidor, antes de nada, qué versiones habla, qué ofrece y cómo se llama. Las revisiones anteriores (hasta la <code>2025-11-25</code>) empezaban con un saludo <code>initialize</code> que abría una sesión; muchos servidores y SDK todavía hablan esa forma, y la especificación explica cómo convivir con las dos.</p><p>Así se ve una llamada a una herramienta por stdio:</p><div class="code-copia code-lineas"><pre><code><span class="ln">{"jsonrpc": "2.0", "id": 5, "method": "tools/call",</span>
+<span class="ln"> "params": {"name": "consultar_facturas", "arguments": {"cuenta": 20417},</span>
+<span class="ln">            "_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28",</span>
+<span class="ln">                      "io.modelcontextprotocol/clientInfo": {"name": "asistente-de-atencion", "version": "0.8"},</span>
+<span class="ln">                      "io.modelcontextprotocol/clientCapabilities": {}}}}</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>En la práctica va en una sola línea, porque stdio separa los mensajes por saltos de línea.</p></div><figure class="fig fig-flujo" id="10-diagrama-2"><div class="lienzo"><svg viewBox="0 0 960 600" style="min-width:760px" role="img" aria-label="Diagrama de secuencia de MCP: el cliente pide server/discover y recibe versiones y capacidades; pide tools/list y recibe las herramientas permitidas; el anfitrión pasa las definiciones al modelo; el modelo propone consultar_facturas; el anfitrión aprueba y el cliente manda tools/call; el servidor valida y consulta facturación, que responde con las filas; el resultado vuelve con structuredContent y el anfitrión se lo pasa al modelo">
 <defs>
 <marker id="c10d2-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
 <marker id="c10d2-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-warm"/></marker>
@@ -142,145 +142,145 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <text x="842" y="470" class="t t-s t-m">el servidor ejecuta</text>
 </svg></div><figcaption><b>Del descubrimiento a la llamada.</b> Cuatro participantes: el modelo, el anfitrión con su cliente, el servidor MCP de facturación y el sistema de facturación. ① El cliente pregunta <code>server/discover</code> y ② recibe versiones, capacidades y nombre; ③ pide <code>tools/list</code> y ④ recibe las herramientas que su credencial permite; ⑤ el anfitrión pasa esas definiciones al modelo junto con la pregunta; ⑥ el modelo propone <code>consultar_facturas</code>; ⑦ el anfitrión decide si la llamada se hace y el cliente manda <code>tools/call</code>; ⑧ el servidor valida y consulta el sistema, ⑨ que responde con las filas; ⑩ el resultado vuelve como <code>structuredContent</code> y texto, y el anfitrión se lo da al modelo. A la derecha, las fases: descubrir, elegir y llamar.</figcaption></figure></section>
 <section><h2>Herramientas, recursos y prompts</h2><div class="prose"><p>Un servidor puede ofrecer tres tipos de cosas, y la diferencia importante es <b>quién decide usarlas</b>:</p><div class="tbl"><table><thead><tr><th>Primitiva</th><th>Qué es</th><th>Quién la controla</th><th>Métodos</th><th>En el asistente</th></tr></thead><tbody><tr><td><b>Herramientas</b> (<i>tools</i>)</td><td>Funciones que hacen algo o consultan algo</td><td>El modelo las elige; el anfitrión aprueba</td><td><code>tools/list</code>, <code>tools/call</code></td><td><code>consultar_facturas</code>, <code>estado_ticket</code>, <code>reprogramar_visita</code></td></tr><tr><td><b>Recursos</b> (<i>resources</i>)</td><td>Datos identificados por una URI, para leer</td><td>La aplicación decide qué entra al contexto</td><td><code>resources/list</code>, <code>resources/read</code></td><td><code>politicas://reconexion</code>, los manuales del RAG</td></tr><tr><td><b>Prompts</b></td><td>Plantillas de instrucciones con argumentos</td><td>La persona las elige, por ejemplo desde un menú</td><td><code>prompts/list</code>, <code>prompts/get</code></td><td><code>resumen-ticket</code> con el número de ticket</td></tr></tbody></table></div><p>Las herramientas son las del capítulo 9 con el mismo contrato: nombre, descripción y un <code>inputSchema</code> en JSON Schema. MCP agrega dos cosas útiles. Un <code>outputSchema</code> opcional, para que el resultado venga como datos en <code>structuredContent</code> y el cliente lo valide, además del texto en <code>content</code>. Y unas <b>anotaciones</b> (<i>annotations</i>): <code>readOnlyHint</code> (no cambia nada), <code>destructiveHint</code> (puede borrar o sobrescribir), <code>idempotentHint</code> (repetirla no tiene efecto extra) y <code>openWorldHint</code> (toca sistemas externos). Son <b>pistas</b>: la especificación dice que el cliente debe tratarlas como no confiables salvo que el servidor sea de confianza. Las reglas siguen en el registro del capítulo 9.</p><p>Los errores también siguen la idea del capítulo anterior. Un pedido mal formado o una herramienta que no existe da un error de JSON-RPC. Un fallo al ejecutar (factura inexistente, fecha en el pasado) vuelve como un resultado normal con <code>isError: true</code> y una explicación, para que el modelo pueda corregirse.</p><p>El cliente también puede ofrecerle cosas al servidor. La más usada es la <b>solicitud de datos</b> (<i>elicitation</i>): a mitad de una llamada, el servidor responde que necesita algo de la persona (por ejemplo, confirmar un número de cuenta), el anfitrión se lo pregunta y vuelve a mandar el pedido con la respuesta. La revisión vigente marca como obsoletas otras dos capacidades de las versiones anteriores: que el servidor le pida al cliente una generación del modelo (<i>sampling</i>) y la lista de carpetas raíz (<i>roots</i>).</p></div></section>
-<section><h2>Escribir un servidor MCP pequeño</h2><div class="prose"><p>En producción, un servidor MCP se escribe con un SDK oficial, por ejemplo el de Python o el de TypeScript: el SDK maneja el transporte, valida los mensajes, negocia la versión y habla con clientes de versiones anteriores. Para ver qué viaja por el cable, la práctica escribe uno a mano, solo con la biblioteca estándar, con una base de datos de ejemplo en memoria.</p></div><div class="analogia"><b>Imagínalo así</b><p>Antes de manejar un auto automático, a algunos les enseñan con uno de cambios: no porque vayan a usarlo siempre, sino para que entiendan qué hace la caja por ellos. El servidor a mano es el auto de cambios; el SDK es el automático.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un servidor MCP por stdio y su cliente</h3></div><p>Vas a escribir un servidor MCP que expone facturas y tickets de ejemplo, y un cliente que lo lanza como proceso hijo y le habla línea por línea. No necesitas Ollama: aquí no hay modelo, solo el protocolo. Guarda los dos archivos en la misma carpeta. El primero, <code>servidor_mcp.py</code>:</p><div class="code-copia"><pre><code>"""Servidor MCP mínimo por stdio (revisión 2026-07-28), solo con la biblioteca estándar."""
-import json, os, sqlite3, sys
-
-VERSION = "2026-07-28"
-ROL = os.environ.get("MCP_ROL", "")  # por stdio, la credencial llega por el entorno
-
-# Una base de ejemplo en memoria, abierta en solo lectura después de cargarla
-db = sqlite3.connect(":memory:")
-db.executescript("""
-CREATE TABLE facturas (numero TEXT, cuenta INTEGER, mes TEXT, monto REAL, estado TEXT);
-INSERT INTO facturas VALUES ('F-88213', 20417, 'octubre', 30.00, 'vencida'),
-                            ('F-88214', 31552, 'octubre', 45.00, 'vencida');
-CREATE TABLE tickets (numero TEXT, cuenta INTEGER, asunto TEXT, estado TEXT);
-INSERT INTO tickets VALUES ('T-55190', 20417, 'cobro duplicado de US$ 30,00', 'abierto');
-""")
-db.execute("PRAGMA query_only = ON")
-
-HERRAMIENTAS = [
-    {"name": "consultar_facturas", "title": "Facturas de una cuenta",
-     "description": "Devuelve las facturas de una cuenta con mes, monto y estado. Solo lectura.",
-     "inputSchema": {"type": "object", "additionalProperties": False,
-                     "properties": {"cuenta": {"type": "integer"}}, "required": ["cuenta"]},
-     "annotations": {"readOnlyHint": True, "openWorldHint": False},
-     "roles": ["reclamos", "supervisora"]},
-    {"name": "estado_ticket", "title": "Estado de un ticket",
-     "description": "Devuelve el asunto y el estado de un ticket (T-#####). Solo lectura.",
-     "inputSchema": {"type": "object", "additionalProperties": False,
-                     "properties": {"ticket": {"type": "string", "pattern": "^T-[0-9]{5}$"}},
-                     "required": ["ticket"]},
-     "annotations": {"readOnlyHint": True, "openWorldHint": False},
-     "roles": ["reclamos", "supervisora", "tecnico"]},
-]
-RECURSOS = {"politicas://reconexion": "Política de reconexión (vigente desde 2026): "
-                                      "el cargo es de US$ 5,00 y se suma a la factura vencida."}
-PROMPTS = [{"name": "resumen-ticket", "description": "Resume un ticket para el agente",
-            "arguments": [{"name": "ticket", "required": True}]}]
-
-def visibles():
-    return [{k: v for k, v in h.items() if k != "roles"} for h in HERRAMIENTAS if ROL in h["roles"]]
-
-def texto(datos, error=False):
-    return {"resultType": "complete", "isError": error, "structuredContent": datos,
-            "content": [{"type": "text", "text": json.dumps(datos, ensure_ascii=False)}]}
-
-def llamar_herramienta(nombre, args):
-    if nombre not in [h["name"] for h in visibles()]:
-        return texto({"error": "permiso_denegado",
-                      "detalle": f"El rol '{ROL or 'sin credencial'}' no puede usar {nombre}."}, True)
-    if nombre == "consultar_facturas":
-        if not isinstance(args.get("cuenta"), int):
-            return texto({"error": "entrada_invalida", "detalle": "cuenta debe ser un número entero"}, True)
-        filas = db.execute("SELECT numero, mes, monto, estado FROM facturas WHERE cuenta = ?",
-                           (args["cuenta"],)).fetchall()  # consulta con parámetros, nunca SQL libre
-        return texto({"cuenta": args["cuenta"],
-                      "facturas": [dict(zip(["numero", "mes", "monto", "estado"], f)) for f in filas]})
-    fila = db.execute("SELECT asunto, estado FROM tickets WHERE numero = ?",
-                      (str(args.get("ticket")),)).fetchone()
-    if fila is None:
-        return texto({"error": "ticket_no_existe", "detalle": "Revisa el número del ticket."}, True)
-    return texto({"ticket": args["ticket"], "asunto": fila[0], "estado": fila[1]})
-
-def atender(metodo, params):
-    if metodo == "server/discover":
-        return {"resultType": "complete", "supportedVersions": [VERSION],
-                "capabilities": {"tools": {}, "resources": {}, "prompts": {}},
-                "instructions": "Datos de facturas y tickets de ejemplo, solo lectura.",
-                "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "facturacion-ejemplo", "version": "0.8.0"}}}
-    if metodo == "tools/list":
-        return {"resultType": "complete", "tools": visibles()}
-    if metodo == "tools/call":
-        return llamar_herramienta(params.get("name"), params.get("arguments") or {})
-    if metodo == "resources/list":
-        return {"resultType": "complete",
-                "resources": [{"uri": u, "name": u.split("//")[1], "mimeType": "text/plain"} for u in RECURSOS]}
-    if metodo == "resources/read":
-        uri = params.get("uri")
-        if uri not in RECURSOS:
-            raise ValueError(f"Recurso desconocido: {uri}")
-        return {"resultType": "complete", "contents": [{"uri": uri, "mimeType": "text/plain", "text": RECURSOS[uri]}]}
-    if metodo == "prompts/list":
-        return {"resultType": "complete", "prompts": PROMPTS}
-    raise LookupError(metodo)
-
-for linea in sys.stdin:  # un mensaje JSON-RPC por línea
-    msg = json.loads(linea)
-    if "id" not in msg:
-        continue  # notificación: no se responde
-    params = msg.get("params") or {}
-    version = (params.get("_meta") or {}).get("io.modelcontextprotocol/protocolVersion")
-    try:
-        if version is None:
-            raise ValueError("Falta io.modelcontextprotocol/protocolVersion en _meta")
-        if version != VERSION:
-            salida = {"error": {"code": -32022, "message": "Unsupported protocol version",
-                                "data": {"supported": [VERSION], "requested": version}}}
-        else:
-            salida = {"result": atender(msg["method"], params)}
-    except LookupError as e:
-        salida = {"error": {"code": -32601, "message": f"Método desconocido: {e}"}}
-    except ValueError as e:
-        salida = {"error": {"code": -32602, "message": str(e)}}
-    print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], **salida}, ensure_ascii=False), flush=True)
-    print(f"[servidor] {msg['method']} atendido (rol: {ROL or 'ninguno'})", file=sys.stderr, flush=True)</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>El segundo, <code>cliente_mcp.py</code>:</p><div class="code-copia"><pre><code>"""Cliente MCP mínimo: lanza el servidor como subproceso y le habla por stdio."""
-import json, os, subprocess, sys
-
-rol = sys.argv[1] if len(sys.argv) &gt; 1 else "reclamos"
-servidor = subprocess.Popen([sys.executable, "servidor_mcp.py"],
-                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-                            encoding="utf-8", env={**os.environ, "MCP_ROL": rol})
-META = {"io.modelcontextprotocol/protocolVersion": "2026-07-28",
-        "io.modelcontextprotocol/clientInfo": {"name": "asistente-de-atencion", "version": "0.8"},
-        "io.modelcontextprotocol/clientCapabilities": {}}
-siguiente_id = 0
-
-def pedir(metodo, **params):
-    global siguiente_id
-    siguiente_id += 1
-    mensaje = {"jsonrpc": "2.0", "id": siguiente_id, "method": metodo,
-               "params": {**params, "_meta": META}}
-    servidor.stdin.write(json.dumps(mensaje, ensure_ascii=False) + "\n")
-    servidor.stdin.flush()
-    respuesta = json.loads(servidor.stdout.readline())
-    print(f"\n--&gt; {metodo} {params or ''}")
-    resultado = respuesta.get("result", respuesta.get("error"))
-    if metodo == "tools/list":
-        resultado = [h["name"] for h in resultado["tools"]]
-    print("&lt;--", json.dumps(resultado, ensure_ascii=False)[:240])
-    return respuesta
-
-pedir("server/discover")
-pedir("tools/list")
-pedir("resources/list")
-pedir("resources/read", uri="politicas://reconexion")
-pedir("tools/call", name="consultar_facturas", arguments={"cuenta": 20417})
-pedir("tools/call", name="consultar_facturas", arguments={"cuenta": "20417; DELETE FROM facturas"})
-pedir("tools/call", name="estado_ticket", arguments={"ticket": "T-55190"})
-
-servidor.stdin.close()  # cerrar la entrada es la señal para que el servidor termine
-servidor.wait(timeout=5)</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python cliente_mcp.py reclamos</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 cliente_mcp.py reclamos</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el cliente y sigue cada par de mensajes: qué pide (<code>--&gt;</code>) y qué responde el servidor (<code>&lt;--</code>).</span></li><li><span>Anota qué herramientas anuncia <code>tools/list</code> y qué trae <code>structuredContent</code> en la consulta de la cuenta 20417.</span></li><li><span>Mira el pedido con <code>"20417; DELETE FROM facturas"</code>: ¿qué devuelve y por qué no se borró nada?</span></li><li><span>Fíjate en las líneas <code>[servidor] ...</code>: salen por la salida de errores del servidor, no por la de mensajes.</span></li></ol><p><b>Qué observar:</b> el cliente nunca abre una conexión a la base: solo manda mensajes JSON-RPC, cada uno con su versión del protocolo en <code>_meta</code>. El servidor responde con el mismo <code>id</code> del pedido. El intento de inyección vuelve como un resultado con <code>isError: true</code> y una explicación, porque la cuenta debe ser un entero; además, la consulta usa parámetros y la base está en solo lectura. Las líneas de registro van aparte para no ensuciar el canal de mensajes, como pide la especificación. Si conectas este servidor a un asistente de escritorio, puede que no lo reconozca: muchos todavía hablan la revisión anterior, con el saludo <code>initialize</code>; un SDK oficial resuelve esa compatibilidad.</p></div><div class="prose"><p>Para probar servidores reales sin escribir un cliente, el proyecto mantiene el <b>MCP Inspector</b>, una herramienta con interfaz web que se conecta a un servidor, lista lo que anuncia y permite llamar cada herramienta a mano.</p></div><div class="lab" id="10-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Conecta un servidor MCP de ejemplo y mira qué anuncia</h3></div><p class="hint">Elige uno de cuatro servidores y pulsa «Conectar». Verás los pedidos y las respuestas del descubrimiento, y una ficha con las herramientas (con sus anotaciones), los recursos y los prompts que anuncia. Después llama a una herramienta. Uno de los servidores es de terceros: lee con atención sus descripciones.</p><style>
+<section><h2>Escribir un servidor MCP pequeño</h2><div class="prose"><p>En producción, un servidor MCP se escribe con un SDK oficial, por ejemplo el de Python o el de TypeScript: el SDK maneja el transporte, valida los mensajes, negocia la versión y habla con clientes de versiones anteriores. Para ver qué viaja por el cable, la práctica escribe uno a mano, solo con la biblioteca estándar, con una base de datos de ejemplo en memoria.</p></div><div class="analogia"><b>Imagínalo así</b><p>Antes de manejar un auto automático, a algunos les enseñan con uno de cambios: no porque vayan a usarlo siempre, sino para que entiendan qué hace la caja por ellos. El servidor a mano es el auto de cambios; el SDK es el automático.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un servidor MCP por stdio y su cliente</h3></div><p>Vas a escribir un servidor MCP que expone facturas y tickets de ejemplo, y un cliente que lo lanza como proceso hijo y le habla línea por línea. No necesitas Ollama: aquí no hay modelo, solo el protocolo. Guarda los dos archivos en la misma carpeta. El primero, <code>servidor_mcp.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">"""Servidor MCP mínimo por stdio (revisión 2026-07-28), solo con la biblioteca estándar."""</span>
+<span class="ln">import json, os, sqlite3, sys</span>
+<span class="ln"></span>
+<span class="ln">VERSION = "2026-07-28"</span>
+<span class="ln">ROL = os.environ.get("MCP_ROL", "")  # por stdio, la credencial llega por el entorno</span>
+<span class="ln"></span>
+<span class="ln"># Una base de ejemplo en memoria, abierta en solo lectura después de cargarla</span>
+<span class="ln">db = sqlite3.connect(":memory:")</span>
+<span class="ln">db.executescript("""</span>
+<span class="ln">CREATE TABLE facturas (numero TEXT, cuenta INTEGER, mes TEXT, monto REAL, estado TEXT);</span>
+<span class="ln">INSERT INTO facturas VALUES ('F-88213', 20417, 'octubre', 30.00, 'vencida'),</span>
+<span class="ln">                            ('F-88214', 31552, 'octubre', 45.00, 'vencida');</span>
+<span class="ln">CREATE TABLE tickets (numero TEXT, cuenta INTEGER, asunto TEXT, estado TEXT);</span>
+<span class="ln">INSERT INTO tickets VALUES ('T-55190', 20417, 'cobro duplicado de US$ 30,00', 'abierto');</span>
+<span class="ln">""")</span>
+<span class="ln">db.execute("PRAGMA query_only = ON")</span>
+<span class="ln"></span>
+<span class="ln">HERRAMIENTAS = [</span>
+<span class="ln">    {"name": "consultar_facturas", "title": "Facturas de una cuenta",</span>
+<span class="ln">     "description": "Devuelve las facturas de una cuenta con mes, monto y estado. Solo lectura.",</span>
+<span class="ln">     "inputSchema": {"type": "object", "additionalProperties": False,</span>
+<span class="ln">                     "properties": {"cuenta": {"type": "integer"}}, "required": ["cuenta"]},</span>
+<span class="ln">     "annotations": {"readOnlyHint": True, "openWorldHint": False},</span>
+<span class="ln">     "roles": ["reclamos", "supervisora"]},</span>
+<span class="ln">    {"name": "estado_ticket", "title": "Estado de un ticket",</span>
+<span class="ln">     "description": "Devuelve el asunto y el estado de un ticket (T-#####). Solo lectura.",</span>
+<span class="ln">     "inputSchema": {"type": "object", "additionalProperties": False,</span>
+<span class="ln">                     "properties": {"ticket": {"type": "string", "pattern": "^T-[0-9]{5}$"}},</span>
+<span class="ln">                     "required": ["ticket"]},</span>
+<span class="ln">     "annotations": {"readOnlyHint": True, "openWorldHint": False},</span>
+<span class="ln">     "roles": ["reclamos", "supervisora", "tecnico"]},</span>
+<span class="ln">]</span>
+<span class="ln">RECURSOS = {"politicas://reconexion": "Política de reconexión (vigente desde 2026): "</span>
+<span class="ln">                                      "el cargo es de US$ 5,00 y se suma a la factura vencida."}</span>
+<span class="ln">PROMPTS = [{"name": "resumen-ticket", "description": "Resume un ticket para el agente",</span>
+<span class="ln">            "arguments": [{"name": "ticket", "required": True}]}]</span>
+<span class="ln"></span>
+<span class="ln">def visibles():</span>
+<span class="ln">    return [{k: v for k, v in h.items() if k != "roles"} for h in HERRAMIENTAS if ROL in h["roles"]]</span>
+<span class="ln"></span>
+<span class="ln">def texto(datos, error=False):</span>
+<span class="ln">    return {"resultType": "complete", "isError": error, "structuredContent": datos,</span>
+<span class="ln">            "content": [{"type": "text", "text": json.dumps(datos, ensure_ascii=False)}]}</span>
+<span class="ln"></span>
+<span class="ln">def llamar_herramienta(nombre, args):</span>
+<span class="ln">    if nombre not in [h["name"] for h in visibles()]:</span>
+<span class="ln">        return texto({"error": "permiso_denegado",</span>
+<span class="ln">                      "detalle": f"El rol '{ROL or 'sin credencial'}' no puede usar {nombre}."}, True)</span>
+<span class="ln">    if nombre == "consultar_facturas":</span>
+<span class="ln">        if not isinstance(args.get("cuenta"), int):</span>
+<span class="ln">            return texto({"error": "entrada_invalida", "detalle": "cuenta debe ser un número entero"}, True)</span>
+<span class="ln">        filas = db.execute("SELECT numero, mes, monto, estado FROM facturas WHERE cuenta = ?",</span>
+<span class="ln">                           (args["cuenta"],)).fetchall()  # consulta con parámetros, nunca SQL libre</span>
+<span class="ln">        return texto({"cuenta": args["cuenta"],</span>
+<span class="ln">                      "facturas": [dict(zip(["numero", "mes", "monto", "estado"], f)) for f in filas]})</span>
+<span class="ln">    fila = db.execute("SELECT asunto, estado FROM tickets WHERE numero = ?",</span>
+<span class="ln">                      (str(args.get("ticket")),)).fetchone()</span>
+<span class="ln">    if fila is None:</span>
+<span class="ln">        return texto({"error": "ticket_no_existe", "detalle": "Revisa el número del ticket."}, True)</span>
+<span class="ln">    return texto({"ticket": args["ticket"], "asunto": fila[0], "estado": fila[1]})</span>
+<span class="ln"></span>
+<span class="ln">def atender(metodo, params):</span>
+<span class="ln">    if metodo == "server/discover":</span>
+<span class="ln">        return {"resultType": "complete", "supportedVersions": [VERSION],</span>
+<span class="ln">                "capabilities": {"tools": {}, "resources": {}, "prompts": {}},</span>
+<span class="ln">                "instructions": "Datos de facturas y tickets de ejemplo, solo lectura.",</span>
+<span class="ln">                "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "facturacion-ejemplo", "version": "0.8.0"}}}</span>
+<span class="ln">    if metodo == "tools/list":</span>
+<span class="ln">        return {"resultType": "complete", "tools": visibles()}</span>
+<span class="ln">    if metodo == "tools/call":</span>
+<span class="ln">        return llamar_herramienta(params.get("name"), params.get("arguments") or {})</span>
+<span class="ln">    if metodo == "resources/list":</span>
+<span class="ln">        return {"resultType": "complete",</span>
+<span class="ln">                "resources": [{"uri": u, "name": u.split("//")[1], "mimeType": "text/plain"} for u in RECURSOS]}</span>
+<span class="ln">    if metodo == "resources/read":</span>
+<span class="ln">        uri = params.get("uri")</span>
+<span class="ln">        if uri not in RECURSOS:</span>
+<span class="ln">            raise ValueError(f"Recurso desconocido: {uri}")</span>
+<span class="ln">        return {"resultType": "complete", "contents": [{"uri": uri, "mimeType": "text/plain", "text": RECURSOS[uri]}]}</span>
+<span class="ln">    if metodo == "prompts/list":</span>
+<span class="ln">        return {"resultType": "complete", "prompts": PROMPTS}</span>
+<span class="ln">    raise LookupError(metodo)</span>
+<span class="ln"></span>
+<span class="ln">for linea in sys.stdin:  # un mensaje JSON-RPC por línea</span>
+<span class="ln">    msg = json.loads(linea)</span>
+<span class="ln">    if "id" not in msg:</span>
+<span class="ln">        continue  # notificación: no se responde</span>
+<span class="ln">    params = msg.get("params") or {}</span>
+<span class="ln">    version = (params.get("_meta") or {}).get("io.modelcontextprotocol/protocolVersion")</span>
+<span class="ln">    try:</span>
+<span class="ln">        if version is None:</span>
+<span class="ln">            raise ValueError("Falta io.modelcontextprotocol/protocolVersion en _meta")</span>
+<span class="ln">        if version != VERSION:</span>
+<span class="ln">            salida = {"error": {"code": -32022, "message": "Unsupported protocol version",</span>
+<span class="ln">                                "data": {"supported": [VERSION], "requested": version}}}</span>
+<span class="ln">        else:</span>
+<span class="ln">            salida = {"result": atender(msg["method"], params)}</span>
+<span class="ln">    except LookupError as e:</span>
+<span class="ln">        salida = {"error": {"code": -32601, "message": f"Método desconocido: {e}"}}</span>
+<span class="ln">    except ValueError as e:</span>
+<span class="ln">        salida = {"error": {"code": -32602, "message": str(e)}}</span>
+<span class="ln">    print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], **salida}, ensure_ascii=False), flush=True)</span>
+<span class="ln">    print(f"[servidor] {msg['method']} atendido (rol: {ROL or 'ninguno'})", file=sys.stderr, flush=True)</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>El segundo, <code>cliente_mcp.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">"""Cliente MCP mínimo: lanza el servidor como subproceso y le habla por stdio."""</span>
+<span class="ln">import json, os, subprocess, sys</span>
+<span class="ln"></span>
+<span class="ln">rol = sys.argv[1] if len(sys.argv) &gt; 1 else "reclamos"</span>
+<span class="ln">servidor = subprocess.Popen([sys.executable, "servidor_mcp.py"],</span>
+<span class="ln">                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,</span>
+<span class="ln">                            encoding="utf-8", env={**os.environ, "MCP_ROL": rol})</span>
+<span class="ln">META = {"io.modelcontextprotocol/protocolVersion": "2026-07-28",</span>
+<span class="ln">        "io.modelcontextprotocol/clientInfo": {"name": "asistente-de-atencion", "version": "0.8"},</span>
+<span class="ln">        "io.modelcontextprotocol/clientCapabilities": {}}</span>
+<span class="ln">siguiente_id = 0</span>
+<span class="ln"></span>
+<span class="ln">def pedir(metodo, **params):</span>
+<span class="ln">    global siguiente_id</span>
+<span class="ln">    siguiente_id += 1</span>
+<span class="ln">    mensaje = {"jsonrpc": "2.0", "id": siguiente_id, "method": metodo,</span>
+<span class="ln">               "params": {**params, "_meta": META}}</span>
+<span class="ln">    servidor.stdin.write(json.dumps(mensaje, ensure_ascii=False) + "\n")</span>
+<span class="ln">    servidor.stdin.flush()</span>
+<span class="ln">    respuesta = json.loads(servidor.stdout.readline())</span>
+<span class="ln">    print(f"\n--&gt; {metodo} {params or ''}")</span>
+<span class="ln">    resultado = respuesta.get("result", respuesta.get("error"))</span>
+<span class="ln">    if metodo == "tools/list":</span>
+<span class="ln">        resultado = [h["name"] for h in resultado["tools"]]</span>
+<span class="ln">    print("&lt;--", json.dumps(resultado, ensure_ascii=False)[:240])</span>
+<span class="ln">    return respuesta</span>
+<span class="ln"></span>
+<span class="ln">pedir("server/discover")</span>
+<span class="ln">pedir("tools/list")</span>
+<span class="ln">pedir("resources/list")</span>
+<span class="ln">pedir("resources/read", uri="politicas://reconexion")</span>
+<span class="ln">pedir("tools/call", name="consultar_facturas", arguments={"cuenta": 20417})</span>
+<span class="ln">pedir("tools/call", name="consultar_facturas", arguments={"cuenta": "20417; DELETE FROM facturas"})</span>
+<span class="ln">pedir("tools/call", name="estado_ticket", arguments={"ticket": "T-55190"})</span>
+<span class="ln"></span>
+<span class="ln">servidor.stdin.close()  # cerrar la entrada es la señal para que el servidor termine</span>
+<span class="ln">servidor.wait(timeout=5)</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python cliente_mcp.py reclamos</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 cliente_mcp.py reclamos</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el cliente y sigue cada par de mensajes: qué pide (<code>--&gt;</code>) y qué responde el servidor (<code>&lt;--</code>).</span></li><li><span>Anota qué herramientas anuncia <code>tools/list</code> y qué trae <code>structuredContent</code> en la consulta de la cuenta 20417.</span></li><li><span>Mira el pedido con <code>"20417; DELETE FROM facturas"</code>: ¿qué devuelve y por qué no se borró nada?</span></li><li><span>Fíjate en las líneas <code>[servidor] ...</code>: salen por la salida de errores del servidor, no por la de mensajes.</span></li></ol><p><b>Qué observar:</b> el cliente nunca abre una conexión a la base: solo manda mensajes JSON-RPC, cada uno con su versión del protocolo en <code>_meta</code>. El servidor responde con el mismo <code>id</code> del pedido. El intento de inyección vuelve como un resultado con <code>isError: true</code> y una explicación, porque la cuenta debe ser un entero; además, la consulta usa parámetros y la base está en solo lectura. Las líneas de registro van aparte para no ensuciar el canal de mensajes, como pide la especificación. Si conectas este servidor a un asistente de escritorio, puede que no lo reconozca: muchos todavía hablan la revisión anterior, con el saludo <code>initialize</code>; un SDK oficial resuelve esa compatibilidad.</p></div><div class="prose"><p>Para probar servidores reales sin escribir un cliente, el proyecto mantiene el <b>MCP Inspector</b>, una herramienta con interfaz web que se conecta a un servidor, lista lo que anuncia y permite llamar cada herramienta a mano.</p></div><div class="lab" id="10-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Conecta un servidor MCP de ejemplo y mira qué anuncia</h3></div><p class="hint">Elige uno de cuatro servidores y pulsa «Conectar». Verás los pedidos y las respuestas del descubrimiento, y una ficha con las herramientas (con sus anotaciones), los recursos y los prompts que anuncia. Después llama a una herramienta. Uno de los servidores es de terceros: lee con atención sus descripciones.</p><style>
 [id="10-lab-1"] .c10l1-log{list-style:none;margin:0;padding:0;display:grid;gap:4px}
 [id="10-lab-1"] .c10l1-log li{display:grid;grid-template-columns:22px 1fr;gap:6px;font:500 .76rem/1.35 var(--f-mono);border:1px solid var(--line);border-radius:7px;padding:5px 8px;background:var(--card);overflow-wrap:anywhere}
 [id="10-lab-1"] .c10l1-log li b{font-weight:700}

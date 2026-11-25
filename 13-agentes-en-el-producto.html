@@ -97,72 +97,72 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <text x="34" y="410" class="t t-xs t-b t-m">CUÁNDO</text>
 <text x="34" y="427" class="t t-s">Si los pasos se conocen, un flujo. Si cada caso trae combinaciones nuevas y hay que decidir el camino sobre la marcha, un agente.</text>
 </svg></div><figcaption><b>Flujo frente a agente.</b> A la izquierda, el flujo del capítulo 12: pasos fijos en un orden fijo, con ramas escritas de antemano; si aparece un caso que nadie previó, cae a la cola humana. A la derecha, el agente: un objetivo con sus criterios de éxito, un plan que es un dato, y un bucle de actuar, observar y replanificar, con puntos de control donde decide una persona y límites que lo detienen. Abajo, cuándo conviene cada uno.</figcaption></figure></section>
-<section><h2>Objetivos y planes como datos con esquema</h2><div class="prose"><p>Si el objetivo y el plan viven solo en el texto del modelo, nadie puede revisarlos ni detenerlos a tiempo. Por eso los dos son <b>datos con esquema</b>, como las salidas estructuradas del capítulo 5.</p><p>El objetivo lo crea el sistema, no el modelo:</p><div class="code-copia"><pre><code>{"objetivo": "Atender la avería masiva de la zona Norte",
- "incidente": "INC-311",
- "zona": "Norte",
- "criterios_de_exito": [
-     "clientes afectados avisados",
-     "tickets vinculados al incidente",
-     "tickets cerrados con servicio verificado",
-     "créditos según la política"],
- "restricciones": [
-     "ningún mensaje a clientes sin aprobación",
-     "sin reembolsos en dinero"],
- "presupuesto": {"pasos": 30, "costo_usd": 0.50, "minutos": 240}}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>El plan sí lo propone el modelo, pero dentro de un esquema: una lista de pasos, cada uno con la herramienta que usará (de una lista cerrada), sus argumentos, de qué pasos depende y cuándo se considera hecho. El código revisa el plan antes de ejecutar nada:</p><ul><li><b>Que cada herramienta exista</b> en el registro del capítulo 9 y que el agente tenga permiso para usarla.</li><li><b>Que las dependencias tengan sentido</b>: ningún paso depende de uno posterior, ni hay ciclos.</li><li><b>Que el plan quepa en el presupuesto</b>: si propone 50 pasos y el presupuesto es de 30, se rechaza.</li><li><b>Qué pasos piden aprobación</b>: no lo dice el modelo, lo calcula el código con el riesgo de cada herramienta y la política del capítulo 11.</li></ul><p>El plan aprobado se muestra como una línea de tiempo en el panel de la jefa de turno, la etapa 4 de la interfaz del capítulo 6. Cada replanificación guarda una versión nueva y se ve qué cambió. La teoría del planificador y del ejecutor, con la replanificación y el revisor, está en <a href="https://aaramirez.github.io/arneses/12-planificador-y-ejecutor.html" target="_blank" rel="noopener">Planificador y ejecutor</a>.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El plan como dato: el modelo propone y el registro decide</h3></div><p>Vas a pedirle a tu modelo local un plan para la avería de la zona Norte con un esquema que solo admite herramientas del registro. El código valida el plan y marca qué pasos se ejecutan solos, cuáles piden aprobación y cuáles el agente no tiene permiso de hacer. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>plan.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
-
-URL = "http://localhost:11434/v1/chat/completions"
-REGISTRO = {   # lo que el agente puede pedir y cómo lo trata la política
-    "consultar_alarmas":          {"efecto": "lectura"},
-    "buscar_tickets_zona":        {"efecto": "lectura"},
-    "buscar_en_manuales":         {"efecto": "lectura"},
-    "crear_incidente_maestro":    {"efecto": "escritura reversible"},
-    "vincular_tickets":           {"efecto": "escritura reversible"},
-    "avisar_clientes_zona":       {"efecto": "mensaje masivo", "aprobacion": True},
-    "reprogramar_visitas_zona":   {"efecto": "escritura", "permitido": False},
-    "aplicar_creditos_politica":  {"efecto": "escritura", "aprobacion_si": "crédito &gt; US$ 10,00"},
-    "cerrar_tickets_verificados": {"efecto": "escritura reversible"},
-}
-ESQUEMA = {"type": "object", "properties": {"pasos": {"type": "array", "items": {
-    "type": "object", "properties": {
-        "n": {"type": "integer"},
-        "herramienta": {"type": "string", "enum": list(REGISTRO)},
-        "para_que": {"type": "string"},
-        "depende_de": {"type": "array", "items": {"type": "integer"}}},
-    "required": ["n", "herramienta", "para_que", "depende_de"]}}},
-    "required": ["pasos"]}
-OBJETIVO = ("Objetivo: atender la avería masiva de la zona Norte (incidente INC-311). "
-            "Criterios: clientes avisados, tickets vinculados, tickets cerrados con servicio "
-            "verificado y créditos según la política. Arma un plan de 5 a 9 pasos.")
-
-cuerpo = {"model": "llama3.2:3b", "temperature": 0,
-          "response_format": {"type": "json_schema", "json_schema": {"name": "plan", "schema": ESQUEMA}},
-          "messages": [{"role": "system", "content": "Eres el planificador. Devuelve solo el plan en JSON."},
-                       {"role": "user", "content": OBJETIVO}]}
-pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
-                                headers={"Content-Type": "application/json"})
-with urllib.request.urlopen(pedido, timeout=120) as r:
-    plan = json.loads(json.load(r)["choices"][0]["message"]["content"])
-
-pasos, problemas = plan["pasos"], []
-if len(pasos) &gt; 9:
-    problemas.append(f"el plan tiene {len(pasos)} pasos y el presupuesto admite 9")
-vistos = set()
-for p in pasos:
-    ficha = REGISTRO.get(p["herramienta"], {})
-    malas = [d for d in p["depende_de"] if d not in vistos]
-    if malas:
-        problemas.append(f"el paso {p['n']} depende de {malas}, que no van antes")
-    if ficha.get("permitido") is False:
-        decision = "SIN PERMISO: se crea una tarea para una persona"
-    elif ficha.get("aprobacion"):
-        decision = "PUNTO DE CONTROL: pide aprobación"
-    elif "aprobacion_si" in ficha:
-        decision = "solo, salvo " + ficha["aprobacion_si"]
-    else:
-        decision = "se ejecuta solo"
-    print(f"{p['n']:&gt;2}. {p['herramienta']:&lt;27} {decision}\n    para: {p['para_que']}")
-    vistos.add(p["n"])
-print("\nPlan válido" if not problemas else "\nPlan rechazado: " + "; ".join(problemas))</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python plan.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 plan.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y lee el plan. Fíjate en el orden: ¿consulta antes de avisar?</span></li><li><span>Mira qué pasos quedaron como punto de control y cuáles sin permiso.</span></li><li><span>Córrelo dos o tres veces más y compara los planes.</span></li></ol><p><b>Qué observar:</b> el modelo solo puede nombrar herramientas del registro, porque el esquema lo obliga. Lo que se ejecuta solo, lo que pide aprobación y lo que no está permitido lo decide el diccionario <code>REGISTRO</code>: aunque el plan incluya reprogramar las visitas, el agente no puede hacerlo y crea una tarea. Un modelo pequeño a veces arma dependencias imposibles; la validación rechaza el plan en vez de ejecutarlo, y en producción el agente replanifica con el motivo. Los planes cambian de una corrida a otra.</p></div></section>
+<section><h2>Objetivos y planes como datos con esquema</h2><div class="prose"><p>Si el objetivo y el plan viven solo en el texto del modelo, nadie puede revisarlos ni detenerlos a tiempo. Por eso los dos son <b>datos con esquema</b>, como las salidas estructuradas del capítulo 5.</p><p>El objetivo lo crea el sistema, no el modelo:</p><div class="code-copia code-lineas"><pre><code><span class="ln">{"objetivo": "Atender la avería masiva de la zona Norte",</span>
+<span class="ln"> "incidente": "INC-311",</span>
+<span class="ln"> "zona": "Norte",</span>
+<span class="ln"> "criterios_de_exito": [</span>
+<span class="ln">     "clientes afectados avisados",</span>
+<span class="ln">     "tickets vinculados al incidente",</span>
+<span class="ln">     "tickets cerrados con servicio verificado",</span>
+<span class="ln">     "créditos según la política"],</span>
+<span class="ln"> "restricciones": [</span>
+<span class="ln">     "ningún mensaje a clientes sin aprobación",</span>
+<span class="ln">     "sin reembolsos en dinero"],</span>
+<span class="ln"> "presupuesto": {"pasos": 30, "costo_usd": 0.50, "minutos": 240}}</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>El plan sí lo propone el modelo, pero dentro de un esquema: una lista de pasos, cada uno con la herramienta que usará (de una lista cerrada), sus argumentos, de qué pasos depende y cuándo se considera hecho. El código revisa el plan antes de ejecutar nada:</p><ul><li><b>Que cada herramienta exista</b> en el registro del capítulo 9 y que el agente tenga permiso para usarla.</li><li><b>Que las dependencias tengan sentido</b>: ningún paso depende de uno posterior, ni hay ciclos.</li><li><b>Que el plan quepa en el presupuesto</b>: si propone 50 pasos y el presupuesto es de 30, se rechaza.</li><li><b>Qué pasos piden aprobación</b>: no lo dice el modelo, lo calcula el código con el riesgo de cada herramienta y la política del capítulo 11.</li></ul><p>El plan aprobado se muestra como una línea de tiempo en el panel de la jefa de turno, la etapa 4 de la interfaz del capítulo 6. Cada replanificación guarda una versión nueva y se ve qué cambió. La teoría del planificador y del ejecutor, con la replanificación y el revisor, está en <a href="https://aaramirez.github.io/arneses/12-planificador-y-ejecutor.html" target="_blank" rel="noopener">Planificador y ejecutor</a>.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El plan como dato: el modelo propone y el registro decide</h3></div><p>Vas a pedirle a tu modelo local un plan para la avería de la zona Norte con un esquema que solo admite herramientas del registro. El código valida el plan y marca qué pasos se ejecutan solos, cuáles piden aprobación y cuáles el agente no tiene permiso de hacer. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>plan.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import json, urllib.request</span>
+<span class="ln"></span>
+<span class="ln">URL = "http://localhost:11434/v1/chat/completions"</span>
+<span class="ln">REGISTRO = {   # lo que el agente puede pedir y cómo lo trata la política</span>
+<span class="ln">    "consultar_alarmas":          {"efecto": "lectura"},</span>
+<span class="ln">    "buscar_tickets_zona":        {"efecto": "lectura"},</span>
+<span class="ln">    "buscar_en_manuales":         {"efecto": "lectura"},</span>
+<span class="ln">    "crear_incidente_maestro":    {"efecto": "escritura reversible"},</span>
+<span class="ln">    "vincular_tickets":           {"efecto": "escritura reversible"},</span>
+<span class="ln">    "avisar_clientes_zona":       {"efecto": "mensaje masivo", "aprobacion": True},</span>
+<span class="ln">    "reprogramar_visitas_zona":   {"efecto": "escritura", "permitido": False},</span>
+<span class="ln">    "aplicar_creditos_politica":  {"efecto": "escritura", "aprobacion_si": "crédito &gt; US$ 10,00"},</span>
+<span class="ln">    "cerrar_tickets_verificados": {"efecto": "escritura reversible"},</span>
+<span class="ln">}</span>
+<span class="ln">ESQUEMA = {"type": "object", "properties": {"pasos": {"type": "array", "items": {</span>
+<span class="ln">    "type": "object", "properties": {</span>
+<span class="ln">        "n": {"type": "integer"},</span>
+<span class="ln">        "herramienta": {"type": "string", "enum": list(REGISTRO)},</span>
+<span class="ln">        "para_que": {"type": "string"},</span>
+<span class="ln">        "depende_de": {"type": "array", "items": {"type": "integer"}}},</span>
+<span class="ln">    "required": ["n", "herramienta", "para_que", "depende_de"]}}},</span>
+<span class="ln">    "required": ["pasos"]}</span>
+<span class="ln">OBJETIVO = ("Objetivo: atender la avería masiva de la zona Norte (incidente INC-311). "</span>
+<span class="ln">            "Criterios: clientes avisados, tickets vinculados, tickets cerrados con servicio "</span>
+<span class="ln">            "verificado y créditos según la política. Arma un plan de 5 a 9 pasos.")</span>
+<span class="ln"></span>
+<span class="ln">cuerpo = {"model": "llama3.2:3b", "temperature": 0,</span>
+<span class="ln">          "response_format": {"type": "json_schema", "json_schema": {"name": "plan", "schema": ESQUEMA}},</span>
+<span class="ln">          "messages": [{"role": "system", "content": "Eres el planificador. Devuelve solo el plan en JSON."},</span>
+<span class="ln">                       {"role": "user", "content": OBJETIVO}]}</span>
+<span class="ln">pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),</span>
+<span class="ln">                                headers={"Content-Type": "application/json"})</span>
+<span class="ln">with urllib.request.urlopen(pedido, timeout=120) as r:</span>
+<span class="ln">    plan = json.loads(json.load(r)["choices"][0]["message"]["content"])</span>
+<span class="ln"></span>
+<span class="ln">pasos, problemas = plan["pasos"], []</span>
+<span class="ln">if len(pasos) &gt; 9:</span>
+<span class="ln">    problemas.append(f"el plan tiene {len(pasos)} pasos y el presupuesto admite 9")</span>
+<span class="ln">vistos = set()</span>
+<span class="ln">for p in pasos:</span>
+<span class="ln">    ficha = REGISTRO.get(p["herramienta"], {})</span>
+<span class="ln">    malas = [d for d in p["depende_de"] if d not in vistos]</span>
+<span class="ln">    if malas:</span>
+<span class="ln">        problemas.append(f"el paso {p['n']} depende de {malas}, que no van antes")</span>
+<span class="ln">    if ficha.get("permitido") is False:</span>
+<span class="ln">        decision = "SIN PERMISO: se crea una tarea para una persona"</span>
+<span class="ln">    elif ficha.get("aprobacion"):</span>
+<span class="ln">        decision = "PUNTO DE CONTROL: pide aprobación"</span>
+<span class="ln">    elif "aprobacion_si" in ficha:</span>
+<span class="ln">        decision = "solo, salvo " + ficha["aprobacion_si"]</span>
+<span class="ln">    else:</span>
+<span class="ln">        decision = "se ejecuta solo"</span>
+<span class="ln">    print(f"{p['n']:&gt;2}. {p['herramienta']:&lt;27} {decision}\n    para: {p['para_que']}")</span>
+<span class="ln">    vistos.add(p["n"])</span>
+<span class="ln">print("\nPlan válido" if not problemas else "\nPlan rechazado: " + "; ".join(problemas))</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python plan.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 plan.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y lee el plan. Fíjate en el orden: ¿consulta antes de avisar?</span></li><li><span>Mira qué pasos quedaron como punto de control y cuáles sin permiso.</span></li><li><span>Córrelo dos o tres veces más y compara los planes.</span></li></ol><p><b>Qué observar:</b> el modelo solo puede nombrar herramientas del registro, porque el esquema lo obliga. Lo que se ejecuta solo, lo que pide aprobación y lo que no está permitido lo decide el diccionario <code>REGISTRO</code>: aunque el plan incluya reprogramar las visitas, el agente no puede hacerlo y crea una tarea. Un modelo pequeño a veces arma dependencias imposibles; la validación rechaza el plan en vez de ejecutarlo, y en producción el agente replanifica con el motivo. Los planes cambian de una corrida a otra.</p></div></section>
 <section><h2>Operación por eventos: el agente que reacciona</h2><div class="prose"><p>Un agente de avería masiva no espera a que alguien escriba un pedido: se despierta cuando pasa algo. Esa forma de trabajar se llama <b>arquitectura orientada a eventos</b> (<i>event-driven architecture</i>).</p></div><div class="analogia"><b>Imagínalo así</b><p>Un bombero no recorre la ciudad buscando incendios: espera en el cuartel hasta que suena la alarma. La alarma dice dónde y de qué tipo es el fuego, y con eso el equipo sale con lo que necesita. Mientras apaga, sigue escuchando la radio: si el viento cambia, cambia el plan.</p></div><div class="prose"><p>Los sistemas de la empresa publican <b>eventos</b> (<i>events</i>), hechos que ya ocurrieron con su hora y sus datos, en un <b>bus de eventos</b> (<i>event bus</i>), un intermediario al que otros servicios se suscriben. Kafka, RabbitMQ y los servicios de mensajería de los proveedores de nube son ejemplos del mercado. Para la versión 1.0 importan cuatro: «alarma en un nodo», «ticket creado», «visita agendada» y «alarma despejada».</p><p>El agente no se suscribe a todo. Un <b>disparador</b> (<i>trigger</i>) en código, sin modelo, mira los eventos y decide cuándo crear un objetivo: una alarma en un nodo <b>y</b> más de 30 tickets de la misma zona en 15 minutos. Esa regla es determinista y está versionada; el modelo no decide cuándo despertarse.</p><p>Despierto, el agente escucha los eventos de su objetivo. Si llega «alarma despejada» mientras el aviso espera aprobación, replanifica y el aviso pasa de «estamos trabajando en la falla» a «el servicio ya se restableció». Tres cuidados: los eventos pueden llegar <b>repetidos</b> (cada uno lleva un identificador y el repetido se descarta), <b>desordenados</b> (vale la hora del evento, no la de llegada) o <b>no llegar</b> (antes de cerrar, el agente consulta el estado de la alarma). Cómo se reanuda un agente después de una caída en mitad de su objetivo está en <a href="https://aaramirez.github.io/arneses/06-estado-y-eventos.html" target="_blank" rel="noopener">Sesiones, eventos y ejecución durable</a>.</p></div><figure class="fig fig-flujo" id="13-diagrama-2"><div class="lienzo"><svg viewBox="0 0 1000 660" style="min-width:800px" role="img" aria-label="Diagrama de secuencia del agente de avería masiva: el monitoreo publica la alarma, el disparador crea el objetivo, el agente consulta por MCP, arma y valida el plan, pide la aprobación del aviso a la jefa de turno, ejecuta, recibe el evento de alarma despejada, verifica, cierra, aplica créditos y entrega el informe">
 <defs>
 <marker id="c13d2-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-sis"/></marker>
@@ -322,65 +322,65 @@ print("\nPlan válido" if not problemas else "\nPlan rechazado: " + "; ".join(pr
   <div class="c13l1-k"><span>Clientes avisados</span><output id="c13l1-k5"></output></div>
 </div>
 <div class="readout texto" id="c13l1-out" aria-live="polite"></div></div></section>
-<section><h2>Presupuestos, límites y botón de parada</h2><div class="prose"><p>Un flujo termina cuando se le acaban los pasos; un agente, cuando cumple el objetivo o cuando algo lo detiene. Sin límites, un agente que no lo logra puede seguir intentando para siempre, gastando y actuando.</p><p>Cada objetivo trae su <b>presupuesto</b> (<i>budget</i>), y el orquestador lo controla en cada vuelta del bucle, no el modelo:</p><ul><li><b>Pasos</b>: cuántas llamadas a herramientas puede hacer.</li><li><b>Costo</b>: cuántos dólares de tokens puede gastar, calculados por la puerta a los modelos del capítulo 3.</li><li><b>Tiempo</b>: cuántos minutos puede durar el objetivo.</li><li><b>Alcance de efectos</b> (<i>blast radius</i>): cuántos clientes puede tocar o cuánto dinero puede mover sin una aprobación nueva. Un aviso a 1.240 clientes ya pasó por aprobación; si el plan nuevo quiere avisar a 5.000, vuelve a preguntar.</li></ul><p>Además del presupuesto, el orquestador detecta <b>bucles</b>: si el agente repite la misma herramienta con los mismos argumentos y el mismo error tres veces, se detiene aunque le quede presupuesto. Y existe un <b>interruptor de parada</b> (<i>kill switch</i>) en tres alcances: por objetivo (la jefa detiene este agente), por herramienta (nadie usa <code>avisar_clientes_zona</code> hasta nuevo aviso) y general (se apagan todos los agentes).</p><p>Detenerse bien importa tanto como detenerse: el agente termina o cancela el paso en curso, cancela las aprobaciones pendientes, deja el estado consistente y entrega un <b>informe de traspaso</b> con lo hecho, lo que falta y el motivo. Una persona retoma desde ahí. Cómo se pausa, limita y apaga un agente desde el arnés está en <a href="https://aaramirez.github.io/arneses/10-credenciales-y-aislamiento.html" target="_blank" rel="noopener">Credenciales, aislamiento e idempotencia</a>.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un bucle de agente con presupuesto y botón de parada</h3></div><p>Vas a correr un agente mínimo con tres herramientas falsas y una de cierre, un máximo de pasos, un tope de costo y un interruptor de parada que es un archivo llamado <code>PARAR</code>. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>agente.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
-from pathlib import Path
-
-URL = "http://localhost:11434/v1/chat/completions"
-MAX_PASOS, MAX_COSTO = 6, 0.0040                 # presupuesto del objetivo
-PRECIO_ENTRADA, PRECIO_SALIDA = 1.00, 4.00       # US$ por millón de tokens (inventados)
-
-def herramienta(nombre, descripcion, props):
-    return {"type": "function", "function": {"name": nombre, "description": descripcion,
-            "parameters": {"type": "object", "properties": props, "required": list(props)}}}
-HERRAMIENTAS = [
-    herramienta("consultar_alarmas", "Alarmas activas de una zona.", {"zona": {"type": "string"}}),
-    herramienta("buscar_tickets_zona", "Tickets abiertos de una zona en la última hora.", {"zona": {"type": "string"}}),
-    herramienta("crear_incidente_maestro", "Crea el incidente que agrupa los tickets.",
-                {"zona": {"type": "string"}, "tickets": {"type": "integer"}}),
-    herramienta("terminar", "Úsala cuando el objetivo esté cumplido.", {"resumen": {"type": "string"}}),
-]
-def ejecutar(nombre, args):   # los «sistemas»: respuestas fijas de ejemplo
-    if nombre == "consultar_alarmas":
-        return {"alarmas": [{"nodo": "N14", "zona": args.get("zona"), "desde": "07:40"}]}
-    if nombre == "buscar_tickets_zona":
-        return {"tickets_abiertos": 186}
-    if nombre == "crear_incidente_maestro":
-        return {"incidente": "INC-311", "tickets_vinculados": args.get("tickets")}
-    return {"ok": True}
-
-mensajes = [{"role": "system", "content": "Eres el agente de averías. Usa las herramientas una por una. "
-             "Primero consulta, después crea el incidente maestro y al final llama a terminar."},
-            {"role": "user", "content": "Objetivo: agrupar los tickets de la avería de la zona Norte en un incidente maestro."}]
-pasos, costo = 0, 0.0
-while True:
-    if Path("PARAR").exists():
-        motivo = "interruptor de parada"; break
-    if pasos &gt;= MAX_PASOS:
-        motivo = f"se agotaron los {MAX_PASOS} pasos"; break
-    if costo &gt;= MAX_COSTO:
-        motivo = f"se agotó el presupuesto de US$ {MAX_COSTO:.4f}"; break
-    cuerpo = {"model": "llama3.2:3b", "temperature": 0, "tools": HERRAMIENTAS, "messages": mensajes}
-    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
-                                    headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(pedido, timeout=120) as r:
-        respuesta = json.load(r)
-    uso = respuesta.get("usage", {})
-    costo += (uso.get("prompt_tokens", 0) * PRECIO_ENTRADA + uso.get("completion_tokens", 0) * PRECIO_SALIDA) / 1_000_000
-    mensaje = respuesta["choices"][0]["message"]
-    llamadas = mensaje.get("tool_calls") or []
-    if not llamadas:
-        motivo = "el modelo respondió sin pedir herramientas"; break
-    mensajes.append(mensaje)
-    for llamada in llamadas:
-        nombre, args = llamada["function"]["name"], llamada["function"]["arguments"]
-        args = json.loads(args) if isinstance(args, str) else args
-        pasos += 1
-        resultado = ejecutar(nombre, args)
-        print(f"paso {pasos}: {nombre}({args}) -&gt; {resultado}   costo acumulado US$ {costo:.5f}")
-        mensajes.append({"role": "tool", "tool_call_id": llamada.get("id", ""), "content": json.dumps(resultado)})
-        if nombre == "terminar":
-            print("\nObjetivo cumplido según el agente:", args.get("resumen")); raise SystemExit
-print(f"\nDetenido: {motivo}. Pasos: {pasos}. Costo: US$ {costo:.5f}. Una persona retoma desde aquí.")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>python agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>New-Item PARAR</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Remove-Item PARAR</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>touch PARAR</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>rm PARAR</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Corre el agente y sigue cada paso: qué herramienta pide, qué recibe y cuánto lleva gastado.</span></li><li><span>Cambia <code>MAX_PASOS</code> a <code>2</code> y vuelve a correrlo.</span></li><li><span>Crea el archivo <code>PARAR</code> con la segunda línea, corre el agente otra vez y después borra el archivo.</span></li></ol><p><b>Qué observar:</b> los límites los revisa el código al principio de cada vuelta, no el modelo, así que un modelo que se empeña en seguir no puede saltárselos. Con dos pasos, el agente se detiene antes de crear el incidente. Con el archivo <code>PARAR</code>, ni siquiera llama al modelo. Un modelo pequeño a veces repite una consulta u olvida llamar a <code>terminar</code>: justo lo que corta el presupuesto de pasos. El costo usa precios inventados sobre los tokens que informa la respuesta; Ollama no cobra.</p></div><div class="lab" id="13-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Ponle un presupuesto de pasos y de costo y mira dónde se detiene</h3></div><p class="hint">Elige un escenario (una avería normal, una herramienta que falla una y otra vez, o una avería grande), mueve los topes de pasos y de costo, y activa o no el detector de bucles y el interruptor de parada. La gráfica muestra el costo acumulado paso a paso y dónde se detiene el agente; la lectura dice qué quedó hecho y qué recibe la persona que retoma.</p><style>
+<section><h2>Presupuestos, límites y botón de parada</h2><div class="prose"><p>Un flujo termina cuando se le acaban los pasos; un agente, cuando cumple el objetivo o cuando algo lo detiene. Sin límites, un agente que no lo logra puede seguir intentando para siempre, gastando y actuando.</p><p>Cada objetivo trae su <b>presupuesto</b> (<i>budget</i>), y el orquestador lo controla en cada vuelta del bucle, no el modelo:</p><ul><li><b>Pasos</b>: cuántas llamadas a herramientas puede hacer.</li><li><b>Costo</b>: cuántos dólares de tokens puede gastar, calculados por la puerta a los modelos del capítulo 3.</li><li><b>Tiempo</b>: cuántos minutos puede durar el objetivo.</li><li><b>Alcance de efectos</b> (<i>blast radius</i>): cuántos clientes puede tocar o cuánto dinero puede mover sin una aprobación nueva. Un aviso a 1.240 clientes ya pasó por aprobación; si el plan nuevo quiere avisar a 5.000, vuelve a preguntar.</li></ul><p>Además del presupuesto, el orquestador detecta <b>bucles</b>: si el agente repite la misma herramienta con los mismos argumentos y el mismo error tres veces, se detiene aunque le quede presupuesto. Y existe un <b>interruptor de parada</b> (<i>kill switch</i>) en tres alcances: por objetivo (la jefa detiene este agente), por herramienta (nadie usa <code>avisar_clientes_zona</code> hasta nuevo aviso) y general (se apagan todos los agentes).</p><p>Detenerse bien importa tanto como detenerse: el agente termina o cancela el paso en curso, cancela las aprobaciones pendientes, deja el estado consistente y entrega un <b>informe de traspaso</b> con lo hecho, lo que falta y el motivo. Una persona retoma desde ahí. Cómo se pausa, limita y apaga un agente desde el arnés está en <a href="https://aaramirez.github.io/arneses/10-credenciales-y-aislamiento.html" target="_blank" rel="noopener">Credenciales, aislamiento e idempotencia</a>.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un bucle de agente con presupuesto y botón de parada</h3></div><p>Vas a correr un agente mínimo con tres herramientas falsas y una de cierre, un máximo de pasos, un tope de costo y un interruptor de parada que es un archivo llamado <code>PARAR</code>. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>agente.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import json, urllib.request</span>
+<span class="ln">from pathlib import Path</span>
+<span class="ln"></span>
+<span class="ln">URL = "http://localhost:11434/v1/chat/completions"</span>
+<span class="ln">MAX_PASOS, MAX_COSTO = 6, 0.0040                 # presupuesto del objetivo</span>
+<span class="ln">PRECIO_ENTRADA, PRECIO_SALIDA = 1.00, 4.00       # US$ por millón de tokens (inventados)</span>
+<span class="ln"></span>
+<span class="ln">def herramienta(nombre, descripcion, props):</span>
+<span class="ln">    return {"type": "function", "function": {"name": nombre, "description": descripcion,</span>
+<span class="ln">            "parameters": {"type": "object", "properties": props, "required": list(props)}}}</span>
+<span class="ln">HERRAMIENTAS = [</span>
+<span class="ln">    herramienta("consultar_alarmas", "Alarmas activas de una zona.", {"zona": {"type": "string"}}),</span>
+<span class="ln">    herramienta("buscar_tickets_zona", "Tickets abiertos de una zona en la última hora.", {"zona": {"type": "string"}}),</span>
+<span class="ln">    herramienta("crear_incidente_maestro", "Crea el incidente que agrupa los tickets.",</span>
+<span class="ln">                {"zona": {"type": "string"}, "tickets": {"type": "integer"}}),</span>
+<span class="ln">    herramienta("terminar", "Úsala cuando el objetivo esté cumplido.", {"resumen": {"type": "string"}}),</span>
+<span class="ln">]</span>
+<span class="ln">def ejecutar(nombre, args):   # los «sistemas»: respuestas fijas de ejemplo</span>
+<span class="ln">    if nombre == "consultar_alarmas":</span>
+<span class="ln">        return {"alarmas": [{"nodo": "N14", "zona": args.get("zona"), "desde": "07:40"}]}</span>
+<span class="ln">    if nombre == "buscar_tickets_zona":</span>
+<span class="ln">        return {"tickets_abiertos": 186}</span>
+<span class="ln">    if nombre == "crear_incidente_maestro":</span>
+<span class="ln">        return {"incidente": "INC-311", "tickets_vinculados": args.get("tickets")}</span>
+<span class="ln">    return {"ok": True}</span>
+<span class="ln"></span>
+<span class="ln">mensajes = [{"role": "system", "content": "Eres el agente de averías. Usa las herramientas una por una. "</span>
+<span class="ln">             "Primero consulta, después crea el incidente maestro y al final llama a terminar."},</span>
+<span class="ln">            {"role": "user", "content": "Objetivo: agrupar los tickets de la avería de la zona Norte en un incidente maestro."}]</span>
+<span class="ln">pasos, costo = 0, 0.0</span>
+<span class="ln">while True:</span>
+<span class="ln">    if Path("PARAR").exists():</span>
+<span class="ln">        motivo = "interruptor de parada"; break</span>
+<span class="ln">    if pasos &gt;= MAX_PASOS:</span>
+<span class="ln">        motivo = f"se agotaron los {MAX_PASOS} pasos"; break</span>
+<span class="ln">    if costo &gt;= MAX_COSTO:</span>
+<span class="ln">        motivo = f"se agotó el presupuesto de US$ {MAX_COSTO:.4f}"; break</span>
+<span class="ln">    cuerpo = {"model": "llama3.2:3b", "temperature": 0, "tools": HERRAMIENTAS, "messages": mensajes}</span>
+<span class="ln">    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),</span>
+<span class="ln">                                    headers={"Content-Type": "application/json"})</span>
+<span class="ln">    with urllib.request.urlopen(pedido, timeout=120) as r:</span>
+<span class="ln">        respuesta = json.load(r)</span>
+<span class="ln">    uso = respuesta.get("usage", {})</span>
+<span class="ln">    costo += (uso.get("prompt_tokens", 0) * PRECIO_ENTRADA + uso.get("completion_tokens", 0) * PRECIO_SALIDA) / 1_000_000</span>
+<span class="ln">    mensaje = respuesta["choices"][0]["message"]</span>
+<span class="ln">    llamadas = mensaje.get("tool_calls") or []</span>
+<span class="ln">    if not llamadas:</span>
+<span class="ln">        motivo = "el modelo respondió sin pedir herramientas"; break</span>
+<span class="ln">    mensajes.append(mensaje)</span>
+<span class="ln">    for llamada in llamadas:</span>
+<span class="ln">        nombre, args = llamada["function"]["name"], llamada["function"]["arguments"]</span>
+<span class="ln">        args = json.loads(args) if isinstance(args, str) else args</span>
+<span class="ln">        pasos += 1</span>
+<span class="ln">        resultado = ejecutar(nombre, args)</span>
+<span class="ln">        print(f"paso {pasos}: {nombre}({args}) -&gt; {resultado}   costo acumulado US$ {costo:.5f}")</span>
+<span class="ln">        mensajes.append({"role": "tool", "tool_call_id": llamada.get("id", ""), "content": json.dumps(resultado)})</span>
+<span class="ln">        if nombre == "terminar":</span>
+<span class="ln">            print("\nObjetivo cumplido según el agente:", args.get("resumen")); raise SystemExit</span>
+<span class="ln">print(f"\nDetenido: {motivo}. Pasos: {pasos}. Costo: US$ {costo:.5f}. Una persona retoma desde aquí.")</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>python agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>New-Item PARAR</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Remove-Item PARAR</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>touch PARAR</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 agente.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>rm PARAR</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Corre el agente y sigue cada paso: qué herramienta pide, qué recibe y cuánto lleva gastado.</span></li><li><span>Cambia <code>MAX_PASOS</code> a <code>2</code> y vuelve a correrlo.</span></li><li><span>Crea el archivo <code>PARAR</code> con la segunda línea, corre el agente otra vez y después borra el archivo.</span></li></ol><p><b>Qué observar:</b> los límites los revisa el código al principio de cada vuelta, no el modelo, así que un modelo que se empeña en seguir no puede saltárselos. Con dos pasos, el agente se detiene antes de crear el incidente. Con el archivo <code>PARAR</code>, ni siquiera llama al modelo. Un modelo pequeño a veces repite una consulta u olvida llamar a <code>terminar</code>: justo lo que corta el presupuesto de pasos. El costo usa precios inventados sobre los tokens que informa la respuesta; Ollama no cobra.</p></div><div class="lab" id="13-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Ponle un presupuesto de pasos y de costo y mira dónde se detiene</h3></div><p class="hint">Elige un escenario (una avería normal, una herramienta que falla una y otra vez, o una avería grande), mueve los topes de pasos y de costo, y activa o no el detector de bucles y el interruptor de parada. La gráfica muestra el costo acumulado paso a paso y dónde se detiene el agente; la lectura dice qué quedó hecho y qué recibe la persona que retoma.</p><style>
 [id="13-lab-2"] .c13l2-chk{display:flex;gap:8px;align-items:flex-start;font:500 .84rem/1.35 var(--f-display);color:var(--ink);cursor:pointer}
 [id="13-lab-2"] svg{width:100%;height:auto;display:block;background:var(--paper);border-radius:10px}
 [id="13-lab-2"] svg text{font:500 11px var(--f-display);fill:var(--muted)}

@@ -65,57 +65,57 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <rect x="300" y="368" width="340" height="24" rx="12" class="caja" style="stroke:var(--warm)"/>
 <text x="470" y="384" class="t t-s t-b k-warm" text-anchor="middle">conjunto dorado: la misma vara para cada escalón</text>
 <text x="24" y="410" class="t t-s t-m">Se sube al escalón siguiente solo si el anterior no alcanza la meta en el conjunto dorado.</text>
-</svg></div><figcaption><b>La escalera de alternativas.</b> De izquierda a derecha, las cuatro formas de mejorar un modelo, cada una más alta que la anterior porque suma piezas que mantener y cuesta más cambiarla. Debajo de cada escalón, qué toca (el prompt, el contexto, la elección del modelo o los pesos) y un ejemplo del asistente. La línea punteada es el conjunto dorado: la misma vara para medir cada escalón antes de subir al siguiente.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Antes de ajustar, mide: sin ejemplos y con ejemplos</h3></div><p>Vas a clasificar 12 tickets etiquetados dos veces con tu modelo local: primero solo con la lista de categorías y después con seis ejemplos en el prompt. El programa cuenta aciertos y tokens de entrada de cada forma. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>con_ejemplos.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
-
-URL = "http://localhost:11434/v1/chat/completions"
-CATS = ["cobro_duplicado", "reconexion", "visita_tecnica", "cambio_de_plan", "averia", "otro"]
-ESQUEMA = {"type": "object", "properties": {"categoria": {"type": "string", "enum": CATS}},
-           "required": ["categoria"]}
-DORADO = [  # mini conjunto dorado: texto y categoría correcta
-    ("Me cobraron dos veces la factura de octubre", "cobro_duplicado"),
-    ("Pagué ayer y sigo sin servicio, ¿cuándo me reconectan?", "reconexion"),
-    ("En el estado de cuenta aparece el mismo cargo repetido", "cobro_duplicado"),
-    ("Ya pagué la deuda, necesito que vuelvan a activar mi servicio", "reconexion"),
-    ("Quiero cambiar la visita del técnico para el jueves", "visita_tecnica"),
-    ("El técnico no vino a la cita de hoy", "visita_tecnica"),
-    ("Quiero pasarme al plan de 500", "cambio_de_plan"),
-    ("¿Puedo bajar a un plan más barato?", "cambio_de_plan"),
-    ("Desde la mañana no hay servicio en todo mi edificio", "averia"),
-    ("Se cayó el servicio en mi barrio, los vecinos tampoco tienen", "averia"),
-    ("¿A qué hora abren las oficinas?", "otro"),
-    ("Me debitaron el pago y además me cortaron el servicio", "reconexion"),
-]
-EJEMPLOS = ("Ejemplos:\n"
-            "«Hay dos cargos iguales este mes» -&gt; cobro_duplicado\n"
-            "«Ya pagué, actívenme el servicio» -&gt; reconexion\n"
-            "«Muevan la cita del técnico» -&gt; visita_tecnica\n"
-            "«Quiero un plan con más velocidad» -&gt; cambio_de_plan\n"
-            "«No hay servicio en toda la cuadra» -&gt; averia\n"
-            "«¿Dónde queda la oficina?» -&gt; otro\n")
-
-def clasificar(texto, con_ejemplos):
-    sistema = "Clasifica el ticket en una categoría: " + ", ".join(CATS) + ".\n"
-    if con_ejemplos:
-        sistema += EJEMPLOS
-    cuerpo = {"model": "llama3.2:3b", "temperature": 0,
-              "response_format": {"type": "json_schema", "json_schema": {"name": "c", "schema": ESQUEMA}},
-              "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": texto}]}
-    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
-                                    headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(pedido, timeout=60) as r:
-        resp = json.load(r)
-    return json.loads(resp["choices"][0]["message"]["content"])["categoria"], resp.get("usage", {}).get("prompt_tokens", 0)
-
-for con in (False, True):
-    aciertos, tokens = 0, 0
-    print("\nCON EJEMPLOS" if con else "SIN EJEMPLOS")
-    for texto, esperada in DORADO:
-        cat, t = clasificar(texto, con)
-        tokens += t
-        aciertos += cat == esperada
-        if cat != esperada:
-            print(f"  fallo: «{texto}» -&gt; {cat} (era {esperada})")
-    print(f"  aciertos: {aciertos} de {len(DORADO)} · tokens de entrada: {tokens}")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python con_ejemplos.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 con_ejemplos.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y compara aciertos y tokens de las dos formas.</span></li><li><span>Mira en qué tickets falla cada una. ¿Se confunden <code>cobro_duplicado</code> y <code>reconexion</code>?</span></li><li><span>Agrega un ejemplo que distinga esas dos categorías y vuelve a medir.</span></li></ol><p><b>Qué observar:</b> los ejemplos suelen subir los aciertos, pero cada llamada lee muchos más tokens, y con 40.000 contactos al mes ese prompt largo pesa en el costo y en la latencia. Ahí empieza a tener sentido el ajuste: enseñar con miles de ejemplos una sola vez en lugar de mandar seis en cada llamada. Con 12 casos la medida es ruidosa; en producción se mide con cientos. Los resultados cambian según el modelo.</p></div></section>
+</svg></div><figcaption><b>La escalera de alternativas.</b> De izquierda a derecha, las cuatro formas de mejorar un modelo, cada una más alta que la anterior porque suma piezas que mantener y cuesta más cambiarla. Debajo de cada escalón, qué toca (el prompt, el contexto, la elección del modelo o los pesos) y un ejemplo del asistente. La línea punteada es el conjunto dorado: la misma vara para medir cada escalón antes de subir al siguiente.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Antes de ajustar, mide: sin ejemplos y con ejemplos</h3></div><p>Vas a clasificar 12 tickets etiquetados dos veces con tu modelo local: primero solo con la lista de categorías y después con seis ejemplos en el prompt. El programa cuenta aciertos y tokens de entrada de cada forma. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>con_ejemplos.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import json, urllib.request</span>
+<span class="ln"></span>
+<span class="ln">URL = "http://localhost:11434/v1/chat/completions"</span>
+<span class="ln">CATS = ["cobro_duplicado", "reconexion", "visita_tecnica", "cambio_de_plan", "averia", "otro"]</span>
+<span class="ln">ESQUEMA = {"type": "object", "properties": {"categoria": {"type": "string", "enum": CATS}},</span>
+<span class="ln">           "required": ["categoria"]}</span>
+<span class="ln">DORADO = [  # mini conjunto dorado: texto y categoría correcta</span>
+<span class="ln">    ("Me cobraron dos veces la factura de octubre", "cobro_duplicado"),</span>
+<span class="ln">    ("Pagué ayer y sigo sin servicio, ¿cuándo me reconectan?", "reconexion"),</span>
+<span class="ln">    ("En el estado de cuenta aparece el mismo cargo repetido", "cobro_duplicado"),</span>
+<span class="ln">    ("Ya pagué la deuda, necesito que vuelvan a activar mi servicio", "reconexion"),</span>
+<span class="ln">    ("Quiero cambiar la visita del técnico para el jueves", "visita_tecnica"),</span>
+<span class="ln">    ("El técnico no vino a la cita de hoy", "visita_tecnica"),</span>
+<span class="ln">    ("Quiero pasarme al plan de 500", "cambio_de_plan"),</span>
+<span class="ln">    ("¿Puedo bajar a un plan más barato?", "cambio_de_plan"),</span>
+<span class="ln">    ("Desde la mañana no hay servicio en todo mi edificio", "averia"),</span>
+<span class="ln">    ("Se cayó el servicio en mi barrio, los vecinos tampoco tienen", "averia"),</span>
+<span class="ln">    ("¿A qué hora abren las oficinas?", "otro"),</span>
+<span class="ln">    ("Me debitaron el pago y además me cortaron el servicio", "reconexion"),</span>
+<span class="ln">]</span>
+<span class="ln">EJEMPLOS = ("Ejemplos:\n"</span>
+<span class="ln">            "«Hay dos cargos iguales este mes» -&gt; cobro_duplicado\n"</span>
+<span class="ln">            "«Ya pagué, actívenme el servicio» -&gt; reconexion\n"</span>
+<span class="ln">            "«Muevan la cita del técnico» -&gt; visita_tecnica\n"</span>
+<span class="ln">            "«Quiero un plan con más velocidad» -&gt; cambio_de_plan\n"</span>
+<span class="ln">            "«No hay servicio en toda la cuadra» -&gt; averia\n"</span>
+<span class="ln">            "«¿Dónde queda la oficina?» -&gt; otro\n")</span>
+<span class="ln"></span>
+<span class="ln">def clasificar(texto, con_ejemplos):</span>
+<span class="ln">    sistema = "Clasifica el ticket en una categoría: " + ", ".join(CATS) + ".\n"</span>
+<span class="ln">    if con_ejemplos:</span>
+<span class="ln">        sistema += EJEMPLOS</span>
+<span class="ln">    cuerpo = {"model": "llama3.2:3b", "temperature": 0,</span>
+<span class="ln">              "response_format": {"type": "json_schema", "json_schema": {"name": "c", "schema": ESQUEMA}},</span>
+<span class="ln">              "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": texto}]}</span>
+<span class="ln">    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),</span>
+<span class="ln">                                    headers={"Content-Type": "application/json"})</span>
+<span class="ln">    with urllib.request.urlopen(pedido, timeout=60) as r:</span>
+<span class="ln">        resp = json.load(r)</span>
+<span class="ln">    return json.loads(resp["choices"][0]["message"]["content"])["categoria"], resp.get("usage", {}).get("prompt_tokens", 0)</span>
+<span class="ln"></span>
+<span class="ln">for con in (False, True):</span>
+<span class="ln">    aciertos, tokens = 0, 0</span>
+<span class="ln">    print("\nCON EJEMPLOS" if con else "SIN EJEMPLOS")</span>
+<span class="ln">    for texto, esperada in DORADO:</span>
+<span class="ln">        cat, t = clasificar(texto, con)</span>
+<span class="ln">        tokens += t</span>
+<span class="ln">        aciertos += cat == esperada</span>
+<span class="ln">        if cat != esperada:</span>
+<span class="ln">            print(f"  fallo: «{texto}» -&gt; {cat} (era {esperada})")</span>
+<span class="ln">    print(f"  aciertos: {aciertos} de {len(DORADO)} · tokens de entrada: {tokens}")</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python con_ejemplos.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 con_ejemplos.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y compara aciertos y tokens de las dos formas.</span></li><li><span>Mira en qué tickets falla cada una. ¿Se confunden <code>cobro_duplicado</code> y <code>reconexion</code>?</span></li><li><span>Agrega un ejemplo que distinga esas dos categorías y vuelve a medir.</span></li></ol><p><b>Qué observar:</b> los ejemplos suelen subir los aciertos, pero cada llamada lee muchos más tokens, y con 40.000 contactos al mes ese prompt largo pesa en el costo y en la latencia. Ahí empieza a tener sentido el ajuste: enseñar con miles de ejemplos una sola vez en lugar de mandar seis en cada llamada. Con 12 casos la medida es ruidosa; en producción se mide con cientos. Los resultados cambian según el modelo.</p></div></section>
 <section><h2>Cuándo sí ajustar: formato, tono, dominio y costo por tarea</h2><div class="prose"><p>El <b>ajuste fino</b> (<i>fine-tuning</i>) sigue entrenando un modelo ya entrenado con ejemplos de entrada y salida, para que aprenda a hacer una tarea de cierta manera. Hoy casi siempre se hace con <b>LoRA</b> (<i>Low-Rank Adaptation</i>, adaptación de bajo rango): en lugar de cambiar todos los pesos, se entrenan unas piezas pequeñas que se suman al modelo, que queda congelado. Es más barato y permite varios adaptadores para un mismo modelo base.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un músico de conservatorio sabe leer cualquier partitura. Si entra a una banda de salsa, no vuelve a estudiar música desde cero: ensaya el repertorio de la banda hasta que le sale con el estilo de la banda, sin pensar. El ajuste fino es ese ensayo: no enseña música, enseña un repertorio.</p></div><div class="prose"><p>Hay cuatro buenas razones para ajustar:</p><ul><li><b>Formato.</b> Una salida muy estricta que el modelo no logra de forma estable solo con instrucciones, o que pide un prompt enorme para lograrla.</li><li><b>Tono.</b> Un estilo de escritura consistente, por ejemplo el de los avisos a clientes, que las instrucciones solo aproximan.</li><li><b>Dominio.</b> Jerga, códigos de productos y formas de escribir de los clientes que un modelo general no conoce. Ojo: <b>dominio no es hechos</b>. Las tarifas, políticas y planes cambian; eso va por RAG, no en los pesos.</li><li><b>Costo y latencia por tarea.</b> Una tarea angosta y de mucho volumen que un modelo pequeño ajustado hace tan bien como uno grande con un prompt largo, más rápido y por menos.</li></ul><p>Y hay malas razones: «que se sepa nuestras tarifas» (cambian; es RAG), «que no invente» (el ajuste no quita las alucinaciones; las citas y la abstención del capítulo 8 ayudan) y «que sea nuestro» (un modelo ajustado hay que evaluarlo, versionarlo y reentrenarlo).</p><p>Para el clasificador, la cuenta honesta no salió por costo: US$ 126 al mes no justifican un ajuste. Salió por tres razones juntas: latencia (clasificar mientras el cliente escribe), exactitud en las dos categorías que se confunden y que el texto de los clientes no saliera de la empresa. Comprar o construir, mirado desde el negocio, está en <a href="https://aaramirez.github.io/adopcion-de-ia/08-comprar-o-construir.html" target="_blank" rel="noopener">Comprar, construir o combinar</a>.</p></div><div class="lab" id="14-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>El árbol de decisión: ¿instrucciones, RAG, enrutado o ajuste?</h3></div><p class="hint">Responde las preguntas de un caso, o carga uno de los casos de ejemplo, y mira el camino que sigue el árbol, la opción recomendada, por qué, y una estimación de su costo de construir y de operar.</p><style>
 [id="14-lab-1"] .c14l1-q{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--card);font:500 .82rem/1.35 var(--f-display);color:var(--ink)}
 [id="14-lab-1"] .c14l1-q.usada{border-color:var(--c-apl);border-width:2px}
@@ -211,52 +211,52 @@ for con in (False, True):
 <path d="M406 200 V170 H670 V105" class="ln ln-d" fill="none" style="stroke:var(--warm);stroke-width:1.5" marker-end="url(#c14d2-w)"/>
 <text x="500" y="164" class="t t-s k-warm">si pierde: volver a los datos</text>
 <text x="360" y="390" class="t t-s t-m">Rojo continuo: personas · verde azulado: código · rosa: el modelo propio (nivel 5).</text>
-</svg></div><figcaption><b>De los registros al modelo en producción.</b> De izquierda a derecha y en dos filas: los registros de producción pasan por el filtro de consentimiento, la anonimización, la etiqueta del agente y la curaduría; se dividen en entrenamiento, validación y prueba (el conjunto dorado, aparte y sin tocar); se ajusta el modelo con LoRA; se evalúa contra el modelo actual con el mismo conjunto dorado; si gana, entra al registro de modelos con su versión, corre en modo sombra y recién después lo usa el enrutador. Las flechas de vuelta muestran que, si pierde, se vuelve a los datos.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Del registro al conjunto de entrenamiento</h3></div><p>Vas a convertir unos registros de producción inventados en dos archivos JSONL, uno de entrenamiento y otro de prueba, con el formato de chat que usan las herramientas de ajuste: filtrar por consentimiento, anonimizar, tomar la etiqueta del agente, quitar duplicados y dividir. No necesitas Ollama. Guarda este programa como <code>preparar_datos.py</code>:</p><div class="code-copia"><pre><code>import hashlib, json, re
-
-REGISTROS = [  # lo que dejaron las trazas: texto, lo que dijo el modelo, lo que cerró el agente
-    {"texto": "Soy Carmen Rojas, cuenta 20417: me cobraron dos veces octubre", "modelo": "reconexion", "agente": "cobro_duplicado", "consiente": True},
-    {"texto": "Cuenta 31552, ya pagué, reconéctenme por favor", "modelo": "reconexion", "agente": "reconexion", "consiente": True},
-    {"texto": "Luis Pérez aquí, el técnico no llegó a la visita", "modelo": "visita_tecnica", "agente": "visita_tecnica", "consiente": False},
-    {"texto": "Cuenta 40981: el técnico no vino, ticket T-55204", "modelo": "visita_tecnica", "agente": "visita_tecnica", "consiente": True},
-    {"texto": "No hay servicio en mi calle desde las 7, cuenta 20990", "modelo": "averia", "agente": "averia", "consiente": True},
-    {"texto": "No hay servicio en mi calle desde las 7, cuenta 20990", "modelo": "averia", "agente": "averia", "consiente": True},
-    {"texto": "Quiero subir al plan de 500, cuenta 51234", "modelo": "cambio_de_plan", "agente": "cambio_de_plan", "consiente": True},
-    {"texto": "Aparece el mismo cargo dos veces, cuenta 22871", "modelo": "cobro_duplicado", "agente": "cobro_duplicado", "consiente": True},
-    {"texto": "Pagué y además me cortaron, cuenta 33410", "modelo": "cobro_duplicado", "agente": "reconexion", "consiente": True},
-    {"texto": "¿Dónde pago en efectivo?", "modelo": "otro", "agente": "otro", "consiente": True},
-]
-NOMBRES = ["Carmen Rojas", "Luis Pérez", "Ana Gómez"]  # en producción: un detector de datos personales
-SISTEMA = "Clasifica el ticket en una categoría."
-
-def anonimizar(t):
-    for n in NOMBRES:
-        t = t.replace(n, "[NOMBRE]")
-    t = re.sub(r"\b\d{5}\b", "[CUENTA]", t)
-    return re.sub(r"\bT-\d+\b", "[TICKET]", t)
-
-vistos, entrenamiento, prueba, excluidos = set(), [], [], {"sin consentimiento": 0, "duplicado": 0}
-for r in REGISTROS:
-    if not r["consiente"]:
-        excluidos["sin consentimiento"] += 1; continue
-    texto = anonimizar(r["texto"])
-    if texto in vistos:
-        excluidos["duplicado"] += 1; continue
-    vistos.add(texto)
-    ejemplo = {"messages": [{"role": "system", "content": SISTEMA},
-                            {"role": "user", "content": texto},
-                            {"role": "assistant", "content": r["agente"]}]}   # la etiqueta del agente
-    # División estable por huella del texto: más o menos uno de cada cuatro va a prueba
-    lado = prueba if int(hashlib.sha256(texto.encode()).hexdigest(), 16) % 4 == 3 else entrenamiento
-    lado.append(ejemplo)
-
-for nombre, filas in (("entrenamiento.jsonl", entrenamiento), ("prueba.jsonl", prueba)):
-    with open(nombre, "w", encoding="utf-8") as f:
-        for fila in filas:
-            f.write(json.dumps(fila, ensure_ascii=False) + "\n")
-corregidos = sum(r["modelo"] != r["agente"] for r in REGISTROS if r["consiente"])
-print(f"entrenamiento: {len(entrenamiento)} · prueba: {len(prueba)} · excluidos: {excluidos}")
-print(f"casos donde el agente corrigió al modelo: {corregidos}")
-print("ejemplo:", json.dumps(entrenamiento[0], ensure_ascii=False))</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>python preparar_datos.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Get-Content entrenamiento.jsonl</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 preparar_datos.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>cat entrenamiento.jsonl</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y lee el resumen: cuántos quedaron de cada lado y cuántos se excluyeron.</span></li><li><span>Abre <code>entrenamiento.jsonl</code> y busca algún nombre o número de cuenta.</span></li><li><span>Busca el caso «Pagué y además me cortaron»: el modelo dijo <code>cobro_duplicado</code> y el agente, <code>reconexion</code>. ¿Cuál quedó?</span></li></ol><p><b>Qué observar:</b> el registro sin consentimiento y el duplicado no entran; nombres, cuentas y tickets quedan como marcadores; y la etiqueta es la del agente, así que los casos que el modelo clasificó mal se vuelven lecciones. La división por huella del texto es estable: cada caso cae siempre del mismo lado y un mismo texto nunca queda en los dos. Con diez registros la división es desigual; con miles se acerca al 75 % y 25 %. La lista de nombres es un atajo: en producción se usa un detector de datos personales.</p></div></section>
+</svg></div><figcaption><b>De los registros al modelo en producción.</b> De izquierda a derecha y en dos filas: los registros de producción pasan por el filtro de consentimiento, la anonimización, la etiqueta del agente y la curaduría; se dividen en entrenamiento, validación y prueba (el conjunto dorado, aparte y sin tocar); se ajusta el modelo con LoRA; se evalúa contra el modelo actual con el mismo conjunto dorado; si gana, entra al registro de modelos con su versión, corre en modo sombra y recién después lo usa el enrutador. Las flechas de vuelta muestran que, si pierde, se vuelve a los datos.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Del registro al conjunto de entrenamiento</h3></div><p>Vas a convertir unos registros de producción inventados en dos archivos JSONL, uno de entrenamiento y otro de prueba, con el formato de chat que usan las herramientas de ajuste: filtrar por consentimiento, anonimizar, tomar la etiqueta del agente, quitar duplicados y dividir. No necesitas Ollama. Guarda este programa como <code>preparar_datos.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import hashlib, json, re</span>
+<span class="ln"></span>
+<span class="ln">REGISTROS = [  # lo que dejaron las trazas: texto, lo que dijo el modelo, lo que cerró el agente</span>
+<span class="ln">    {"texto": "Soy Carmen Rojas, cuenta 20417: me cobraron dos veces octubre", "modelo": "reconexion", "agente": "cobro_duplicado", "consiente": True},</span>
+<span class="ln">    {"texto": "Cuenta 31552, ya pagué, reconéctenme por favor", "modelo": "reconexion", "agente": "reconexion", "consiente": True},</span>
+<span class="ln">    {"texto": "Luis Pérez aquí, el técnico no llegó a la visita", "modelo": "visita_tecnica", "agente": "visita_tecnica", "consiente": False},</span>
+<span class="ln">    {"texto": "Cuenta 40981: el técnico no vino, ticket T-55204", "modelo": "visita_tecnica", "agente": "visita_tecnica", "consiente": True},</span>
+<span class="ln">    {"texto": "No hay servicio en mi calle desde las 7, cuenta 20990", "modelo": "averia", "agente": "averia", "consiente": True},</span>
+<span class="ln">    {"texto": "No hay servicio en mi calle desde las 7, cuenta 20990", "modelo": "averia", "agente": "averia", "consiente": True},</span>
+<span class="ln">    {"texto": "Quiero subir al plan de 500, cuenta 51234", "modelo": "cambio_de_plan", "agente": "cambio_de_plan", "consiente": True},</span>
+<span class="ln">    {"texto": "Aparece el mismo cargo dos veces, cuenta 22871", "modelo": "cobro_duplicado", "agente": "cobro_duplicado", "consiente": True},</span>
+<span class="ln">    {"texto": "Pagué y además me cortaron, cuenta 33410", "modelo": "cobro_duplicado", "agente": "reconexion", "consiente": True},</span>
+<span class="ln">    {"texto": "¿Dónde pago en efectivo?", "modelo": "otro", "agente": "otro", "consiente": True},</span>
+<span class="ln">]</span>
+<span class="ln">NOMBRES = ["Carmen Rojas", "Luis Pérez", "Ana Gómez"]  # en producción: un detector de datos personales</span>
+<span class="ln">SISTEMA = "Clasifica el ticket en una categoría."</span>
+<span class="ln"></span>
+<span class="ln">def anonimizar(t):</span>
+<span class="ln">    for n in NOMBRES:</span>
+<span class="ln">        t = t.replace(n, "[NOMBRE]")</span>
+<span class="ln">    t = re.sub(r"\b\d{5}\b", "[CUENTA]", t)</span>
+<span class="ln">    return re.sub(r"\bT-\d+\b", "[TICKET]", t)</span>
+<span class="ln"></span>
+<span class="ln">vistos, entrenamiento, prueba, excluidos = set(), [], [], {"sin consentimiento": 0, "duplicado": 0}</span>
+<span class="ln">for r in REGISTROS:</span>
+<span class="ln">    if not r["consiente"]:</span>
+<span class="ln">        excluidos["sin consentimiento"] += 1; continue</span>
+<span class="ln">    texto = anonimizar(r["texto"])</span>
+<span class="ln">    if texto in vistos:</span>
+<span class="ln">        excluidos["duplicado"] += 1; continue</span>
+<span class="ln">    vistos.add(texto)</span>
+<span class="ln">    ejemplo = {"messages": [{"role": "system", "content": SISTEMA},</span>
+<span class="ln">                            {"role": "user", "content": texto},</span>
+<span class="ln">                            {"role": "assistant", "content": r["agente"]}]}   # la etiqueta del agente</span>
+<span class="ln">    # División estable por huella del texto: más o menos uno de cada cuatro va a prueba</span>
+<span class="ln">    lado = prueba if int(hashlib.sha256(texto.encode()).hexdigest(), 16) % 4 == 3 else entrenamiento</span>
+<span class="ln">    lado.append(ejemplo)</span>
+<span class="ln"></span>
+<span class="ln">for nombre, filas in (("entrenamiento.jsonl", entrenamiento), ("prueba.jsonl", prueba)):</span>
+<span class="ln">    with open(nombre, "w", encoding="utf-8") as f:</span>
+<span class="ln">        for fila in filas:</span>
+<span class="ln">            f.write(json.dumps(fila, ensure_ascii=False) + "\n")</span>
+<span class="ln">corregidos = sum(r["modelo"] != r["agente"] for r in REGISTROS if r["consiente"])</span>
+<span class="ln">print(f"entrenamiento: {len(entrenamiento)} · prueba: {len(prueba)} · excluidos: {excluidos}")</span>
+<span class="ln">print(f"casos donde el agente corrigió al modelo: {corregidos}")</span>
+<span class="ln">print("ejemplo:", json.dumps(entrenamiento[0], ensure_ascii=False))</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>python preparar_datos.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Get-Content entrenamiento.jsonl</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 preparar_datos.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>cat entrenamiento.jsonl</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y lee el resumen: cuántos quedaron de cada lado y cuántos se excluyeron.</span></li><li><span>Abre <code>entrenamiento.jsonl</code> y busca algún nombre o número de cuenta.</span></li><li><span>Busca el caso «Pagué y además me cortaron»: el modelo dijo <code>cobro_duplicado</code> y el agente, <code>reconexion</code>. ¿Cuál quedó?</span></li></ol><p><b>Qué observar:</b> el registro sin consentimiento y el duplicado no entran; nombres, cuentas y tickets quedan como marcadores; y la etiqueta es la del agente, así que los casos que el modelo clasificó mal se vuelven lecciones. La división por huella del texto es estable: cada caso cae siempre del mismo lado y un mismo texto nunca queda en los dos. Con diez registros la división es desigual; con miles se acerca al 75 % y 25 %. La lista de nombres es un atajo: en producción se usa un detector de datos personales.</p></div></section>
 <section><h2>Destilar y cuantizar como decisión de producto</h2><div class="prose"><p>Dos técnicas más aparecen con los modelos propios, y las dos son decisiones de producto.</p><p>La <b>destilación</b> (<i>distillation</i>) usa un modelo grande, el maestro, para etiquetar o responder miles de casos, y con esas salidas ajusta uno pequeño, el estudiante. Sirve cuando faltan etiquetas humanas: el modelo grande etiqueta, una persona revisa una muestra y el pequeño aprende. Antes de destilar hay que leer los términos de uso: varios proveedores comerciales prohíben usar las salidas de sus modelos para entrenar modelos que compitan con ellos, y las licencias de algunos modelos abiertos también ponen condiciones.</p><p>La <b>cuantización</b> (<i>quantization</i>) guarda los pesos del modelo con menos bits: de 16 a 8 o a 4 bits por número. El modelo ocupa la mitad o la cuarta parte de memoria, corre más rápido en equipos modestos y pierde algo de calidad, a veces casi nada y a veces mucho en tareas delicadas. Los modelos que descarga Ollama ya vienen cuantizados.</p></div><div class="analogia"><b>Imagínalo así</b><p>Una foto en máxima resolución pesa mucho; comprimida, cabe en un mensaje y casi no se nota la diferencia, salvo si haces zoom en un detalle. Cuantizar es comprimir el modelo: para la mayoría de las tareas no se nota, pero hay que mirar con zoom justo la tarea que te importa.</p></div><div class="prose"><p>Son decisiones de producto porque definen <b>dónde corre</b> el modelo (un servidor propio con una tarjeta gráfica pequeña en vez de una API), <b>cuánto tarda</b> y <b>qué datos salen</b> de la empresa. Y se aceptan igual que todo: midiendo con el conjunto dorado la versión destilada o cuantizada, no la original. Con números de ejemplo:</p><div class="tbl"><table><thead><tr><th>Modelo</th><th>Memoria</th><th>Latencia</th><th>Exactitud en el conjunto dorado</th></tr></thead><tbody><tr><td>Mediano por API, prompt con 30 ejemplos</td><td>— (externo)</td><td>1,4 s</td><td>91 %</td></tr><tr><td>3B ajustado con LoRA, 16 bits</td><td>unos 7 GB</td><td>0,4 s</td><td>95,5 %</td></tr><tr><td>3B ajustado con LoRA, 4 bits</td><td>unos 2,5 GB</td><td>0,25 s</td><td>95,0 %</td></tr></tbody></table></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>¿Cuánto pesa un modelo cuantizado?</h3></div><p>Vas a mirar los datos del modelo que ya descargaste: cuántos parámetros tiene, con qué cuantización viene y cuánto ocupa en disco. Necesitas Ollama con <code>llama3.2:3b</code>.</p><div class="cmds"><div class="cmd-panel" data-so="win mac linux"><div class="cmd-l"><code>ollama show llama3.2:3b</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>ollama list</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>En la salida de <code>ollama show</code>, busca las líneas de parámetros y de cuantización.</span></li><li><span>En <code>ollama list</code>, anota el tamaño del modelo.</span></li><li><span>Haz la cuenta: parámetros por 2 bytes (16 bits) y compárala con el tamaño real.</span></li></ol><p><b>Qué observar:</b> un modelo de unos 3.200 millones de parámetros a 16 bits ocuparía unos 6,4 GB; el que descargaste pesa unos 2 GB porque viene cuantizado a unos 4 bits por peso. Esa diferencia es la que permite correrlo en una computadora común. Si descargaste otro modelo pequeño, los números cambian, pero la proporción se parece.</p></div></section>
 <section><h2>Enrutado entre modelos: el más pequeño que alcanza</h2><div class="prose"><p>Tener un modelo pequeño y bueno no obliga a mandarle todo. Un <b>enrutador de modelos</b> (<i>model router</i>) decide, pedido por pedido, qué modelo lo atiende. Hay tres formas:</p><ul><li><b>Por reglas</b>: según la tarea o el canal. Las clasificaciones van al pequeño; los resúmenes para la supervisora, al mediano.</li><li><b>Por un clasificador</b>: un modelo muy barato estima la dificultad del pedido y lo manda al modelo que corresponde.</li><li><b>En cascada</b> (<i>cascade</i>): todo va primero al pequeño; si su respuesta no pasa la validación o su <b>confianza</b> es baja, el pedido sube al siguiente. La confianza sale de un campo del esquema o de las probabilidades que da el modelo, y el umbral se <b>calibra</b> con el conjunto dorado: se elige el que da la exactitud pedida con el menor costo.</li></ul></div><div class="analogia"><b>Imagínalo así</b><p>En una clínica, la enfermera de triaje atiende lo simple y deriva al médico general lo que no puede resolver; el general deriva al especialista solo lo que lo necesita. Nadie manda una gripe al cardiólogo, y nadie deja un infarto en el triaje.</p></div><div class="prose"><p>El equipo eligió la cascada: el 3B ajustado atiende todo y, si su confianza baja de 0,7, el ticket pasa al mediano por API. Se miden juntos la exactitud global, el costo por mil pedidos y el porcentaje que sube; si sube demasiado, el pequeño no alcanza y hay que volver a los datos. Cómo se elige y enruta el modelo desde el lado del arnés de un agente está en <a href="https://aaramirez.github.io/arneses/04-puerta-a-los-modelos.html" target="_blank" rel="noopener">La puerta a los modelos</a>.</p></div><figure class="fig fig-arquitectura" id="14-diagrama-3"><div class="lienzo"><svg viewBox="0 0 960 430" style="min-width:780px" role="img" aria-label="Enrutador con cascada y respaldo: el ticket entra a la puerta a los modelos, va al modelo propio ajustado, una compuerta revisa esquema y confianza; si no pasa, sube al modelo mediano por API; si el servidor propio cae, todo va al mediano; si el proveedor también cae, a reglas por palabras clave y a la cola manual">
 <defs>

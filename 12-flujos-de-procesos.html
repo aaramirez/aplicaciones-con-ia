@@ -30,23 +30,23 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <main>
 <header class="page-head"><span class="num">CAPÍTULO 12 DE 20</span><h1>Flujos de procesos con IA</h1><p class="lede">Las herramientas, MCP y las aprobaciones resuelven acciones sueltas; un reclamo o un incidente es una cadena de pasos con responsables y plazos que dura horas o días. Este capítulo modela esos procesos como flujos orquestados, mete al modelo dentro de algunos pasos como cadena o enrutador y muestra cómo la IA ayuda a evaluarlos y mejorarlos sin cambiarlos por su cuenta.</p></header>
 <section><div class="prose"><p>Con la versión 0.9, el asistente propone el reembolso de Carmen Rojas, la política decide y la supervisora aprueba desde el chat interno. Aun así, el ticket T-55190 tardó tres días en cerrarse: esperó un día a que alguien lo clasificara, medio día a que alguien verificara el cobro y otro día porque nadie avisó a Carmen cuando el dinero salió.</p><p>«El asistente hace bien cada paso», dijo la jefa de reclamos, «pero nadie es dueño del proceso». Lucía propuso cerrar el nivel 3 con una pieza más: el <b>flujo orquestado</b>, que conoce todos los pasos del reclamo, sabe en cuál está cada caso, quién lo tiene y cuánto le queda de plazo. Dentro de ese flujo, el modelo hace algunos pasos; no decide el camino.</p></div></section>
-<section><h2>Modelar el flujo: pasos, estados, responsables y plazos</h2><div class="analogia"><b>Imagínalo así</b><p>En la cocina de un restaurante cada pedido viaja en una comanda. La comanda pasa por la parrilla, por la estación de ensaladas y por el pase, donde el jefe revisa el plato antes de que salga. Nadie se pregunta en qué va la mesa 12: la comanda está colgada en la estación donde se encuentra y tiene la hora en que entró. Si un plato se demora, el jefe lo ve en el riel.</p></div><div class="prose"><p>Un <b>flujo de trabajo</b> (<i>workflow</i>) es la descripción de un proceso como pasos con un orden, un responsable y un plazo. La forma más útil de modelarlo es como una <b>máquina de estados</b> (<i>state machine</i>): el caso siempre está en un solo estado («en verificación», «esperando aprobación») y solo pasa a otro cuando ocurre un <b>evento</b> (<i>event</i>) permitido («cobro verificado», «aprobado», «venció el plazo»). Cada estado tiene un responsable, que puede ser una persona, el código o el modelo, y un plazo, que suele salir de un <b>acuerdo de nivel de servicio</b> (<i>service level agreement</i>, SLA), el compromiso de tiempo con el cliente.</p><p>Así quedó el reclamo de cobro:</p><div class="tbl"><table><thead><tr><th>Estado</th><th>Responsable</th><th>Plazo</th><th>Sale con</th></tr></thead><tbody><tr><td>Recibido</td><td>código</td><td>inmediato</td><td>ticket registrado</td></tr><tr><td>Clasificado</td><td>modelo, validado por el código</td><td>1 minuto</td><td>categoría y datos extraídos</td></tr><tr><td>En verificación</td><td>código (consulta facturación por MCP)</td><td>5 minutos</td><td>cobro duplicado sí o no</td></tr><tr><td>Esperando aprobación</td><td>supervisora</td><td>30 minutos, luego escala</td><td>aprobado, rechazado o vencido</td></tr><tr><td>Reembolso registrado</td><td>código, con clave de idempotencia</td><td>10 minutos</td><td>identificador del reembolso</td></tr><tr><td>Cliente avisado</td><td>flujo de avisos</td><td>1 hora</td><td>mensaje entregado</td></tr><tr><td>Cerrado</td><td>código, si se verifica el criterio</td><td>—</td><td>ticket resuelto</td></tr></tbody></table></div><p>Dos estados más, «escalado» y «rechazado», salen de cualquier punto cuando algo no cuadra. El modelo aparece en una sola fila: produce datos y el código decide con ellos a qué estado pasa el caso. La definición del flujo es un dato versionado, no código suelto:</p><div class="code-copia"><pre><code>FLUJO_RECLAMO_COBRO = {
-    "version": 3,
-    "estados": {
-        "recibido": {"resp": "codigo", "plazo_min": 0,
-                     "sigue": {"registrado": "clasificado"}},
-        "clasificado": {"resp": "modelo", "plazo_min": 1,
-                        "sigue": {"cobro": "en_verificacion", "otro": "escalado"}},
-        "en_verificacion": {"resp": "codigo", "plazo_min": 5,
-                            "sigue": {"duplicado": "esperando_aprobacion",
-                                      "no_duplicado": "rechazado"}},
-        "esperando_aprobacion": {"resp": "supervisora", "plazo_min": 30,
-                                 "sigue": {"aprobado": "reembolso_registrado",
-                                           "rechazado": "rechazado",
-                                           "vencido": "escalado"}},
-        # ... reembolso_registrado, cliente_avisado, cerrado
-    },
-}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div></div><figure class="fig fig-esquema" id="12-diagrama-1"><div class="lienzo"><svg viewBox="0 0 940 470" style="min-width:760px" role="img" aria-label="Máquina de estados del reclamo de cobro: recibido, clasificado por el modelo, en verificación por el código, esperando aprobación de la supervisora, reembolso registrado, cliente avisado y cerrado, con plazos en cada estado y una franja de salidas a escalado o rechazado">
+<section><h2>Modelar el flujo: pasos, estados, responsables y plazos</h2><div class="analogia"><b>Imagínalo así</b><p>En la cocina de un restaurante cada pedido viaja en una comanda. La comanda pasa por la parrilla, por la estación de ensaladas y por el pase, donde el jefe revisa el plato antes de que salga. Nadie se pregunta en qué va la mesa 12: la comanda está colgada en la estación donde se encuentra y tiene la hora en que entró. Si un plato se demora, el jefe lo ve en el riel.</p></div><div class="prose"><p>Un <b>flujo de trabajo</b> (<i>workflow</i>) es la descripción de un proceso como pasos con un orden, un responsable y un plazo. La forma más útil de modelarlo es como una <b>máquina de estados</b> (<i>state machine</i>): el caso siempre está en un solo estado («en verificación», «esperando aprobación») y solo pasa a otro cuando ocurre un <b>evento</b> (<i>event</i>) permitido («cobro verificado», «aprobado», «venció el plazo»). Cada estado tiene un responsable, que puede ser una persona, el código o el modelo, y un plazo, que suele salir de un <b>acuerdo de nivel de servicio</b> (<i>service level agreement</i>, SLA), el compromiso de tiempo con el cliente.</p><p>Así quedó el reclamo de cobro:</p><div class="tbl"><table><thead><tr><th>Estado</th><th>Responsable</th><th>Plazo</th><th>Sale con</th></tr></thead><tbody><tr><td>Recibido</td><td>código</td><td>inmediato</td><td>ticket registrado</td></tr><tr><td>Clasificado</td><td>modelo, validado por el código</td><td>1 minuto</td><td>categoría y datos extraídos</td></tr><tr><td>En verificación</td><td>código (consulta facturación por MCP)</td><td>5 minutos</td><td>cobro duplicado sí o no</td></tr><tr><td>Esperando aprobación</td><td>supervisora</td><td>30 minutos, luego escala</td><td>aprobado, rechazado o vencido</td></tr><tr><td>Reembolso registrado</td><td>código, con clave de idempotencia</td><td>10 minutos</td><td>identificador del reembolso</td></tr><tr><td>Cliente avisado</td><td>flujo de avisos</td><td>1 hora</td><td>mensaje entregado</td></tr><tr><td>Cerrado</td><td>código, si se verifica el criterio</td><td>—</td><td>ticket resuelto</td></tr></tbody></table></div><p>Dos estados más, «escalado» y «rechazado», salen de cualquier punto cuando algo no cuadra. El modelo aparece en una sola fila: produce datos y el código decide con ellos a qué estado pasa el caso. La definición del flujo es un dato versionado, no código suelto:</p><div class="code-copia code-lineas"><pre><code><span class="ln">FLUJO_RECLAMO_COBRO = {</span>
+<span class="ln">    "version": 3,</span>
+<span class="ln">    "estados": {</span>
+<span class="ln">        "recibido": {"resp": "codigo", "plazo_min": 0,</span>
+<span class="ln">                     "sigue": {"registrado": "clasificado"}},</span>
+<span class="ln">        "clasificado": {"resp": "modelo", "plazo_min": 1,</span>
+<span class="ln">                        "sigue": {"cobro": "en_verificacion", "otro": "escalado"}},</span>
+<span class="ln">        "en_verificacion": {"resp": "codigo", "plazo_min": 5,</span>
+<span class="ln">                            "sigue": {"duplicado": "esperando_aprobacion",</span>
+<span class="ln">                                      "no_duplicado": "rechazado"}},</span>
+<span class="ln">        "esperando_aprobacion": {"resp": "supervisora", "plazo_min": 30,</span>
+<span class="ln">                                 "sigue": {"aprobado": "reembolso_registrado",</span>
+<span class="ln">                                           "rechazado": "rechazado",</span>
+<span class="ln">                                           "vencido": "escalado"}},</span>
+<span class="ln">        # ... reembolso_registrado, cliente_avisado, cerrado</span>
+<span class="ln">    },</span>
+<span class="ln">}</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div></div><figure class="fig fig-esquema" id="12-diagrama-1"><div class="lienzo"><svg viewBox="0 0 940 470" style="min-width:760px" role="img" aria-label="Máquina de estados del reclamo de cobro: recibido, clasificado por el modelo, en verificación por el código, esperando aprobación de la supervisora, reembolso registrado, cliente avisado y cerrado, con plazos en cada estado y una franja de salidas a escalado o rechazado">
 <defs>
 <marker id="c12d1-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>
 <marker id="c12d1-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
@@ -115,44 +115,44 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <text x="430" y="423" class="t t-s">persona</text>
 <text x="20" y="452" class="t t-s t-m">El modelo es responsable de un solo estado; los eventos que mueven el caso los decide el código.</text>
 </svg></div><figcaption><b>El reclamo de cobro como máquina de estados.</b> Cada recuadro es un estado; su borde dice quién es el responsable (código en verde azulado, modelo con borde rojo anaranjado y línea punteada, persona con borde rojo anaranjado continuo) y la etiqueta de abajo, su plazo. Las flechas son los eventos que mueven el caso de un estado a otro. En medio, la franja de salidas: «escalado» y «rechazado», a los que se llega desde varios estados. El modelo solo es responsable de un estado: clasificar.</figcaption></figure></section>
-<section><h2>Motores de orquestación: máquinas de estado, flujos durables y n8n</h2><div class="prose"><p>Un flujo que dura tres días no puede vivir en la memoria de un programa: el servidor se reinicia, la red falla a mitad de un paso. Alguien tiene que guardar en qué va cada caso y retomarlo donde quedó: el <b>orquestador</b> (<i>orchestrator</i>).</p></div><div class="analogia"><b>Imagínalo así</b><p>Un mensajero lleva un paquete por cinco oficinas y anota en un cuaderno cada firma que recibe. Si se enferma a mitad de camino, otro mensajero toma el cuaderno, ve que ya pasó por tres oficinas y sigue por la cuarta. No vuelve a la primera ni entrega dos veces el mismo sobre.</p></div><div class="prose"><p>Hay tres familias, y cada una sirve para algo distinto:</p><ul><li><b>La máquina de estados en tu base de datos.</b> Una tabla con el caso, su estado, su versión de flujo y la hora del último cambio, más un proceso que revisa los plazos. Es simple y alcanza para flujos cortos con pocos pasos.</li><li><b>Los motores de ejecución durable</b> (<i>durable execution</i>). Guardan el historial de cada paso, reanudan después de una caída, reintentan con reglas, esperan horas o días por una aprobación sin ocupar un proceso y manejan temporizadores. Temporal, AWS Step Functions, Azure Durable Functions y Restate son ejemplos del mercado. Son para los procesos con dinero, con plazos legales o con muchas esperas.</li><li><b>Las plataformas de automatización visual</b>, como n8n, Make, Zapier o Power Automate. Se arman con nodos, tienen cientos de conectores y nodos con modelos. Brillan en la integración: avisar por cinco canales, copiar datos entre sistemas. En el capítulo 10 viste cómo n8n publica un flujo como una sola herramienta MCP.</li></ul><p>La regla del equipo fue práctica: el reclamo, donde sale dinero y hay plazos, corre en un motor durable; los avisos son un flujo de n8n que el motor llama como un paso más. Cómo un arnés de agente guarda pasos durables y espera aprobaciones de días está en <a href="https://aaramirez.github.io/arneses/06-estado-y-eventos.html" target="_blank" rel="noopener">Sesiones, eventos y ejecución durable</a>.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un flujo durable de juguete que se cae y se reanuda</h3></div><p>Vas a correr el reclamo T-55190 como un flujo de seis pasos que guarda su estado en un archivo después de cada paso, a tumbarlo a propósito y a ver cómo se reanuda sin repetir el reembolso. No necesitas Ollama. Guarda este programa como <code>flujo_durable.py</code>:</p><div class="code-copia"><pre><code>import json, sys, time
-from pathlib import Path
-
-ESTADO = Path("reclamo_T-55190.json")   # el «cuaderno» del orquestador
-EFECTOS = Path("efectos.log")           # lo que sale del sistema: aquí se ve si algo se repite
-PASOS = ["clasificar", "verificar_cobro", "pedir_aprobacion",
-         "registrar_reembolso", "avisar_clienta", "cerrar_ticket"]
-
-def ejecutar(paso, clave):
-    """Cada paso es idempotente: si su clave ya está en los efectos, no se repite."""
-    hechos = EFECTOS.read_text(encoding="utf-8").splitlines() if EFECTOS.exists() else []
-    if clave in hechos:
-        return "ya estaba hecho, no se repite"
-    time.sleep(0.4)
-    with EFECTOS.open("a", encoding="utf-8") as f:
-        f.write(clave + "\n")
-    return "hecho"
-
-if ESTADO.exists():
-    estado = json.loads(ESTADO.read_text(encoding="utf-8"))
-    print(f"Reanudando el flujo en el paso {estado['siguiente'] + 1} de {len(PASOS)}")
-else:
-    estado = {"ticket": "T-55190", "version_flujo": 3, "siguiente": 0, "historial": []}
-    print("Flujo nuevo para el ticket T-55190")
-
-caer_en = int(sys.argv[1]) if len(sys.argv) &gt; 1 else None
-for i in range(estado["siguiente"], len(PASOS)):
-    paso = PASOS[i]
-    resultado = ejecutar(paso, f"{estado['ticket']}-{paso}")
-    if caer_en == i + 1:
-        print(f"  {i + 1}. {paso}: {resultado}")
-        print("*** El proceso se cae justo después del efecto y antes de guardar el estado ***")
-        raise SystemExit(1)
-    estado["historial"].append({"paso": paso, "resultado": resultado, "hora": time.strftime("%H:%M:%S")})
-    estado["siguiente"] = i + 1
-    ESTADO.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"  {i + 1}. {paso}: {resultado}")
-print("Flujo terminado. Efectos registrados:", len(EFECTOS.read_text(encoding="utf-8").splitlines()))</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>python flujo_durable.py 4</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python flujo_durable.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Get-Content efectos.log</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Get-Content reclamo_T-55190.json</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Remove-Item reclamo_T-55190.json, efectos.log</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 flujo_durable.py 4</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 flujo_durable.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>cat efectos.log</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>cat reclamo_T-55190.json</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>rm reclamo_T-55190.json efectos.log</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Corre la primera línea: el flujo se cae en el paso 4, después de registrar el reembolso y antes de anotarlo en su estado.</span></li><li><span>Corre la segunda línea, sin número: el flujo se reanuda. Mira qué dice del paso 4.</span></li><li><span>Mira los dos archivos. Cuenta cuántas veces aparece <code>T-55190-registrar_reembolso</code> en los efectos.</span></li><li><span>Con la última línea borras los dos archivos para empezar de cero. Prueba a tumbarlo en otro paso.</span></li></ol><p><b>Qué observar:</b> al reanudar, el flujo no vuelve al principio: lee el estado y sigue en el paso 4. Como se cayó después del efecto y antes de guardar, el paso 4 se intenta otra vez, pero su clave ya está en los efectos y el reembolso no se repite. Estado guardado después de cada paso más pasos idempotentes: eso hace confiable a un orquestador. Un motor durable real lo hace por ti, con el historial en una base de datos.</p></div></section>
+<section><h2>Motores de orquestación: máquinas de estado, flujos durables y n8n</h2><div class="prose"><p>Un flujo que dura tres días no puede vivir en la memoria de un programa: el servidor se reinicia, la red falla a mitad de un paso. Alguien tiene que guardar en qué va cada caso y retomarlo donde quedó: el <b>orquestador</b> (<i>orchestrator</i>).</p></div><div class="analogia"><b>Imagínalo así</b><p>Un mensajero lleva un paquete por cinco oficinas y anota en un cuaderno cada firma que recibe. Si se enferma a mitad de camino, otro mensajero toma el cuaderno, ve que ya pasó por tres oficinas y sigue por la cuarta. No vuelve a la primera ni entrega dos veces el mismo sobre.</p></div><div class="prose"><p>Hay tres familias, y cada una sirve para algo distinto:</p><ul><li><b>La máquina de estados en tu base de datos.</b> Una tabla con el caso, su estado, su versión de flujo y la hora del último cambio, más un proceso que revisa los plazos. Es simple y alcanza para flujos cortos con pocos pasos.</li><li><b>Los motores de ejecución durable</b> (<i>durable execution</i>). Guardan el historial de cada paso, reanudan después de una caída, reintentan con reglas, esperan horas o días por una aprobación sin ocupar un proceso y manejan temporizadores. Temporal, AWS Step Functions, Azure Durable Functions y Restate son ejemplos del mercado. Son para los procesos con dinero, con plazos legales o con muchas esperas.</li><li><b>Las plataformas de automatización visual</b>, como n8n, Make, Zapier o Power Automate. Se arman con nodos, tienen cientos de conectores y nodos con modelos. Brillan en la integración: avisar por cinco canales, copiar datos entre sistemas. En el capítulo 10 viste cómo n8n publica un flujo como una sola herramienta MCP.</li></ul><p>La regla del equipo fue práctica: el reclamo, donde sale dinero y hay plazos, corre en un motor durable; los avisos son un flujo de n8n que el motor llama como un paso más. Cómo un arnés de agente guarda pasos durables y espera aprobaciones de días está en <a href="https://aaramirez.github.io/arneses/06-estado-y-eventos.html" target="_blank" rel="noopener">Sesiones, eventos y ejecución durable</a>.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Un flujo durable de juguete que se cae y se reanuda</h3></div><p>Vas a correr el reclamo T-55190 como un flujo de seis pasos que guarda su estado en un archivo después de cada paso, a tumbarlo a propósito y a ver cómo se reanuda sin repetir el reembolso. No necesitas Ollama. Guarda este programa como <code>flujo_durable.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import json, sys, time</span>
+<span class="ln">from pathlib import Path</span>
+<span class="ln"></span>
+<span class="ln">ESTADO = Path("reclamo_T-55190.json")   # el «cuaderno» del orquestador</span>
+<span class="ln">EFECTOS = Path("efectos.log")           # lo que sale del sistema: aquí se ve si algo se repite</span>
+<span class="ln">PASOS = ["clasificar", "verificar_cobro", "pedir_aprobacion",</span>
+<span class="ln">         "registrar_reembolso", "avisar_clienta", "cerrar_ticket"]</span>
+<span class="ln"></span>
+<span class="ln">def ejecutar(paso, clave):</span>
+<span class="ln">    """Cada paso es idempotente: si su clave ya está en los efectos, no se repite."""</span>
+<span class="ln">    hechos = EFECTOS.read_text(encoding="utf-8").splitlines() if EFECTOS.exists() else []</span>
+<span class="ln">    if clave in hechos:</span>
+<span class="ln">        return "ya estaba hecho, no se repite"</span>
+<span class="ln">    time.sleep(0.4)</span>
+<span class="ln">    with EFECTOS.open("a", encoding="utf-8") as f:</span>
+<span class="ln">        f.write(clave + "\n")</span>
+<span class="ln">    return "hecho"</span>
+<span class="ln"></span>
+<span class="ln">if ESTADO.exists():</span>
+<span class="ln">    estado = json.loads(ESTADO.read_text(encoding="utf-8"))</span>
+<span class="ln">    print(f"Reanudando el flujo en el paso {estado['siguiente'] + 1} de {len(PASOS)}")</span>
+<span class="ln">else:</span>
+<span class="ln">    estado = {"ticket": "T-55190", "version_flujo": 3, "siguiente": 0, "historial": []}</span>
+<span class="ln">    print("Flujo nuevo para el ticket T-55190")</span>
+<span class="ln"></span>
+<span class="ln">caer_en = int(sys.argv[1]) if len(sys.argv) &gt; 1 else None</span>
+<span class="ln">for i in range(estado["siguiente"], len(PASOS)):</span>
+<span class="ln">    paso = PASOS[i]</span>
+<span class="ln">    resultado = ejecutar(paso, f"{estado['ticket']}-{paso}")</span>
+<span class="ln">    if caer_en == i + 1:</span>
+<span class="ln">        print(f"  {i + 1}. {paso}: {resultado}")</span>
+<span class="ln">        print("*** El proceso se cae justo después del efecto y antes de guardar el estado ***")</span>
+<span class="ln">        raise SystemExit(1)</span>
+<span class="ln">    estado["historial"].append({"paso": paso, "resultado": resultado, "hora": time.strftime("%H:%M:%S")})</span>
+<span class="ln">    estado["siguiente"] = i + 1</span>
+<span class="ln">    ESTADO.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")</span>
+<span class="ln">    print(f"  {i + 1}. {paso}: {resultado}")</span>
+<span class="ln">print("Flujo terminado. Efectos registrados:", len(EFECTOS.read_text(encoding="utf-8").splitlines()))</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>python flujo_durable.py 4</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python flujo_durable.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Get-Content efectos.log</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Get-Content reclamo_T-55190.json</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Remove-Item reclamo_T-55190.json, efectos.log</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 flujo_durable.py 4</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>python3 flujo_durable.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>cat efectos.log</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>cat reclamo_T-55190.json</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>rm reclamo_T-55190.json efectos.log</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Corre la primera línea: el flujo se cae en el paso 4, después de registrar el reembolso y antes de anotarlo en su estado.</span></li><li><span>Corre la segunda línea, sin número: el flujo se reanuda. Mira qué dice del paso 4.</span></li><li><span>Mira los dos archivos. Cuenta cuántas veces aparece <code>T-55190-registrar_reembolso</code> en los efectos.</span></li><li><span>Con la última línea borras los dos archivos para empezar de cero. Prueba a tumbarlo en otro paso.</span></li></ol><p><b>Qué observar:</b> al reanudar, el flujo no vuelve al principio: lee el estado y sigue en el paso 4. Como se cayó después del efecto y antes de guardar, el paso 4 se intenta otra vez, pero su clave ya está en los efectos y el reembolso no se repite. Estado guardado después de cada paso más pasos idempotentes: eso hace confiable a un orquestador. Un motor durable real lo hace por ti, con el historial en una base de datos.</p></div></section>
 <section><h2>Patrones canónicos: escalamiento, aprobación en cadena y trabajo en paralelo</h2><div class="prose"><p>Casi todos los procesos se arman con tres patrones, y los motores de orquestación los traen resueltos.</p></div><div class="analogia"><b>Imagínalo así</b><p>En una carrera de relevos, cada corredor espera el testigo del anterior. En la parada de una carrera de autos, cuatro mecánicos cambian las cuatro ruedas al mismo tiempo y el auto sale cuando el último levanta la mano. El primero es una cadena; el segundo, trabajo en paralelo con una espera al final.</p></div><div class="prose"><ul><li><b>Escalamiento por plazo</b> (<i>escalation</i>). Un temporizador corre desde que el caso entra a un estado; si vence, el caso pasa al siguiente responsable. Es la regla de los 30 minutos del capítulo 11, pero ahora vive en el flujo y vale para cualquier estado.</li><li><b>Aprobación en cadena</b> (<i>approval chain</i>). Varias personas aprueban en orden y cualquiera puede rechazar. Un reembolso de más de US$ 100,00 ya no se niega sin más: primero aprueba la supervisora y después Finanzas, cada una con su plazo.</li><li><b>Trabajo en paralelo</b> (<i>fan-out / fan-in</i>). Registrado el reembolso, el flujo lanza a la vez el aviso a Carmen, la actualización del ticket y la nota en el CRM, y espera a que terminen todas antes de cerrar. Si una falla, se reintenta sola, con su clave; si no se puede, se compensa, como en la saga del capítulo 11.</li></ul></div></section>
 <section><h2>Cadenas y enrutadores: pasos con modelo dentro del flujo</h2><div class="prose"><p>Hay pasos que sí conviene darle al modelo: entender el texto libre del cliente, resumir un caso para quien aprueba, redactar un aviso. Dentro de un flujo se usa de dos formas.</p><p>Una <b>cadena de prompts</b> (<i>prompt chaining</i>) parte una tarea en varias llamadas pequeñas, cada una con su plantilla y su esquema de salida, y entre una y otra pone una <b>compuerta</b> (<i>gate</i>): código que valida el resultado antes de pasarlo al siguiente paso. Tres llamadas cortas y verificables son más confiables que una larga que intenta todo.</p><p>Un <b>enrutador</b> (<i>router</i>) es un paso de clasificación cuya salida, una enumeración cerrada, elige la rama del flujo. El modelo dice «esto es un cobro duplicado» y el flujo, no el modelo, toma la rama de cobros. Si la salida no pasa la validación o la confianza es baja, la rama por defecto es una persona.</p><p>Cada paso con modelo tiene su esquema de entrada y de salida, un tiempo límite, reintentos y un camino de respaldo: el flujo nunca queda colgado porque el modelo respondió algo raro. En el capítulo 14 verás otro enrutador, que elige entre modelos; este elige entre caminos del proceso.</p></div><figure class="fig fig-esquema" id="12-diagrama-2"><div class="lienzo"><svg viewBox="0 0 980 450" style="min-width:780px" role="img" aria-label="Cadena con enrutador: el ticket pasa por un paso con modelo que clasifica, una compuerta en código que valida, y un enrutador que manda a las ramas de cobros, visitas, averías o la cola humana; en cobros, un segundo paso con modelo resume para la supervisora y otra compuerta lo revisa antes de esperar la aprobación">
 <defs>
@@ -229,73 +229,73 @@ print("Flujo terminado. Efectos registrados:", len(EFECTOS.read_text(encoding="u
 <text x="300" y="427" class="t t-s">rama del flujo (nivel 3)</text>
 <rect x="470" y="414" width="22" height="16" rx="4" class="caja" style="stroke:var(--warm);stroke-width:2"/>
 <text x="500" y="427" class="t t-s">persona</text>
-</svg></div><figcaption><b>Una cadena con un enrutador dentro del flujo.</b> De izquierda a derecha: el ticket entra; el paso 1, con modelo (borde rojo anaranjado), lo clasifica con un esquema; la compuerta, en código (verde azulado), valida la categoría y la confianza; el enrutador manda cada caso a su rama: cobros, visitas, averías o la cola humana. En la rama de cobros, el paso 2 con modelo resume el caso para la supervisora y una segunda compuerta revisa que el resumen cite el ticket y el monto del sistema. Las flechas grises punteadas son la salida a una persona cuando algo no pasa.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Una cadena con enrutador sobre tu modelo local</h3></div><p>Vas a pasar tres tickets por una cadena: el modelo los clasifica con un esquema, una compuerta en código los valida, el enrutador elige la rama y, solo en la rama de cobros, una segunda llamada resume el caso. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>cadena.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
-
-URL = "http://localhost:11434/v1/chat/completions"
-MODELO = "llama3.2:3b"
-RAMAS = ["cobro_duplicado", "reconexion", "visita_tecnica", "averia", "otro"]
-ESQUEMA = {"type": "object", "properties": {
-    "categoria": {"type": "string", "enum": RAMAS},
-    "confianza": {"type": "number"}},
-    "required": ["categoria", "confianza"]}
-TICKETS = {
-    "T-55190": "Me cobraron dos veces los US$ 30,00 de octubre en la cuenta 20417.",
-    "T-55204": "El técnico no vino ayer a la visita y nadie me avisó. Cuenta 40981.",
-    "T-55231": "Desde las 7 de la mañana no tengo servicio y mis vecinos tampoco.",
-}
-MONTOS_DEL_SISTEMA = {"T-55190": 30.00}   # facturación: el monto nunca sale del modelo
-
-def llamar(mensajes, esquema=None):
-    cuerpo = {"model": MODELO, "temperature": 0, "messages": mensajes}
-    if esquema:
-        cuerpo["response_format"] = {"type": "json_schema",
-                                     "json_schema": {"name": "paso", "schema": esquema}}
-    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
-                                    headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(pedido, timeout=60) as r:
-        return json.load(r)["choices"][0]["message"]["content"]
-
-def paso_clasificar(texto):
-    return llamar([{"role": "system", "content": "Clasifica el ticket. Responde solo el JSON. "
-                    "La confianza va de 0 a 1."},
-                   {"role": "user", "content": texto}], ESQUEMA)
-
-def compuerta(salida):
-    """Código, no modelo: valida antes de dejar pasar."""
-    try:
-        d = json.loads(salida)
-    except json.JSONDecodeError:
-        return None, "la salida no es JSON"
-    if d.get("categoria") not in RAMAS:
-        return None, "categoría fuera de la lista"
-    if float(d.get("confianza", 0)) &lt; 0.6:
-        return None, f"confianza baja ({d.get('confianza')})"
-    return d["categoria"], "ok"
-
-def rama_cobros(ticket, texto):
-    monto = MONTOS_DEL_SISTEMA.get(ticket)
-    if monto is None:
-        return "cola humana: no hay cobro registrado para verificar"
-    resumen = llamar([{"role": "system", "content": "Resume el caso para la supervisora en dos frases. "
-                       f"Usa el ticket {ticket} y el monto US$ {monto:.2f} del sistema."},
-                      {"role": "user", "content": texto}])
-    if ticket not in resumen:
-        return "cola humana: el resumen no cita el ticket"
-    return "flujo de reembolso -&gt; esperando_aprobacion\n      " + resumen.strip()
-
-ENRUTADOR = {"cobro_duplicado": rama_cobros,
-             "visita_tecnica": lambda t, x: "flujo de visitas (sin modelo)",
-             "averia": lambda t, x: "flujo de incidentes: se agrupa con otros tickets de la zona"}
-
-for ticket, texto in TICKETS.items():
-    salida = paso_clasificar(texto)
-    categoria, motivo = compuerta(salida)
-    print(f"{ticket}: modelo -&gt; {salida}")
-    if categoria is None:
-        print(f"   compuerta: {motivo} -&gt; cola humana\n")
-        continue
-    rama = ENRUTADOR.get(categoria, lambda t, x: "cola humana: rama sin flujo automático")
-    print(f"   compuerta: ok -&gt; {rama(ticket, texto)}\n")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python cadena.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 cadena.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota la categoría, la confianza y la rama de cada ticket.</span></li><li><span>Sube el umbral de la compuerta de <code>0.6</code> a <code>0.9</code> y vuelve a correrlo.</span></li><li><span>Escribe un cuarto ticket ambiguo («quiero hablar con alguien») y mira a qué rama va.</span></li></ol><p><b>Qué observar:</b> el modelo solo produce una categoría y una confianza; la rama la elige el diccionario <code>ENRUTADOR</code>, y lo que no pasa la compuerta termina en una persona. El segundo paso con modelo corre solo en la rama de cobros, con el monto del sistema, y su salida también se revisa. Con el umbral en 0,9 más casos van a la cola humana: la compuerta es una perilla de riesgo. Un modelo pequeño suele dar confianzas altas aunque se equivoque, así que en producción el umbral se calibra con casos etiquetados. Los resultados cambian según el modelo.</p></div></section>
+</svg></div><figcaption><b>Una cadena con un enrutador dentro del flujo.</b> De izquierda a derecha: el ticket entra; el paso 1, con modelo (borde rojo anaranjado), lo clasifica con un esquema; la compuerta, en código (verde azulado), valida la categoría y la confianza; el enrutador manda cada caso a su rama: cobros, visitas, averías o la cola humana. En la rama de cobros, el paso 2 con modelo resume el caso para la supervisora y una segunda compuerta revisa que el resumen cite el ticket y el monto del sistema. Las flechas grises punteadas son la salida a una persona cuando algo no pasa.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Una cadena con enrutador sobre tu modelo local</h3></div><p>Vas a pasar tres tickets por una cadena: el modelo los clasifica con un esquema, una compuerta en código los valida, el enrutador elige la rama y, solo en la rama de cobros, una segunda llamada resume el caso. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>cadena.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import json, urllib.request</span>
+<span class="ln"></span>
+<span class="ln">URL = "http://localhost:11434/v1/chat/completions"</span>
+<span class="ln">MODELO = "llama3.2:3b"</span>
+<span class="ln">RAMAS = ["cobro_duplicado", "reconexion", "visita_tecnica", "averia", "otro"]</span>
+<span class="ln">ESQUEMA = {"type": "object", "properties": {</span>
+<span class="ln">    "categoria": {"type": "string", "enum": RAMAS},</span>
+<span class="ln">    "confianza": {"type": "number"}},</span>
+<span class="ln">    "required": ["categoria", "confianza"]}</span>
+<span class="ln">TICKETS = {</span>
+<span class="ln">    "T-55190": "Me cobraron dos veces los US$ 30,00 de octubre en la cuenta 20417.",</span>
+<span class="ln">    "T-55204": "El técnico no vino ayer a la visita y nadie me avisó. Cuenta 40981.",</span>
+<span class="ln">    "T-55231": "Desde las 7 de la mañana no tengo servicio y mis vecinos tampoco.",</span>
+<span class="ln">}</span>
+<span class="ln">MONTOS_DEL_SISTEMA = {"T-55190": 30.00}   # facturación: el monto nunca sale del modelo</span>
+<span class="ln"></span>
+<span class="ln">def llamar(mensajes, esquema=None):</span>
+<span class="ln">    cuerpo = {"model": MODELO, "temperature": 0, "messages": mensajes}</span>
+<span class="ln">    if esquema:</span>
+<span class="ln">        cuerpo["response_format"] = {"type": "json_schema",</span>
+<span class="ln">                                     "json_schema": {"name": "paso", "schema": esquema}}</span>
+<span class="ln">    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),</span>
+<span class="ln">                                    headers={"Content-Type": "application/json"})</span>
+<span class="ln">    with urllib.request.urlopen(pedido, timeout=60) as r:</span>
+<span class="ln">        return json.load(r)["choices"][0]["message"]["content"]</span>
+<span class="ln"></span>
+<span class="ln">def paso_clasificar(texto):</span>
+<span class="ln">    return llamar([{"role": "system", "content": "Clasifica el ticket. Responde solo el JSON. "</span>
+<span class="ln">                    "La confianza va de 0 a 1."},</span>
+<span class="ln">                   {"role": "user", "content": texto}], ESQUEMA)</span>
+<span class="ln"></span>
+<span class="ln">def compuerta(salida):</span>
+<span class="ln">    """Código, no modelo: valida antes de dejar pasar."""</span>
+<span class="ln">    try:</span>
+<span class="ln">        d = json.loads(salida)</span>
+<span class="ln">    except json.JSONDecodeError:</span>
+<span class="ln">        return None, "la salida no es JSON"</span>
+<span class="ln">    if d.get("categoria") not in RAMAS:</span>
+<span class="ln">        return None, "categoría fuera de la lista"</span>
+<span class="ln">    if float(d.get("confianza", 0)) &lt; 0.6:</span>
+<span class="ln">        return None, f"confianza baja ({d.get('confianza')})"</span>
+<span class="ln">    return d["categoria"], "ok"</span>
+<span class="ln"></span>
+<span class="ln">def rama_cobros(ticket, texto):</span>
+<span class="ln">    monto = MONTOS_DEL_SISTEMA.get(ticket)</span>
+<span class="ln">    if monto is None:</span>
+<span class="ln">        return "cola humana: no hay cobro registrado para verificar"</span>
+<span class="ln">    resumen = llamar([{"role": "system", "content": "Resume el caso para la supervisora en dos frases. "</span>
+<span class="ln">                       f"Usa el ticket {ticket} y el monto US$ {monto:.2f} del sistema."},</span>
+<span class="ln">                      {"role": "user", "content": texto}])</span>
+<span class="ln">    if ticket not in resumen:</span>
+<span class="ln">        return "cola humana: el resumen no cita el ticket"</span>
+<span class="ln">    return "flujo de reembolso -&gt; esperando_aprobacion\n      " + resumen.strip()</span>
+<span class="ln"></span>
+<span class="ln">ENRUTADOR = {"cobro_duplicado": rama_cobros,</span>
+<span class="ln">             "visita_tecnica": lambda t, x: "flujo de visitas (sin modelo)",</span>
+<span class="ln">             "averia": lambda t, x: "flujo de incidentes: se agrupa con otros tickets de la zona"}</span>
+<span class="ln"></span>
+<span class="ln">for ticket, texto in TICKETS.items():</span>
+<span class="ln">    salida = paso_clasificar(texto)</span>
+<span class="ln">    categoria, motivo = compuerta(salida)</span>
+<span class="ln">    print(f"{ticket}: modelo -&gt; {salida}")</span>
+<span class="ln">    if categoria is None:</span>
+<span class="ln">        print(f"   compuerta: {motivo} -&gt; cola humana\n")</span>
+<span class="ln">        continue</span>
+<span class="ln">    rama = ENRUTADOR.get(categoria, lambda t, x: "cola humana: rama sin flujo automático")</span>
+<span class="ln">    print(f"   compuerta: ok -&gt; {rama(ticket, texto)}\n")</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python cadena.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 cadena.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota la categoría, la confianza y la rama de cada ticket.</span></li><li><span>Sube el umbral de la compuerta de <code>0.6</code> a <code>0.9</code> y vuelve a correrlo.</span></li><li><span>Escribe un cuarto ticket ambiguo («quiero hablar con alguien») y mira a qué rama va.</span></li></ol><p><b>Qué observar:</b> el modelo solo produce una categoría y una confianza; la rama la elige el diccionario <code>ENRUTADOR</code>, y lo que no pasa la compuerta termina en una persona. El segundo paso con modelo corre solo en la rama de cobros, con el monto del sistema, y su salida también se revisa. Con el umbral en 0,9 más casos van a la cola humana: la compuerta es una perilla de riesgo. Un modelo pequeño suele dar confianzas altas aunque se equivoque, así que en producción el umbral se calibra con casos etiquetados. Los resultados cambian según el modelo.</p></div></section>
 <section><h2>La IA en el flujo: asistir, evaluar y optimizar</h2><div class="prose"><p>La cadena y el enrutador son la IA <b>dentro</b> de un paso. Pero el modelo puede ayudar al proceso de dos formas más, desde afuera.</p></div><div class="analogia"><b>Imagínalo así</b><p>En un equipo de fútbol hay jugadores, un árbitro y un cuerpo técnico que mira el video del partido el lunes. Los jugadores hacen las jugadas, el árbitro revisa que se cumplan las reglas y el cuerpo técnico decide qué cambiar para el próximo partido. Nadie cambia el reglamento a mitad del juego.</p></div><div class="prose"><ul><li><b>Asistir.</b> El modelo hace parte del trabajo de un paso: clasifica, extrae, resume, redacta un borrador. Es lo que viste en la cadena.</li><li><b>Evaluar.</b> El modelo revisa casos cerrados: ¿la respuesta citó la política vigente?, ¿se cumplió el plazo?, ¿el monto coincide con facturación? Las personas revisan el 5 % de los casos; el evaluador con modelo, todos, y marca los dudosos para que una persona los mire. El capítulo 16 trata cómo se confía en un modelo como juez.</li><li><b>Optimizar.</b> Cada transición de estado deja un registro con su hora. Con miles de casos, ese <b>registro de eventos</b> (<i>event log</i>) dice dónde se pierde el tiempo. La <b>minería de procesos</b> (<i>process mining</i>) reconstruye el proceso real desde esos registros; Celonis, Apromore y la biblioteca abierta PM4Py son ejemplos del mercado. El modelo ayuda a leer el resultado y a proponer cambios, pero no los aplica.</li></ul><p>El caso más exigente es un <b>incidente crítico</b> (<i>critical incident</i>): una falla que afecta a muchos clientes a la vez. Un martes a las 7:40, el sistema de monitoreo marca una alarma en la zona Norte y en diez minutos llegan 40 tickets que dicen lo mismo con otras palabras. El flujo de incidentes tiene seis etapas, y en cada una hay que decidir qué hace la IA y qué decide una persona.</p></div><figure class="fig fig-flujo" id="12-diagrama-3"><div class="lienzo"><svg viewBox="0 0 1000 640" style="min-width:800px" role="img" aria-label="Diagrama de secuencia de un incidente crítico: el monitoreo manda la alarma y los tickets al orquestador; el modelo agrupa y propone severidad; la jefa de turno confirma; el modelo redacta el aviso y la jefa lo aprueba; el orquestador lo envía por los canales; al despejarse la alarma el código verifica y cierra; el modelo redacta el informe posterior y el comité aprueba los cambios">
 <defs>
 <marker id="c12d3-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-casa"/></marker>

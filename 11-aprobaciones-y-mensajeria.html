@@ -30,16 +30,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <main>
 <header class="page-head"><span class="num">CAPÍTULO 11 DE 20</span><h1>Aprobaciones y mensajería con humano en el bucle</h1><p class="lede">Un asistente que puede devolver dinero necesita reglas que digan cuándo actúa solo, cuándo pregunta y cuándo se niega, un canal para preguntar a la persona correcta y una forma de repetir una acción sin hacerla dos veces. Este capítulo construye esas tres piezas con el reembolso de un cobro duplicado, de la propuesta del modelo al dinero devuelto una sola vez.</p></header>
 <section><div class="prose"><p>Carmen Rojas abrió el ticket T-55190: en octubre le cobraron dos veces la factura de US$ 30,00. Con la versión 0.8, el asistente de atención ya puede leer el ticket, consultar los pagos por MCP y confirmar que el cobro está duplicado. Lo que no puede es devolver el dinero, y la jefa del equipo de reclamos no quiere que lo haga solo: «si se equivoca con una visita, la movemos otra vez; si se equivoca con un reembolso, el dinero ya salió».</p><p>La regla de negocio existe desde el capítulo 1: los reembolsos de hasta US$ 10,00 pasan solos y los mayores necesitan la aprobación de una supervisora. La versión 0.9 la convierte en software: una política que decide, un servicio de mensajes que pregunta a la persona correcta por el canal correcto y una ejecución que, aunque se repita, devuelve el dinero una sola vez.</p></div></section>
-<section><h2>Políticas de decisión: actuar, preguntar o negarse</h2><div class="analogia"><b>Imagínalo así</b><p>En cualquier empresa hay límites de firma. La caja chica la maneja la recepcionista sin preguntar; una compra mediana la firma el gerente del área; una inversión grande va al comité; y hay cosas que nadie firma, como pagarle a un proveedor que no está registrado. Nadie decide el límite en el momento según su humor: está escrito en una tabla.</p></div><div class="prose"><p>Cada vez que el modelo propone una acción, una <b>política de decisión</b> (<i>decision policy</i>) la clasifica en uno de tres resultados:</p><ul><li><b>Actuar.</b> El código ejecuta y avisa. Para lo que es de lectura, de bajo riesgo o reversible y está dentro de los límites.</li><li><b>Preguntar.</b> La acción queda en espera hasta que una persona con el rol adecuado la aprueba o la rechaza. Es el <b>humano en el bucle</b> (<i>human in the loop</i>, HITL).</li><li><b>Negarse.</b> El asistente no la hace ni la ofrece, y explica por qué o crea una tarea para quien sí puede.</li></ul><p>La política mira la acción y su contexto, no la opinión del modelo: el efecto (lectura, escritura reversible o irreversible), el monto, el rol de quien pide, si los validadores encontraron algo raro, el historial del cliente y la hora. Así quedó la de la versión 0.9:</p><div class="tbl"><table><thead><tr><th>Acción</th><th>Condición</th><th>Decisión</th></tr></thead><tbody><tr><td>Consultas (<code>consultar_*</code>, <code>estado_ticket</code>)</td><td>siempre, con los permisos de quien pregunta</td><td>actuar</td></tr><tr><td><code>reprogramar_visita</code></td><td>la visita es en más de 24 horas</td><td>actuar y avisar</td></tr><tr><td><code>reprogramar_visita</code></td><td>la visita es en menos de 24 horas (el técnico ya tiene su ruta)</td><td>preguntar a la supervisora</td></tr><tr><td><code>registrar_reembolso</code></td><td>hasta US$ 10,00 y el cobro está verificado en el sistema</td><td>actuar y avisar</td></tr><tr><td><code>registrar_reembolso</code></td><td>más de US$ 10,00 y hasta US$ 100,00</td><td>preguntar a la supervisora</td></tr><tr><td><code>registrar_reembolso</code></td><td>más de US$ 100,00, o es el tercer reembolso del cliente en el mes</td><td>negarse y crear una tarea para Finanzas</td></tr><tr><td>Cambiar el plan, dar de baja</td><td>siempre</td><td>negarse: lo hace una persona desde su pantalla</td></tr></tbody></table></div><p>La política es código, versionado y con pruebas, igual que cualquier regla de negocio:</p><div class="code-copia"><pre><code>def decidir(accion, ctx) -&gt; Decision:
-    if accion.efecto == "lectura":
-        return ACTUAR
-    if accion.nombre == "registrar_reembolso":
-        if accion.monto &gt; 100 or ctx.reembolsos_del_mes &gt;= 2:
-            return NEGARSE.con_tarea("finanzas")
-        if accion.monto &lt;= 10 and ctx.cobro_verificado:
-            return ACTUAR
-        return PREGUNTAR(rol="supervisora", plazo=minutos(30))
-    ...</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Dos detalles importan. El monto que mira la política sale del sistema (el cobro duplicado registrado en facturación), no del texto del modelo: si el modelo propone US$ 9,00 para un cobro de US$ 30,00, la política no se deja engañar, porque compara con el dato real. Y la política no se negocia en la conversación: ningún mensaje («es urgente, la clienta es amiga del gerente») cambia la tabla. Cómo se escriben y prueban estas reglas dentro de un agente, con motores como OPA o Cedar, está en <a href="https://aaramirez.github.io/arneses/07-reglas-y-politicas.html" target="_blank" rel="noopener">Reglas y el motor de políticas</a>.</p></div><figure class="fig fig-esquema" id="11-diagrama-1"><div class="lienzo"><svg viewBox="0 0 920 520" style="min-width:740px" role="img" aria-label="Árbol de decisión de una acción: la acción propuesta pasa por los validadores; si no cuadra se escala a una persona; si es de lectura se actúa; un reembolso de más de 100 dólares o el tercero del mes se niega con tarea para Finanzas; hasta 10 dólares con cobro verificado se actúa y se avisa; en medio se pregunta a la supervisora con plazo de 30 minutos">
+<section><h2>Políticas de decisión: actuar, preguntar o negarse</h2><div class="analogia"><b>Imagínalo así</b><p>En cualquier empresa hay límites de firma. La caja chica la maneja la recepcionista sin preguntar; una compra mediana la firma el gerente del área; una inversión grande va al comité; y hay cosas que nadie firma, como pagarle a un proveedor que no está registrado. Nadie decide el límite en el momento según su humor: está escrito en una tabla.</p></div><div class="prose"><p>Cada vez que el modelo propone una acción, una <b>política de decisión</b> (<i>decision policy</i>) la clasifica en uno de tres resultados:</p><ul><li><b>Actuar.</b> El código ejecuta y avisa. Para lo que es de lectura, de bajo riesgo o reversible y está dentro de los límites.</li><li><b>Preguntar.</b> La acción queda en espera hasta que una persona con el rol adecuado la aprueba o la rechaza. Es el <b>humano en el bucle</b> (<i>human in the loop</i>, HITL).</li><li><b>Negarse.</b> El asistente no la hace ni la ofrece, y explica por qué o crea una tarea para quien sí puede.</li></ul><p>La política mira la acción y su contexto, no la opinión del modelo: el efecto (lectura, escritura reversible o irreversible), el monto, el rol de quien pide, si los validadores encontraron algo raro, el historial del cliente y la hora. Así quedó la de la versión 0.9:</p><div class="tbl"><table><thead><tr><th>Acción</th><th>Condición</th><th>Decisión</th></tr></thead><tbody><tr><td>Consultas (<code>consultar_*</code>, <code>estado_ticket</code>)</td><td>siempre, con los permisos de quien pregunta</td><td>actuar</td></tr><tr><td><code>reprogramar_visita</code></td><td>la visita es en más de 24 horas</td><td>actuar y avisar</td></tr><tr><td><code>reprogramar_visita</code></td><td>la visita es en menos de 24 horas (el técnico ya tiene su ruta)</td><td>preguntar a la supervisora</td></tr><tr><td><code>registrar_reembolso</code></td><td>hasta US$ 10,00 y el cobro está verificado en el sistema</td><td>actuar y avisar</td></tr><tr><td><code>registrar_reembolso</code></td><td>más de US$ 10,00 y hasta US$ 100,00</td><td>preguntar a la supervisora</td></tr><tr><td><code>registrar_reembolso</code></td><td>más de US$ 100,00, o es el tercer reembolso del cliente en el mes</td><td>negarse y crear una tarea para Finanzas</td></tr><tr><td>Cambiar el plan, dar de baja</td><td>siempre</td><td>negarse: lo hace una persona desde su pantalla</td></tr></tbody></table></div><p>La política es código, versionado y con pruebas, igual que cualquier regla de negocio:</p><div class="code-copia code-lineas"><pre><code><span class="ln">def decidir(accion, ctx) -&gt; Decision:</span>
+<span class="ln">    if accion.efecto == "lectura":</span>
+<span class="ln">        return ACTUAR</span>
+<span class="ln">    if accion.nombre == "registrar_reembolso":</span>
+<span class="ln">        if accion.monto &gt; 100 or ctx.reembolsos_del_mes &gt;= 2:</span>
+<span class="ln">            return NEGARSE.con_tarea("finanzas")</span>
+<span class="ln">        if accion.monto &lt;= 10 and ctx.cobro_verificado:</span>
+<span class="ln">            return ACTUAR</span>
+<span class="ln">        return PREGUNTAR(rol="supervisora", plazo=minutos(30))</span>
+<span class="ln">    ...</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Dos detalles importan. El monto que mira la política sale del sistema (el cobro duplicado registrado en facturación), no del texto del modelo: si el modelo propone US$ 9,00 para un cobro de US$ 30,00, la política no se deja engañar, porque compara con el dato real. Y la política no se negocia en la conversación: ningún mensaje («es urgente, la clienta es amiga del gerente») cambia la tabla. Cómo se escriben y prueban estas reglas dentro de un agente, con motores como OPA o Cedar, está en <a href="https://aaramirez.github.io/arneses/07-reglas-y-politicas.html" target="_blank" rel="noopener">Reglas y el motor de políticas</a>.</p></div><figure class="fig fig-esquema" id="11-diagrama-1"><div class="lienzo"><svg viewBox="0 0 920 520" style="min-width:740px" role="img" aria-label="Árbol de decisión de una acción: la acción propuesta pasa por los validadores; si no cuadra se escala a una persona; si es de lectura se actúa; un reembolso de más de 100 dólares o el tercero del mes se niega con tarea para Finanzas; hasta 10 dólares con cobro verificado se actúa y se avisa; en medio se pregunta a la supervisora con plazo de 30 minutos">
 <defs>
 <marker id="c11d1-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
 </defs>
@@ -95,78 +95,78 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <text x="640" y="452" class="t t-s t-m">La política mira datos del sistema,</text>
 <text x="640" y="468" class="t t-s t-m">no la opinión del modelo, y no se</text>
 <text x="640" y="484" class="t t-s t-m">negocia en la conversación.</text>
-</svg></div><figcaption><b>El árbol de decisión de una acción.</b> Se lee de arriba hacia abajo. La acción propuesta por el modelo pasa primero por los validadores; si algo no cuadra, se escala. Después, la pregunta por el efecto: lo que es de lectura se ejecuta. Para un reembolso, las ramas siguen por el historial y el monto: más de US$ 100,00 o un tercer reembolso en el mes, negarse con una tarea para Finanzas; hasta US$ 10,00 con el cobro verificado, actuar; en medio, preguntar a la supervisora con un plazo. Los colores separan las tres salidas: actuar, preguntar y negarse.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El modelo propone, la política decide y tú apruebas</h3></div><p>Vas a pedirle a tu modelo local que proponga el reembolso del ticket T-55190 con una herramienta. El código compara la propuesta con el ticket, aplica la política y, como el monto pasa de US$ 10,00, te pide la aprobación en la terminal. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>aprobacion.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
-
-URL = "http://localhost:11434/v1/chat/completions"
-MODELO = "llama3.2:3b"
-MENSAJE = ("Ticket T-55190: la clienta Carmen Rojas reclama que le cobraron dos veces "
-           "la factura de octubre. Propón el reembolso que corresponde.")
-
-TICKETS = {"T-55190": {"cuenta": 20417, "monto_en_disputa": 30.00}}  # sistema de tickets
-REEMBOLSOS = {}  # clave de idempotencia -&gt; reembolso ya hecho
-
-HERRAMIENTA = {"type": "function", "function": {
-    "name": "proponer_reembolso",
-    "description": ("Propone un reembolso para un ticket de cobro indebido. "
-                    "No lo ejecuta: el sistema decide si se hace solo, si pide aprobación o si se niega."),
-    "parameters": {"type": "object", "properties": {
-        "ticket": {"type": "string", "description": "Número de ticket, por ejemplo T-55190"},
-        "monto": {"type": "number", "description": "Monto en US$"},
-        "motivo": {"type": "string"}},
-        "required": ["ticket", "monto", "motivo"]}}}
-
-def politica(monto):
-    """Las reglas viven en el código, no en el prompt."""
-    if monto &lt;= 10.00:
-        return "actuar"
-    if monto &lt;= 100.00:
-        return "preguntar"
-    return "negarse"
-
-def ejecutar_reembolso(ticket, monto):
-    clave = f"{ticket}-reembolso"  # la misma acción siempre lleva la misma clave
-    if clave in REEMBOLSOS:
-        return {**REEMBOLSOS[clave], "repetido": True}
-    REEMBOLSOS[clave] = {"id": f"R-{len(REEMBOLSOS) + 1:04d}", "ticket": ticket, "monto": monto}
-    return REEMBOLSOS[clave]
-
-cuerpo = {"model": MODELO, "temperature": 0, "tools": [HERRAMIENTA],
-          "messages": [{"role": "system", "content": "Eres el asistente de los agentes de reclamos. Usa la herramienta para proponer reembolsos."},
-                       {"role": "user", "content": MENSAJE}]}
-pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
-                                headers={"Content-Type": "application/json"})
-with urllib.request.urlopen(pedido) as r:
-    mensaje = json.load(r)["choices"][0]["message"]
-
-llamadas = mensaje.get("tool_calls") or []
-if not llamadas:
-    raise SystemExit("El modelo no propuso nada: " + str(mensaje.get("content")))
-args = llamadas[0]["function"]["arguments"]
-propuesta = json.loads(args) if isinstance(args, str) else args
-print("Propuesta del modelo:", propuesta)
-
-ticket = TICKETS.get(propuesta.get("ticket"))
-if ticket is None or abs(float(propuesta.get("monto", 0)) - ticket["monto_en_disputa"]) &gt; 0.001:
-    raise SystemExit("La propuesta no coincide con el ticket: se escala a una persona.")
-
-monto = ticket["monto_en_disputa"]  # el monto sale del sistema, no del modelo
-decision = politica(monto)
-print(f"Política: monto US$ {monto:.2f} -&gt; {decision}")
-
-if decision == "negarse":
-    print("Fuera del alcance del asistente: se crea una tarea para Finanzas.")
-elif decision == "preguntar":
-    print("\n--- Aprobación pendiente ---------------------------")
-    print(f"Qué: reembolsar US$ {monto:.2f} a la cuenta {ticket['cuenta']}")
-    print(f"Por qué: {propuesta.get('motivo')} (ticket {propuesta['ticket']})")
-    print("Si apruebas: se registra el reembolso y se avisa al agente")
-    respuesta = input("Supervisora, ¿apruebas? [s/n]: ").strip().lower()
-    if respuesta != "s":
-        print("Rechazado: no se ejecuta nada y el agente recibe el motivo.")
-        raise SystemExit
-if decision in ("actuar", "preguntar"):
-    print("Ejecutado:", ejecutar_reembolso(propuesta["ticket"], monto))
-    print("Reintento (la red falló y se repite):", ejecutar_reembolso(propuesta["ticket"], monto))</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python aprobacion.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 aprobacion.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa. Lee la propuesta del modelo y la tarjeta de aprobación, y responde <code>s</code>.</span></li><li><span>Fíjate en las dos últimas líneas: el reembolso y su reintento.</span></li><li><span>Córrelo otra vez y responde <code>n</code>.</span></li><li><span>Cambia <code>monto_en_disputa</code> a <code>8.00</code> y vuelve a correrlo; después a <code>150.00</code>.</span></li></ol><p><b>Qué observar:</b> el modelo solo propone; el código revisa que el ticket exista y que el monto coincida con el del sistema, y la política decide. Con US$ 30,00 te pregunta, con US$ 8,00 actúa sin preguntar y con US$ 150,00 se niega. Al aprobar, el reintento devuelve el mismo reembolso <code>R-0001</code> marcado como repetido, no uno nuevo: es la idempotencia que se explica más abajo. Un modelo pequeño puede proponer otro monto o un ticket mal escrito; en ese caso el programa escala en lugar de ejecutar, que es exactamente lo que debe pasar.</p></div></section>
+</svg></div><figcaption><b>El árbol de decisión de una acción.</b> Se lee de arriba hacia abajo. La acción propuesta por el modelo pasa primero por los validadores; si algo no cuadra, se escala. Después, la pregunta por el efecto: lo que es de lectura se ejecuta. Para un reembolso, las ramas siguen por el historial y el monto: más de US$ 100,00 o un tercer reembolso en el mes, negarse con una tarea para Finanzas; hasta US$ 10,00 con el cobro verificado, actuar; en medio, preguntar a la supervisora con un plazo. Los colores separan las tres salidas: actuar, preguntar y negarse.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El modelo propone, la política decide y tú apruebas</h3></div><p>Vas a pedirle a tu modelo local que proponga el reembolso del ticket T-55190 con una herramienta. El código compara la propuesta con el ticket, aplica la política y, como el monto pasa de US$ 10,00, te pide la aprobación en la terminal. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>aprobacion.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import json, urllib.request</span>
+<span class="ln"></span>
+<span class="ln">URL = "http://localhost:11434/v1/chat/completions"</span>
+<span class="ln">MODELO = "llama3.2:3b"</span>
+<span class="ln">MENSAJE = ("Ticket T-55190: la clienta Carmen Rojas reclama que le cobraron dos veces "</span>
+<span class="ln">           "la factura de octubre. Propón el reembolso que corresponde.")</span>
+<span class="ln"></span>
+<span class="ln">TICKETS = {"T-55190": {"cuenta": 20417, "monto_en_disputa": 30.00}}  # sistema de tickets</span>
+<span class="ln">REEMBOLSOS = {}  # clave de idempotencia -&gt; reembolso ya hecho</span>
+<span class="ln"></span>
+<span class="ln">HERRAMIENTA = {"type": "function", "function": {</span>
+<span class="ln">    "name": "proponer_reembolso",</span>
+<span class="ln">    "description": ("Propone un reembolso para un ticket de cobro indebido. "</span>
+<span class="ln">                    "No lo ejecuta: el sistema decide si se hace solo, si pide aprobación o si se niega."),</span>
+<span class="ln">    "parameters": {"type": "object", "properties": {</span>
+<span class="ln">        "ticket": {"type": "string", "description": "Número de ticket, por ejemplo T-55190"},</span>
+<span class="ln">        "monto": {"type": "number", "description": "Monto en US$"},</span>
+<span class="ln">        "motivo": {"type": "string"}},</span>
+<span class="ln">        "required": ["ticket", "monto", "motivo"]}}}</span>
+<span class="ln"></span>
+<span class="ln">def politica(monto):</span>
+<span class="ln">    """Las reglas viven en el código, no en el prompt."""</span>
+<span class="ln">    if monto &lt;= 10.00:</span>
+<span class="ln">        return "actuar"</span>
+<span class="ln">    if monto &lt;= 100.00:</span>
+<span class="ln">        return "preguntar"</span>
+<span class="ln">    return "negarse"</span>
+<span class="ln"></span>
+<span class="ln">def ejecutar_reembolso(ticket, monto):</span>
+<span class="ln">    clave = f"{ticket}-reembolso"  # la misma acción siempre lleva la misma clave</span>
+<span class="ln">    if clave in REEMBOLSOS:</span>
+<span class="ln">        return {**REEMBOLSOS[clave], "repetido": True}</span>
+<span class="ln">    REEMBOLSOS[clave] = {"id": f"R-{len(REEMBOLSOS) + 1:04d}", "ticket": ticket, "monto": monto}</span>
+<span class="ln">    return REEMBOLSOS[clave]</span>
+<span class="ln"></span>
+<span class="ln">cuerpo = {"model": MODELO, "temperature": 0, "tools": [HERRAMIENTA],</span>
+<span class="ln">          "messages": [{"role": "system", "content": "Eres el asistente de los agentes de reclamos. Usa la herramienta para proponer reembolsos."},</span>
+<span class="ln">                       {"role": "user", "content": MENSAJE}]}</span>
+<span class="ln">pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),</span>
+<span class="ln">                                headers={"Content-Type": "application/json"})</span>
+<span class="ln">with urllib.request.urlopen(pedido) as r:</span>
+<span class="ln">    mensaje = json.load(r)["choices"][0]["message"]</span>
+<span class="ln"></span>
+<span class="ln">llamadas = mensaje.get("tool_calls") or []</span>
+<span class="ln">if not llamadas:</span>
+<span class="ln">    raise SystemExit("El modelo no propuso nada: " + str(mensaje.get("content")))</span>
+<span class="ln">args = llamadas[0]["function"]["arguments"]</span>
+<span class="ln">propuesta = json.loads(args) if isinstance(args, str) else args</span>
+<span class="ln">print("Propuesta del modelo:", propuesta)</span>
+<span class="ln"></span>
+<span class="ln">ticket = TICKETS.get(propuesta.get("ticket"))</span>
+<span class="ln">if ticket is None or abs(float(propuesta.get("monto", 0)) - ticket["monto_en_disputa"]) &gt; 0.001:</span>
+<span class="ln">    raise SystemExit("La propuesta no coincide con el ticket: se escala a una persona.")</span>
+<span class="ln"></span>
+<span class="ln">monto = ticket["monto_en_disputa"]  # el monto sale del sistema, no del modelo</span>
+<span class="ln">decision = politica(monto)</span>
+<span class="ln">print(f"Política: monto US$ {monto:.2f} -&gt; {decision}")</span>
+<span class="ln"></span>
+<span class="ln">if decision == "negarse":</span>
+<span class="ln">    print("Fuera del alcance del asistente: se crea una tarea para Finanzas.")</span>
+<span class="ln">elif decision == "preguntar":</span>
+<span class="ln">    print("\n--- Aprobación pendiente ---------------------------")</span>
+<span class="ln">    print(f"Qué: reembolsar US$ {monto:.2f} a la cuenta {ticket['cuenta']}")</span>
+<span class="ln">    print(f"Por qué: {propuesta.get('motivo')} (ticket {propuesta['ticket']})")</span>
+<span class="ln">    print("Si apruebas: se registra el reembolso y se avisa al agente")</span>
+<span class="ln">    respuesta = input("Supervisora, ¿apruebas? [s/n]: ").strip().lower()</span>
+<span class="ln">    if respuesta != "s":</span>
+<span class="ln">        print("Rechazado: no se ejecuta nada y el agente recibe el motivo.")</span>
+<span class="ln">        raise SystemExit</span>
+<span class="ln">if decision in ("actuar", "preguntar"):</span>
+<span class="ln">    print("Ejecutado:", ejecutar_reembolso(propuesta["ticket"], monto))</span>
+<span class="ln">    print("Reintento (la red falló y se repite):", ejecutar_reembolso(propuesta["ticket"], monto))</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python aprobacion.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 aprobacion.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa. Lee la propuesta del modelo y la tarjeta de aprobación, y responde <code>s</code>.</span></li><li><span>Fíjate en las dos últimas líneas: el reembolso y su reintento.</span></li><li><span>Córrelo otra vez y responde <code>n</code>.</span></li><li><span>Cambia <code>monto_en_disputa</code> a <code>8.00</code> y vuelve a correrlo; después a <code>150.00</code>.</span></li></ol><p><b>Qué observar:</b> el modelo solo propone; el código revisa que el ticket exista y que el monto coincida con el del sistema, y la política decide. Con US$ 30,00 te pregunta, con US$ 8,00 actúa sin preguntar y con US$ 150,00 se niega. Al aprobar, el reintento devuelve el mismo reembolso <code>R-0001</code> marcado como repetido, no uno nuevo: es la idempotencia que se explica más abajo. Un modelo pequeño puede proponer otro monto o un ticket mal escrito; en ese caso el programa escala en lugar de ejecutar, que es exactamente lo que debe pasar.</p></div></section>
 <section><h2>Tipos de mensaje: aviso, recordatorio, aprobación y resumen</h2><div class="prose"><p>Cuando la política dice «preguntar», alguien tiene que enterarse. Y cuando el asistente actúa solo, alguien debería saberlo. El asistente empieza a mandar mensajes, y si todos se mandan igual, al tercer día nadie los lee.</p></div><div class="analogia"><b>Imagínalo así</b><p>En un edificio hay un timbre, un buzón, una alarma de incendio y un tablero de anuncios. Cada uno avisa algo distinto, con distinta urgencia y distinta forma de responder. Si la alarma de incendio sonara cada vez que llega una carta, la gente dejaría de salir cuando hay fuego.</p></div><div class="prose"><p>El servicio de mensajes del asistente distingue cuatro tipos:</p><div class="tbl"><table><thead><tr><th>Tipo</th><th>Para qué</th><th>¿Pide respuesta?</th><th>Ejemplo en el caso de Carmen</th></tr></thead><tbody><tr><td><b>Aviso</b> (<i>notification</i>)</td><td>Informar algo que ya pasó</td><td>No</td><td>«Se registró el reembolso R-0001 de US$ 30,00 del ticket T-55190»</td></tr><tr><td><b>Recordatorio</b> (<i>reminder</i>)</td><td>Insistir sobre algo pendiente con plazo</td><td>No, pero empuja a actuar</td><td>«Tienes una aprobación pendiente desde hace 15 minutos»</td></tr><tr><td><b>Aprobación</b> (<i>approval request</i>)</td><td>Pedir una decisión concreta</td><td>Sí: aprobar o rechazar, con plazo</td><td>«¿Apruebas el reembolso de US$ 30,00 a la cuenta 20417?»</td></tr><tr><td><b>Resumen</b> (<i>digest</i>)</td><td>Agrupar lo de baja prioridad</td><td>No</td><td>«Hoy: 14 reembolsos automáticos (US$ 96,00), 3 aprobados por ti, 1 rechazado»</td></tr></tbody></table></div><p>Cada tipo tiene su urgencia, su plantilla versionada por canal y sus reglas de silencio. Los avisos de baja prioridad se juntan en el resumen diario en lugar de interrumpir uno por uno. Las aprobaciones nunca se juntan: cada una tiene su plazo.</p></div></section>
 <section><h2>Canales, preferencias de cada persona y escalamiento</h2><div class="prose"><p>La supervisora pasa el día en el chat interno de la empresa; la jefa de reclamos lee el correo dos veces al día; los agentes viven en el panel del asistente, al costado de la pantalla de tickets. Mandarle todo a todos por el mismo canal es la forma más rápida de que una aprobación se pierda.</p><p>El servicio de mensajes tiene cuatro piezas:</p><ul><li><b>Preferencias por persona.</b> Canal preferido para cada tipo de mensaje, horario de silencio y suplente. La supervisora recibe aprobaciones en el chat interno y resúmenes por correo.</li><li><b>Plantillas por canal.</b> El mismo mensaje se arma distinto para el panel (con botones), el chat interno (una tarjeta con botones), el correo (con un enlace seguro) o un SMS (texto corto, sin datos personales). Son los adaptadores de canal del capítulo 6.</li><li><b>Reglas de escalamiento</b> (<i>escalation</i>). Qué pasa si nadie responde: un recordatorio, otro canal, el suplente, la jefa. Para las aprobaciones de reembolsos: recordatorio a los 15 minutos; a los 30, la solicitud pasa a la jefa de reclamos; fuera del horario de trabajo, la solicitud espera hasta las 8:00 y el agente le dice a la clienta cuándo tendrá respuesta.</li><li><b>Registro de entrega.</b> Cada mensaje queda con su estado (enviado, entregado, leído, respondido) y su hora. Sin eso no se puede medir cuánto tarda una aprobación ni probar quién aprobó qué.</li></ul><p>Los mensajes al cliente, como avisarle a Carmen que su reembolso fue aprobado, siguen las mismas ideas pero tienen reglas propias de consentimiento, plantillas aprobadas por los canales de mensajería y traspaso a una persona. Ese lado está en <a href="https://aaramirez.github.io/chatbots-empresariales/temario.html" target="_blank" rel="noopener">Chatbots empresariales</a>.</p></div><div class="lab" id="11-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Un reembolso que espera aprobación</h3></div><p class="hint">Elige el monto del reembolso y pulsa «Proponer». Si la política pide aprobación, decide qué hace la supervisora: aprobar, rechazar o no responder y dejar correr el reloj. Mira cómo cambia el estado de la solicitud, qué mensajes salen por cada canal y qué recibe el agente en cada caso.</p><style>
 [id="11-lab-1"] .c11l1-chk{display:flex;gap:8px;align-items:flex-start;font:500 .84rem/1.35 var(--f-display);color:var(--ink);cursor:pointer}
@@ -211,49 +211,49 @@ if decision in ("actuar", "preguntar"):
 <ol class="c11l1-msgs" id="c11l1-msgs" aria-label="Mensajes por canal"></ol>
 <div class="readout texto" id="c11l1-out" aria-live="polite"></div></div></section>
 <section><h2>De la conversación a la acción: botones, formularios y enlaces seguros</h2><div class="prose"><p>Una aprobación tiene que poder responderse en un toque, pero sin que ese toque sea fácil de falsificar.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un cheque tiene fecha, monto en números y en letras, a nombre de quién y una firma. El banco revisa todo antes de pagar, y un cheque viejo o con el monto tachado no se cobra. Un botón de «Aprobar» que llega por correo debe tener las mismas protecciones que un cheque.</p></div><div class="prose"><p>La tarjeta de aprobación muestra lo que la supervisora necesita para decidir sin abrir otra pantalla: qué se va a hacer, a quién, por cuánto, por qué (con el enlace al ticket y la evidencia del cobro duplicado), qué pasa si aprueba y qué pasa si rechaza. Tiene dos botones y, para rechazar, un campo con el motivo, que vuelve al agente.</p><p>Cuando la aprobación sale del panel hacia el correo o el chat, el botón se convierte en un <b>enlace seguro</b>. Las reglas:</p><ul><li><b>Firmado.</b> El enlace lleva el identificador de la solicitud y una firma criptográfica (por ejemplo, HMAC con una clave del servidor). Si alguien cambia un carácter, la firma deja de valer.</li><li><b>Con vencimiento y de un solo uso.</b> Vence con el plazo de la aprobación y no sirve dos veces.</li><li><b>Atado a la persona.</b> Antes de aplicar la decisión, se pide iniciar sesión con la cuenta de la empresa y se verifica que quien aprueba tiene el rol y no es quien pidió.</li><li><b>Atado al contenido.</b> La firma cubre el monto y la cuenta. Si entre el pedido y el clic algo cambió (otro monto, otra cuenta), la aprobación se rechaza y se pide de nuevo.</li><li><b>Fuera del alcance del modelo.</b> El modelo nunca genera ni ve estos enlaces: los crea el servicio de aprobaciones. Si un modelo pudiera escribir el enlace, una inyección podría fabricar una aprobación.</li></ul><p>Al recibir el clic, el servidor revisa la firma, el vencimiento, que la solicitud siga pendiente, el rol de quien aprueba y que el contenido no haya cambiado. Recién entonces cambia el estado y dispara la ejecución. Cómo presenta un agente la acción para aprobarla (resumen, diferencias y riesgo) está en <a href="https://aaramirez.github.io/arneses/09-humano-en-el-bucle.html" target="_blank" rel="noopener">El servicio de interacción humana</a>.</p></div></section>
-<section><h2>Idempotencia, reintentos y compensación</h2><div class="prose"><p>Una vez aprobado, el reembolso se manda a facturación. Y ahí aparece el problema más traicionero de cualquier sistema que actúa: la red falla. El asistente manda «registrar reembolso de US$ 30,00», espera, y la respuesta no llega. ¿Se registró y se perdió la respuesta, o no se registró? Si reintenta, puede devolver US$ 60,00. Si no reintenta, puede no devolver nada.</p></div><div class="analogia"><b>Imagínalo así</b><p>Apretar cinco veces el botón del ascensor no trae cinco ascensores: el sistema sabe que ya hay uno pedido para ese piso. Un botón de «devolver dinero» tiene que funcionar igual: apretarlo de nuevo, por ansiedad o porque no viste la respuesta, no debe devolver el dinero otra vez.</p></div><div class="prose"><p>La solución es la <b>idempotencia</b> (<i>idempotency</i>): una operación es idempotente si hacerla varias veces tiene el mismo efecto que hacerla una vez. Las lecturas ya lo son. Para las escrituras, se usa una <b>clave de idempotencia</b> (<i>idempotency key</i>):</p><ol class="steps"><li><span>Quien pide genera una clave única para <b>la acción que quiere hacer</b>, no para cada intento: <code>T-55190-reembolso-1</code>. Se guarda junto con la solicitud aprobada.</span></li><li><span>La manda en cada intento, por ejemplo en el encabezado HTTP <code>Idempotency-Key</code>, que la IETF está normalizando.</span></li><li><span>El servidor guarda la clave con el resultado. Si llega otra vez con el mismo cuerpo, devuelve el resultado guardado sin volver a ejecutar. Si llega con la misma clave y otro cuerpo (otro monto), responde <code>422</code> y no hace nada.</span></li></ol><p>Con eso, reintentar es seguro. Los reintentos siguen reglas: solo ante errores temporales (tiempo agotado, servicio no disponible), con espera creciente entre intentos, con un máximo, y siempre con la misma clave. Si se agotan, la acción queda «en duda» y una persona revisa en el sistema si se hizo.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>La misma acción tres veces, con clave y sin clave</h3></div><p>Vas a levantar en tu computadora un servicio de reembolsos de juguete y a mandarle el mismo pedido tres veces sin clave de idempotencia y tres veces con clave. No necesitas Ollama. Guarda este programa como <code>servicio_reembolsos.py</code>:</p><div class="code-copia"><pre><code>import hashlib, json
-from http.server import BaseHTTPRequestHandler, HTTPServer
-
-REEMBOLSOS = []   # el «sistema de facturación»: cada fila es dinero que sale
-CLAVES = {}       # clave de idempotencia -&gt; (huella del cuerpo, respuesta guardada)
-
-class Servicio(BaseHTTPRequestHandler):
-    def responder(self, estado, datos, repetida=False):
-        cuerpo = json.dumps(datos, ensure_ascii=False).encode("utf-8")
-        self.send_response(estado)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        if repetida:
-            self.send_header("Idempotent-Replayed", "true")
-        self.end_headers()
-        self.wfile.write(cuerpo)
-
-    def do_GET(self):
-        total = sum(r["monto"] for r in REEMBOLSOS)
-        self.responder(200, {"reembolsos": REEMBOLSOS, "total_devuelto": total})
-
-    def do_POST(self):
-        crudo = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-        pedido = json.loads(crudo)
-        clave = self.headers.get("Idempotency-Key")
-        huella = hashlib.sha256(crudo).hexdigest()
-        if clave in CLAVES:
-            huella_guardada, respuesta = CLAVES[clave]
-            if huella_guardada != huella:
-                return self.responder(422, {"error": "la clave ya se usó con otro cuerpo"})
-            return self.responder(201, respuesta, repetida=True)
-        reembolso = {"id": f"R-{len(REEMBOLSOS) + 1:04d}",
-                     "ticket": pedido["ticket"], "monto": pedido["monto"]}
-        REEMBOLSOS.append(reembolso)
-        if clave:
-            CLAVES[clave] = (huella, reembolso)
-        print(f"Nuevo reembolso {reembolso['id']} por US$ {reembolso['monto']:.2f} (clave: {clave})", flush=True)
-        self.responder(201, reembolso)
-
-    def log_message(self, *args):
-        pass
-
-print("Servicio de reembolsos en http://127.0.0.1:8790 (Ctrl+C para salir)", flush=True)
-HTTPServer(("127.0.0.1", 8790), Servicio).serve_forever()</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>En la misma carpeta, crea un archivo <code>reembolso.json</code> con este contenido:</p><div class="code-copia"><pre><code>{"ticket": "T-55190", "monto": 30.00}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Abre una terminal y deja el servicio corriendo:</p><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python servicio_reembolsos.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 servicio_reembolsos.py</code><button type="button" class="copiar">Copiar</button></div></div></div><p>En una segunda terminal, en la misma carpeta, manda el pedido. Ejecuta tres veces la primera línea (sin clave) y tres veces la segunda (con clave), y al final consulta el total:</p><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>curl.exe -s -X POST -H "Content-Type: application/json" --data-binary "@reembolso.json" http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl.exe -s -i -X POST -H "Content-Type: application/json" -H "Idempotency-Key: T-55190-reembolso-1" --data-binary "@reembolso.json" http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl.exe -s http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>curl -s -X POST -H "Content-Type: application/json" --data-binary "@reembolso.json" http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl -s -i -X POST -H "Content-Type: application/json" -H "Idempotency-Key: T-55190-reembolso-1" --data-binary "@reembolso.json" http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl -s http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Anota el <code>id</code> de cada respuesta sin clave y el de cada respuesta con clave.</span></li><li><span>Mira el encabezado <code>Idempotent-Replayed</code> en las respuestas con clave, y los mensajes que imprime el servicio en la primera terminal.</span></li><li><span>Cambia el monto de <code>reembolso.json</code> a <code>25.00</code> y repite la línea con clave.</span></li><li><span>Consulta el total devuelto y detén el servicio con Ctrl+C.</span></li></ol><p><b>Qué observar:</b> sin clave, cada pedido crea un reembolso nuevo (<code>R-0001</code>, <code>R-0002</code>, <code>R-0003</code>): tres reintentos son US$ 90,00 devueltos por un cobro duplicado de US$ 30,00. Con clave, el primero crea <code>R-0004</code> y los otros dos devuelven el mismo <code>R-0004</code> con <code>Idempotent-Replayed: true</code>, sin crear nada. Con la misma clave y otro monto, el servicio responde <code>422</code> y no hace nada. En un sistema real las claves se guardan en una base con vencimiento, y dos pedidos simultáneos con la misma clave se resuelven con un bloqueo. Si el puerto 8790 está ocupado en tu computadora, cambia el número en el programa y en los comandos.</p></div><div class="lab" id="11-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Envía la misma acción tres veces, con clave de idempotencia y sin ella</h3></div><p class="hint">Elige si el asistente usa clave de idempotencia y qué falla en la red. Pulsa «Enviar 3 veces» y mira cada intento, lo que registra facturación y cuánto dinero sale de verdad. Prueba también la misma clave con otro monto.</p><style>
+<section><h2>Idempotencia, reintentos y compensación</h2><div class="prose"><p>Una vez aprobado, el reembolso se manda a facturación. Y ahí aparece el problema más traicionero de cualquier sistema que actúa: la red falla. El asistente manda «registrar reembolso de US$ 30,00», espera, y la respuesta no llega. ¿Se registró y se perdió la respuesta, o no se registró? Si reintenta, puede devolver US$ 60,00. Si no reintenta, puede no devolver nada.</p></div><div class="analogia"><b>Imagínalo así</b><p>Apretar cinco veces el botón del ascensor no trae cinco ascensores: el sistema sabe que ya hay uno pedido para ese piso. Un botón de «devolver dinero» tiene que funcionar igual: apretarlo de nuevo, por ansiedad o porque no viste la respuesta, no debe devolver el dinero otra vez.</p></div><div class="prose"><p>La solución es la <b>idempotencia</b> (<i>idempotency</i>): una operación es idempotente si hacerla varias veces tiene el mismo efecto que hacerla una vez. Las lecturas ya lo son. Para las escrituras, se usa una <b>clave de idempotencia</b> (<i>idempotency key</i>):</p><ol class="steps"><li><span>Quien pide genera una clave única para <b>la acción que quiere hacer</b>, no para cada intento: <code>T-55190-reembolso-1</code>. Se guarda junto con la solicitud aprobada.</span></li><li><span>La manda en cada intento, por ejemplo en el encabezado HTTP <code>Idempotency-Key</code>, que la IETF está normalizando.</span></li><li><span>El servidor guarda la clave con el resultado. Si llega otra vez con el mismo cuerpo, devuelve el resultado guardado sin volver a ejecutar. Si llega con la misma clave y otro cuerpo (otro monto), responde <code>422</code> y no hace nada.</span></li></ol><p>Con eso, reintentar es seguro. Los reintentos siguen reglas: solo ante errores temporales (tiempo agotado, servicio no disponible), con espera creciente entre intentos, con un máximo, y siempre con la misma clave. Si se agotan, la acción queda «en duda» y una persona revisa en el sistema si se hizo.</p></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>La misma acción tres veces, con clave y sin clave</h3></div><p>Vas a levantar en tu computadora un servicio de reembolsos de juguete y a mandarle el mismo pedido tres veces sin clave de idempotencia y tres veces con clave. No necesitas Ollama. Guarda este programa como <code>servicio_reembolsos.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import hashlib, json</span>
+<span class="ln">from http.server import BaseHTTPRequestHandler, HTTPServer</span>
+<span class="ln"></span>
+<span class="ln">REEMBOLSOS = []   # el «sistema de facturación»: cada fila es dinero que sale</span>
+<span class="ln">CLAVES = {}       # clave de idempotencia -&gt; (huella del cuerpo, respuesta guardada)</span>
+<span class="ln"></span>
+<span class="ln">class Servicio(BaseHTTPRequestHandler):</span>
+<span class="ln">    def responder(self, estado, datos, repetida=False):</span>
+<span class="ln">        cuerpo = json.dumps(datos, ensure_ascii=False).encode("utf-8")</span>
+<span class="ln">        self.send_response(estado)</span>
+<span class="ln">        self.send_header("Content-Type", "application/json; charset=utf-8")</span>
+<span class="ln">        if repetida:</span>
+<span class="ln">            self.send_header("Idempotent-Replayed", "true")</span>
+<span class="ln">        self.end_headers()</span>
+<span class="ln">        self.wfile.write(cuerpo)</span>
+<span class="ln"></span>
+<span class="ln">    def do_GET(self):</span>
+<span class="ln">        total = sum(r["monto"] for r in REEMBOLSOS)</span>
+<span class="ln">        self.responder(200, {"reembolsos": REEMBOLSOS, "total_devuelto": total})</span>
+<span class="ln"></span>
+<span class="ln">    def do_POST(self):</span>
+<span class="ln">        crudo = self.rfile.read(int(self.headers.get("Content-Length", 0)))</span>
+<span class="ln">        pedido = json.loads(crudo)</span>
+<span class="ln">        clave = self.headers.get("Idempotency-Key")</span>
+<span class="ln">        huella = hashlib.sha256(crudo).hexdigest()</span>
+<span class="ln">        if clave in CLAVES:</span>
+<span class="ln">            huella_guardada, respuesta = CLAVES[clave]</span>
+<span class="ln">            if huella_guardada != huella:</span>
+<span class="ln">                return self.responder(422, {"error": "la clave ya se usó con otro cuerpo"})</span>
+<span class="ln">            return self.responder(201, respuesta, repetida=True)</span>
+<span class="ln">        reembolso = {"id": f"R-{len(REEMBOLSOS) + 1:04d}",</span>
+<span class="ln">                     "ticket": pedido["ticket"], "monto": pedido["monto"]}</span>
+<span class="ln">        REEMBOLSOS.append(reembolso)</span>
+<span class="ln">        if clave:</span>
+<span class="ln">            CLAVES[clave] = (huella, reembolso)</span>
+<span class="ln">        print(f"Nuevo reembolso {reembolso['id']} por US$ {reembolso['monto']:.2f} (clave: {clave})", flush=True)</span>
+<span class="ln">        self.responder(201, reembolso)</span>
+<span class="ln"></span>
+<span class="ln">    def log_message(self, *args):</span>
+<span class="ln">        pass</span>
+<span class="ln"></span>
+<span class="ln">print("Servicio de reembolsos en http://127.0.0.1:8790 (Ctrl+C para salir)", flush=True)</span>
+<span class="ln">HTTPServer(("127.0.0.1", 8790), Servicio).serve_forever()</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>En la misma carpeta, crea un archivo <code>reembolso.json</code> con este contenido:</p><div class="code-copia code-lineas"><pre><code><span class="ln">{"ticket": "T-55190", "monto": 30.00}</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Abre una terminal y deja el servicio corriendo:</p><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python servicio_reembolsos.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 servicio_reembolsos.py</code><button type="button" class="copiar">Copiar</button></div></div></div><p>En una segunda terminal, en la misma carpeta, manda el pedido. Ejecuta tres veces la primera línea (sin clave) y tres veces la segunda (con clave), y al final consulta el total:</p><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>curl.exe -s -X POST -H "Content-Type: application/json" --data-binary "@reembolso.json" http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl.exe -s -i -X POST -H "Content-Type: application/json" -H "Idempotency-Key: T-55190-reembolso-1" --data-binary "@reembolso.json" http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl.exe -s http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>curl -s -X POST -H "Content-Type: application/json" --data-binary "@reembolso.json" http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl -s -i -X POST -H "Content-Type: application/json" -H "Idempotency-Key: T-55190-reembolso-1" --data-binary "@reembolso.json" http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>curl -s http://127.0.0.1:8790/v1/reembolsos</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Anota el <code>id</code> de cada respuesta sin clave y el de cada respuesta con clave.</span></li><li><span>Mira el encabezado <code>Idempotent-Replayed</code> en las respuestas con clave, y los mensajes que imprime el servicio en la primera terminal.</span></li><li><span>Cambia el monto de <code>reembolso.json</code> a <code>25.00</code> y repite la línea con clave.</span></li><li><span>Consulta el total devuelto y detén el servicio con Ctrl+C.</span></li></ol><p><b>Qué observar:</b> sin clave, cada pedido crea un reembolso nuevo (<code>R-0001</code>, <code>R-0002</code>, <code>R-0003</code>): tres reintentos son US$ 90,00 devueltos por un cobro duplicado de US$ 30,00. Con clave, el primero crea <code>R-0004</code> y los otros dos devuelven el mismo <code>R-0004</code> con <code>Idempotent-Replayed: true</code>, sin crear nada. Con la misma clave y otro monto, el servicio responde <code>422</code> y no hace nada. En un sistema real las claves se guardan en una base con vencimiento, y dos pedidos simultáneos con la misma clave se resuelven con un bloqueo. Si el puerto 8790 está ocupado en tu computadora, cambia el número en el programa y en los comandos.</p></div><div class="lab" id="11-lab-2"><div class="lab-title"><span class="tag">Laboratorio</span><h3>Envía la misma acción tres veces, con clave de idempotencia y sin ella</h3></div><p class="hint">Elige si el asistente usa clave de idempotencia y qué falla en la red. Pulsa «Enviar 3 veces» y mira cada intento, lo que registra facturación y cuánto dinero sale de verdad. Prueba también la misma clave con otro monto.</p><style>
 [id="11-lab-2"] .c11l2-g{display:grid;gap:4px}
 [id="11-lab-2"] .c11l2-g>span{font:700 .72rem var(--f-display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
 [id="11-lab-2"] .c11l2-int{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:6px}

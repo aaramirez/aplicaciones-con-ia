@@ -154,70 +154,70 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <div class="c17l1-wf" id="c17l1-wf" aria-label="Tramos de la traza (pulsa uno para ver su detalle)"></div>
 <div class="c17l1-ley" aria-hidden="true"><span><i class="t-gen"></i>generación (modelo)</span><span><i class="t-ret"></i>recuperación</span><span><i class="t-tool"></i>herramienta</span><span><i class="t-val"></i>validación y política</span><span><i class="t-guard"></i>guardrail y caché</span><span><i class="t-hum"></i>espera humana</span></div>
 <div class="c17l1-det" id="c17l1-det" aria-live="polite"></div>
-<div class="readout texto" id="c17l1-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Trazas propias, con datos enmascarados, y su resumen</h3></div><p>Vas a instrumentar seis consultas a tu modelo local: cada una deja una traza con tres tramos (recuperación, generación y validación) en un archivo JSONL (<i>JSON Lines</i>, un objeto JSON por línea), con los datos personales enmascarados antes de escribir. Al final, el programa lee el archivo y calcula el costo por función y la latencia en percentiles. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>trazas.py</code>:</p><div class="code-copia"><pre><code>import json, re, time, uuid, urllib.request
-
-URL = "http://localhost:11434/v1/chat/completions"
-PRECIO = {"entrada": 1.00, "salida": 4.00}  # US$ por millón de tokens, inventados
-DOCS = {"reconexion": "El cargo por reconexión es de US$ 5,00.",
-        "visitas": "Las visitas técnicas son de lunes a viernes, de 8:00 a 18:00."}
-CONSULTAS = [
-    ("tarifas", "¿Cuánto cuesta la reconexión? La pide Carmen Rojas, cuenta 20417."),
-    ("tarifas", "¿Cuánto cuesta reconectar? Es para carmen.rojas@ejemplo.com"),
-    ("visitas", "¿En qué horario pueden ir los técnicos a la cuenta 31552?"),
-    ("tarifas", "Precio de la reconexión del servicio"),
-    ("visitas", "¿Hacen visitas los sábados? Cliente Ana Gómez, cuenta 40981."),
-    ("visitas", "¿A qué hora llega el técnico?"),
-]
-
-def enmascarar(texto):
-    texto = re.sub(r"[\w.]+@[\w.]+", "&lt;correo&gt;", texto)
-    return re.sub(r"(cuenta )\d{3}(\d{2})", r"\1***\2", texto)  # cuenta 20417 -&gt; cuenta ***17
-
-def tramo(traza, nombre, padre, inicio, **atributos):
-    return {"traza": traza, "tramo": uuid.uuid4().hex[:8], "padre": padre, "nombre": nombre,
-            "ms": round((time.perf_counter() - inicio) * 1000), **atributos}
-
-with open("trazas.jsonl", "w", encoding="utf-8") as archivo:
-    for funcion, pregunta in CONSULTAS:
-        traza, raiz, t0 = uuid.uuid4().hex[:12], uuid.uuid4().hex[:8], time.perf_counter()
-        t = time.perf_counter()
-        doc = "reconexion" if "reconect" in pregunta.lower() or "reconexión" in pregunta.lower() else "visitas"
-        tramos = [tramo(traza, "recuperacion", raiz, t, fragmentos=[doc])]
-        t = time.perf_counter()
-        cuerpo = {"model": "llama3.2:3b", "temperature": 0, "max_tokens": 120,
-                  "messages": [{"role": "system", "content": "Responde en una frase con: " + DOCS[doc]},
-                               {"role": "user", "content": pregunta}]}
-        pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
-                                        headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(pedido) as r:
-            datos = json.load(r)
-        uso = datos.get("usage", {})
-        ent, sal = uso.get("prompt_tokens", 0), uso.get("completion_tokens", 0)
-        costo = (ent * PRECIO["entrada"] + sal * PRECIO["salida"]) / 1_000_000
-        respuesta = datos["choices"][0]["message"]["content"]
-        tramos.append(tramo(traza, "generacion", raiz, t, **{"gen_ai.request.model": "llama3.2:3b",
-            "gen_ai.usage.input_tokens": ent, "gen_ai.usage.output_tokens": sal, "costo_usd": costo,
-            "entrada": enmascarar(pregunta), "salida": enmascarar(respuesta)}))
-        t = time.perf_counter()
-        tramos.append(tramo(traza, "validacion", raiz, t, cita_ok=bool(re.search(r"5,00|8:00", respuesta))))
-        tramos.append({"traza": traza, "tramo": raiz, "padre": None, "nombre": "consulta",
-                       "app.funcion": funcion, "ms": round((time.perf_counter() - t0) * 1000)})
-        for x in tramos:
-            archivo.write(json.dumps(x, ensure_ascii=False) + "\n")
-
-lineas = [json.loads(l) for l in open("trazas.jsonl", encoding="utf-8")]
-totales = sorted(x["ms"] for x in lineas if x["nombre"] == "consulta")
-def percentil(valores, p):
-    return valores[max(0, round(p / 100 * len(valores)) - 1)]
-funcion_de = {x["traza"]: x["app.funcion"] for x in lineas if x["nombre"] == "consulta"}
-costo = {}
-for x in lineas:
-    if x["nombre"] == "generacion":
-        f = funcion_de[x["traza"]]
-        costo[f] = costo.get(f, 0) + x["costo_usd"]
-print("Latencia de la consulta: p50", percentil(totales, 50), "ms · p95", percentil(totales, 95), "ms")
-print("Costo por función (US$):", {f: round(c, 6) for f, c in costo.items()})
-print("Ejemplo de tramo guardado:", [x for x in lineas if x["nombre"] == "generacion"][0]["entrada"])</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>python trazas.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Get-Content trazas.jsonl -TotalCount 4</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 trazas.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>head -n 4 trazas.jsonl</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota la latencia p50 y p95 y el costo de cada función.</span></li><li><span>Mira las primeras líneas del archivo: identifica la traza, el tramo raíz y sus hijos por los campos <code>traza</code> y <code>padre</code>.</span></li><li><span>Busca en el archivo el número de cuenta 20417 y el correo de Carmen. ¿Aparecen?</span></li></ol><p><b>Qué observar:</b> cada consulta deja cuatro líneas que comparten el mismo identificador de traza, y los tramos hijos apuntan a la raíz: con eso cualquier herramienta reconstruye el árbol. Casi todo el tiempo se va en el tramo de generación. Con seis consultas, la p95 es directamente la más lenta, que suele ser la primera, porque el modelo se carga en memoria: un promedio escondería esa diferencia. En el archivo, la cuenta aparece como <code>cuenta ***17</code> y el correo como <code>&lt;correo&gt;</code>: el enmascarado ocurre antes de escribir, no después. Los nombres, en cambio, siguen ahí: una expresión regular no sabe qué palabras son un nombre, y por eso el texto completo vive en un almacén aparte aunque esté enmascarado. Si <code>usage</code> llega vacío, los tokens quedan en cero; la API compatible de Ollama lo devuelve en las respuestas sin <i>streaming</i>.</p></div></section>
+<div class="readout texto" id="c17l1-out" aria-live="polite"></div></div><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>Trazas propias, con datos enmascarados, y su resumen</h3></div><p>Vas a instrumentar seis consultas a tu modelo local: cada una deja una traza con tres tramos (recuperación, generación y validación) en un archivo JSONL (<i>JSON Lines</i>, un objeto JSON por línea), con los datos personales enmascarados antes de escribir. Al final, el programa lee el archivo y calcula el costo por función y la latencia en percentiles. Necesitas Ollama con <code>llama3.2:3b</code>. Guarda este programa como <code>trazas.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import json, re, time, uuid, urllib.request</span>
+<span class="ln"></span>
+<span class="ln">URL = "http://localhost:11434/v1/chat/completions"</span>
+<span class="ln">PRECIO = {"entrada": 1.00, "salida": 4.00}  # US$ por millón de tokens, inventados</span>
+<span class="ln">DOCS = {"reconexion": "El cargo por reconexión es de US$ 5,00.",</span>
+<span class="ln">        "visitas": "Las visitas técnicas son de lunes a viernes, de 8:00 a 18:00."}</span>
+<span class="ln">CONSULTAS = [</span>
+<span class="ln">    ("tarifas", "¿Cuánto cuesta la reconexión? La pide Carmen Rojas, cuenta 20417."),</span>
+<span class="ln">    ("tarifas", "¿Cuánto cuesta reconectar? Es para carmen.rojas@ejemplo.com"),</span>
+<span class="ln">    ("visitas", "¿En qué horario pueden ir los técnicos a la cuenta 31552?"),</span>
+<span class="ln">    ("tarifas", "Precio de la reconexión del servicio"),</span>
+<span class="ln">    ("visitas", "¿Hacen visitas los sábados? Cliente Ana Gómez, cuenta 40981."),</span>
+<span class="ln">    ("visitas", "¿A qué hora llega el técnico?"),</span>
+<span class="ln">]</span>
+<span class="ln"></span>
+<span class="ln">def enmascarar(texto):</span>
+<span class="ln">    texto = re.sub(r"[\w.]+@[\w.]+", "&lt;correo&gt;", texto)</span>
+<span class="ln">    return re.sub(r"(cuenta )\d{3}(\d{2})", r"\1***\2", texto)  # cuenta 20417 -&gt; cuenta ***17</span>
+<span class="ln"></span>
+<span class="ln">def tramo(traza, nombre, padre, inicio, **atributos):</span>
+<span class="ln">    return {"traza": traza, "tramo": uuid.uuid4().hex[:8], "padre": padre, "nombre": nombre,</span>
+<span class="ln">            "ms": round((time.perf_counter() - inicio) * 1000), **atributos}</span>
+<span class="ln"></span>
+<span class="ln">with open("trazas.jsonl", "w", encoding="utf-8") as archivo:</span>
+<span class="ln">    for funcion, pregunta in CONSULTAS:</span>
+<span class="ln">        traza, raiz, t0 = uuid.uuid4().hex[:12], uuid.uuid4().hex[:8], time.perf_counter()</span>
+<span class="ln">        t = time.perf_counter()</span>
+<span class="ln">        doc = "reconexion" if "reconect" in pregunta.lower() or "reconexión" in pregunta.lower() else "visitas"</span>
+<span class="ln">        tramos = [tramo(traza, "recuperacion", raiz, t, fragmentos=[doc])]</span>
+<span class="ln">        t = time.perf_counter()</span>
+<span class="ln">        cuerpo = {"model": "llama3.2:3b", "temperature": 0, "max_tokens": 120,</span>
+<span class="ln">                  "messages": [{"role": "system", "content": "Responde en una frase con: " + DOCS[doc]},</span>
+<span class="ln">                               {"role": "user", "content": pregunta}]}</span>
+<span class="ln">        pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),</span>
+<span class="ln">                                        headers={"Content-Type": "application/json"})</span>
+<span class="ln">        with urllib.request.urlopen(pedido) as r:</span>
+<span class="ln">            datos = json.load(r)</span>
+<span class="ln">        uso = datos.get("usage", {})</span>
+<span class="ln">        ent, sal = uso.get("prompt_tokens", 0), uso.get("completion_tokens", 0)</span>
+<span class="ln">        costo = (ent * PRECIO["entrada"] + sal * PRECIO["salida"]) / 1_000_000</span>
+<span class="ln">        respuesta = datos["choices"][0]["message"]["content"]</span>
+<span class="ln">        tramos.append(tramo(traza, "generacion", raiz, t, **{"gen_ai.request.model": "llama3.2:3b",</span>
+<span class="ln">            "gen_ai.usage.input_tokens": ent, "gen_ai.usage.output_tokens": sal, "costo_usd": costo,</span>
+<span class="ln">            "entrada": enmascarar(pregunta), "salida": enmascarar(respuesta)}))</span>
+<span class="ln">        t = time.perf_counter()</span>
+<span class="ln">        tramos.append(tramo(traza, "validacion", raiz, t, cita_ok=bool(re.search(r"5,00|8:00", respuesta))))</span>
+<span class="ln">        tramos.append({"traza": traza, "tramo": raiz, "padre": None, "nombre": "consulta",</span>
+<span class="ln">                       "app.funcion": funcion, "ms": round((time.perf_counter() - t0) * 1000)})</span>
+<span class="ln">        for x in tramos:</span>
+<span class="ln">            archivo.write(json.dumps(x, ensure_ascii=False) + "\n")</span>
+<span class="ln"></span>
+<span class="ln">lineas = [json.loads(l) for l in open("trazas.jsonl", encoding="utf-8")]</span>
+<span class="ln">totales = sorted(x["ms"] for x in lineas if x["nombre"] == "consulta")</span>
+<span class="ln">def percentil(valores, p):</span>
+<span class="ln">    return valores[max(0, round(p / 100 * len(valores)) - 1)]</span>
+<span class="ln">funcion_de = {x["traza"]: x["app.funcion"] for x in lineas if x["nombre"] == "consulta"}</span>
+<span class="ln">costo = {}</span>
+<span class="ln">for x in lineas:</span>
+<span class="ln">    if x["nombre"] == "generacion":</span>
+<span class="ln">        f = funcion_de[x["traza"]]</span>
+<span class="ln">        costo[f] = costo.get(f, 0) + x["costo_usd"]</span>
+<span class="ln">print("Latencia de la consulta: p50", percentil(totales, 50), "ms · p95", percentil(totales, 95), "ms")</span>
+<span class="ln">print("Costo por función (US$):", {f: round(c, 6) for f, c in costo.items()})</span>
+<span class="ln">print("Ejemplo de tramo guardado:", [x for x in lineas if x["nombre"] == "generacion"][0]["entrada"])</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><p class="cmd-nota">Windows (PowerShell)</p><div class="cmd-l"><code>python trazas.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>Get-Content trazas.jsonl -TotalCount 4</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 trazas.py</code><button type="button" class="copiar">Copiar</button></div><div class="cmd-l"><code>head -n 4 trazas.jsonl</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota la latencia p50 y p95 y el costo de cada función.</span></li><li><span>Mira las primeras líneas del archivo: identifica la traza, el tramo raíz y sus hijos por los campos <code>traza</code> y <code>padre</code>.</span></li><li><span>Busca en el archivo el número de cuenta 20417 y el correo de Carmen. ¿Aparecen?</span></li></ol><p><b>Qué observar:</b> cada consulta deja cuatro líneas que comparten el mismo identificador de traza, y los tramos hijos apuntan a la raíz: con eso cualquier herramienta reconstruye el árbol. Casi todo el tiempo se va en el tramo de generación. Con seis consultas, la p95 es directamente la más lenta, que suele ser la primera, porque el modelo se carga en memoria: un promedio escondería esa diferencia. En el archivo, la cuenta aparece como <code>cuenta ***17</code> y el correo como <code>&lt;correo&gt;</code>: el enmascarado ocurre antes de escribir, no después. Los nombres, en cambio, siguen ahí: una expresión regular no sabe qué palabras son un nombre, y por eso el texto completo vive en un almacén aparte aunque esté enmascarado. Si <code>usage</code> llega vacío, los tokens quedan en cero; la API compatible de Ollama lo devuelve en las respuestas sin <i>streaming</i>.</p></div></section>
 <section><h2>Costos por usuario, por función y por nivel</h2><div class="prose"><p>El capítulo 3 enseñó a calcular el costo de una llamada. En producción la pregunta cambia: no es cuánto cuesta una llamada, sino <b>en qué se va el dinero</b>. La traza lo responde si cada tramo de generación lleva su costo y cada traza lleva sus etiquetas: la función (<code>consulta_tarifas</code>, <code>clasificar_ticket</code>, <code>reembolso</code>, <code>averia</code>), el nivel de la escalera, el equipo y el rol de quien pidió. El usuario se guarda como un identificador seudónimo, no con su nombre.</p></div><div class="analogia"><b>Imagínalo así</b><p>La cuenta del celular de una familia no dice solo el total del mes: separa cuánto gastó cada línea, en llamadas, en datos y en roaming. Recién con ese detalle alguien descubre que el gasto alto era la línea del hijo de viaje, y no «el plan, que está caro».</p></div><div class="prose"><p>Así se veía el mes típico de la v1.0, con los precios inventados del capítulo 3:</p><div class="tbl"><table><thead><tr><th>Función</th><th>Nivel</th><th>Volumen al mes</th><th>Costo medio</th><th>Costo del mes</th></tr></thead><tbody><tr><td>Consultas de tarifas y políticas</td><td>1 y 2</td><td>30.000</td><td>US$ 0,0024 (una de cada cinco, del caché)</td><td>US$ 72</td></tr><tr><td>Clasificación de tickets, modelo pequeño propio</td><td>5</td><td>40.000</td><td>US$ 0,0002</td><td>US$ 8</td></tr><tr><td>Reembolsos y visitas con herramientas</td><td>3</td><td>3.000</td><td>US$ 0,0060</td><td>US$ 18</td></tr><tr><td>Agente de avería masiva</td><td>4</td><td>6 averías</td><td>US$ 0,25</td><td>US$ 1,50</td></tr><tr><td>Batería en la integración continua (CI) y jueces en línea</td><td>base</td><td>60 corridas y una muestra diaria</td><td>—</td><td>US$ 80</td></tr></tbody></table></div><p>Tres lecturas salen de la tabla, y ninguna se ve en el total. La clasificación es la función con más volumen y casi no cuesta, porque el capítulo 14 la pasó a un modelo pequeño. El agente, que asusta por su costo por ejecución, es lo más barato del mes porque corre pocas veces. Y la evaluación cuesta casi lo mismo que la operación: es una decisión correcta, pero tiene que estar a la vista para que nadie la recorte por sorpresa.</p><p>El número que conecta el costo con el negocio es el <b>costo por resultado</b>: por consulta resuelta sin corrección, por reembolso bien hecho, por avería atendida. Una función barata que los agentes corrigen la mitad de las veces sale cara. Los presupuestos y las alertas de gasto (por día, por función y por usuario) viven en la puerta a los modelos del capítulo 3 y leen estos mismos datos. El costo de cada conversación en un bot de cara al cliente, con los mensajes del canal incluidos, está en <a href="https://aaramirez.github.io/chatbots-empresariales/13-costo-por-conversacion.html" target="_blank" rel="noopener">El costo por conversación</a>.</p></div></section>
 <section><h2>Latencia: tiempo hasta la primera palabra y percentil 95</h2><div class="prose"><p>El agente no siente el promedio: siente la consulta que lo dejó esperando con la clienta en línea.</p></div><div class="analogia"><b>Imagínalo así</b><p>Si un bus pasa cada diez minutos «en promedio», pero un día de cada veinte tarda cuarenta, la gente no recuerda el promedio: recuerda el día que llegó tarde al trabajo. Para saber si el servicio es bueno hay que mirar cuánto se espera en los peores días normales, no en el día típico.</p></div><div class="prose"><p>Un <b>percentil</b> (<i>percentile</i>) dice qué valor no supera un porcentaje de los casos. El percentil 50 (p50, la mediana) es la consulta típica; el <b>percentil 95</b> (p95) es el tiempo que no supera el 95 % de las consultas, es decir, la peor de cada veinte. En una muestra de cien consultas del asistente, el promedio era 2,6 segundos y parecía bien; la p95 era 7,9 segundos, porque cinco consultas habían pasado por reintentos y por el modelo de respaldo. El promedio escondía exactamente lo que la jefa de reclamos estaba sintiendo.</p><p>En el asistente se miden dos tiempos, ya conocidos del capítulo 3: el <b>tiempo hasta la primera palabra</b> (<i>time to first token</i>, TTFT), que es lo que percibe el agente cuando la explicación llega por <i>streaming</i>, y el tiempo total, que es lo que espera un programa por el JSON completo. Para cada uno se fija un <b>objetivo de nivel de servicio</b> (<i>service level objective</i>, SLO): por ejemplo, p95 del TTFT por debajo de 1,5 segundos y p95 total por debajo de 6 segundos en las consultas. Las alarmas se disparan con la p95, no con el promedio.</p><p>La traza permite además descomponer la latencia por tramo. En una consulta con herramienta, la generación se lleva cerca del 80 % del tiempo; la recuperación, el 7 %; la herramienta, el 5 %. Esa descomposición dice dónde vale la pena trabajar: acortar la salida o pasar a un modelo más pequeño mueve mucho más que optimizar la búsqueda. Y separa lo que no es latencia del sistema: un reembolso que esperó veinte minutos la aprobación de la supervisora tiene un tramo de espera humana, que se mide aparte, con su propio objetivo.</p></div></section>
 <section><h2>Señales de calidad: votos, escalamientos y correcciones</h2><div class="prose"><p>La latencia y el costo se miden solos. La calidad, en producción, se infiere de señales:</p><ul><li><b>Votos.</b> El pulgar arriba o abajo del panel, con motivo opcional. Pocos y sesgados hacia las quejas, pero cada voto negativo apunta a una traza concreta.</li><li><b>Correcciones.</b> Si el agente edita la respuesta antes de enviarla, la diferencia entre lo que propuso el asistente y lo que envió el agente es la mejor etiqueta disponible. La <b>tasa de corrección</b> es el porcentaje de respuestas editadas de forma sustancial.</li><li><b>Escalamientos.</b> Los del capítulo 2: veces que el validador no pudo resolver y la respuesta pasó a una persona. Si sube de un día para otro, algo cambió en el modelo, en la plantilla o en los datos.</li><li><b>Abandonos.</b> El agente pide algo, no usa la respuesta y busca en el manual por su cuenta.</li><li><b>Jueces en línea.</b> Las reglas y el juez calibrado del capítulo 16 sobre una muestra diaria, con su puntaje pegado a la traza.</li></ul><p>Cada señal se registra como puntaje de su traza, así que se puede ir del número al caso: de «la tasa de corrección subió a 14 % el jueves» a las veinte trazas corregidas, y de ahí a su causa común. Las fallas confirmadas vuelven al conjunto dorado, como se vio en el capítulo 16. Y cuando las preguntas de los agentes empiezan a ser de temas que antes no aparecían (un producto nuevo, una política nueva), las señales empeoran sin que nada del sistema haya cambiado: es la <b>deriva</b> (<i>drift</i>), que en los modelos clásicos se vigila con métricas propias en <a href="https://aaramirez.github.io/mlops/temario.html" target="_blank" rel="noopener">MLOps</a>.</p></div></section>

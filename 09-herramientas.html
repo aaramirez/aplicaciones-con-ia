@@ -89,96 +89,96 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <text x="812" y="392" class="t t-xs t-b k-warm">VUELTA 2</text>
 <text x="812" y="408" class="t t-s t-m">termina en texto</text>
 <text x="812" y="422" class="t t-s t-m">para la persona</text>
-</svg></div><figcaption><b>Una pregunta, dos vueltas al modelo.</b> Los participantes están arriba y el tiempo corre hacia abajo. ① El agente pregunta cuánto paga Carmen para reconectar; ② el asistente manda al modelo los mensajes y la lista de herramientas; ③ el modelo no responde: pide <code>calcular_total_reconexion(cuenta=20417)</code>; ④ el código valida la llamada y ⑤ la ejecuta en el motor de tarifas, que ⑥ devuelve 35,00; ⑦ el resultado vuelve al modelo como un mensaje <code>tool</code>; ⑧ el modelo redacta la respuesta y ⑨ el agente la recibe con el monto del sistema. A la derecha, las dos vueltas: la primera termina en una llamada a herramienta y la segunda, en texto.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El ciclo completo con dos herramientas</h3></div><p>Vas a darle a tu modelo local dos herramientas (consultar una factura y calcular el total para reconectar) y a ver cómo las pide, cómo las ejecuta el código y cómo responde con el resultado. Necesitas Ollama con <code>llama3.2:3b</code> (capítulo 1), que acepta herramientas por su API compatible con OpenAI. Guarda este programa como <code>herramientas.py</code>:</p><div class="code-copia"><pre><code>import json, urllib.request
-
-URL = "http://localhost:11434/v1/chat/completions"
-MODELO = "llama3.2:3b"
-MENSAJE = ("La clienta de la cuenta 20417 tiene vencida la factura F-88213 "
-           "y pide la reconexión. ¿Cuánto paga hoy?")
-
-# Los sistemas de verdad (aquí, datos de ejemplo en memoria)
-FACTURAS = {"F-88213": {"cuenta": 20417, "mes": "octubre",
-                        "monto": 30.00, "estado": "vencida"}}
-RECONEXION = 5.00
-
-def consultar_factura(numero):
-    f = FACTURAS.get(numero)
-    if f is None:
-        return {"error": "factura_no_existe",
-                "detalle": f"No hay ninguna factura {numero}. Pide el número correcto."}
-    return {"numero": numero, **f}
-
-def calcular_total_reconexion(cuenta):
-    vencidas = [f["monto"] for f in FACTURAS.values()
-                if f["cuenta"] == cuenta and f["estado"] == "vencida"]
-    return {"cuenta": cuenta, "facturas_vencidas": len(vencidas),
-            "total": sum(vencidas) + RECONEXION}
-
-FUNCIONES = {"consultar_factura": consultar_factura,
-             "calcular_total_reconexion": calcular_total_reconexion}
-
-HERRAMIENTAS = [
-    {"type": "function", "function": {
-        "name": "consultar_factura",
-        "description": ("Devuelve el mes, el monto, la cuenta y el estado de una factura. "
-                        "Úsala cuando la persona menciona un número de factura (F-#####)."),
-        "parameters": {"type": "object",
-                       "properties": {"numero": {"type": "string",
-                                                 "description": "Número de factura, por ejemplo F-88213"}},
-                       "required": ["numero"]}}},
-    {"type": "function", "function": {
-        "name": "calcular_total_reconexion",
-        "description": ("Calcula cuánto paga una cuenta para reconectar: facturas vencidas "
-                        "más el cargo de reconexión. Úsala siempre que pregunten un monto a pagar."),
-        "parameters": {"type": "object",
-                       "properties": {"cuenta": {"type": "integer",
-                                                 "description": "Número de cuenta del cliente"}},
-                       "required": ["cuenta"]}}},
-]
-
-def llamar(mensajes):
-    cuerpo = {"model": MODELO, "temperature": 0,
-              "messages": mensajes, "tools": HERRAMIENTAS}
-    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),
-                                    headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(pedido) as r:
-        return json.load(r)["choices"][0]["message"]
-
-def ejecutar(nombre, args):
-    funcion = FUNCIONES.get(nombre)
-    if funcion is None:
-        return {"error": "herramienta_desconocida", "detalle": nombre}
-    try:
-        return funcion(**args)
-    except TypeError as e:  # argumentos que no calzan con la función
-        return {"error": "argumentos_invalidos", "detalle": str(e)}
-
-mensajes = [
-    {"role": "system", "content": ("Eres el asistente de los agentes de atención. "
-                                   "Usa las herramientas para todo dato o monto; nunca inventes cifras. "
-                                   "Responde en español, en una o dos frases.")},
-    {"role": "user", "content": MENSAJE},
-]
-
-for vuelta in range(1, 5):  # tope de vueltas: nunca un ciclo infinito
-    respuesta = llamar(mensajes)
-    llamadas = respuesta.get("tool_calls") or []
-    if not llamadas:
-        print("\nRespuesta final:", respuesta.get("content"))
-        break
-    mensajes.append(respuesta)
-    for llamada in llamadas:
-        nombre = llamada["function"]["name"]
-        args = llamada["function"]["arguments"]
-        if isinstance(args, str):
-            args = json.loads(args or "{}")
-        print(f"[vuelta {vuelta}] el modelo pide {nombre}({args})")
-        resultado = ejecutar(nombre, args)
-        print(f"           el código devuelve {resultado}")
-        mensajes.append({"role": "tool", "tool_call_id": llamada.get("id", ""),
-                         "content": json.dumps(resultado, ensure_ascii=False)})
-else:
-    print("Se alcanzó el tope de vueltas: se escala a una persona.")</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python herramientas.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 herramientas.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota qué herramientas pide el modelo, con qué argumentos y en cuántas vueltas.</span></li><li><span>Compara el monto de la respuesta final con el que devolvió <code>calcular_total_reconexion</code>.</span></li><li><span>Borra la línea <code>"tools": HERRAMIENTAS</code> del cuerpo, vuelve a correrlo y mira qué responde el modelo sin herramientas.</span></li></ol><p><b>Qué observar:</b> el modelo no calcula: pide una o las dos herramientas, el código las ejecuta y el total (US$ 35,00) sale de la función. Los argumentos llegan como JSON que el código decodifica y valida. Sin herramientas, el modelo responde de inmediato y tiene que adivinar el cargo de reconexión. Un modelo pequeño a veces pide una herramienta que no hacía falta, o la misma dos veces; por eso el código tiene un tope de vueltas. El mismo programa sirve con un proveedor comercial cambiando la dirección, el modelo y la clave.</p></div><div class="lab" id="09-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>El ciclo de una llamada a herramienta, paso a paso</h3></div><p class="hint">Elige un caso y avanza con «Siguiente paso». Arriba se enciende quién actúa en cada momento; abajo crece la lista de mensajes que viaja al modelo en cada vuelta. Mira cuándo el modelo pide una herramienta, qué devuelve el código, qué pasa con un error y por qué la escritura se detiene antes de ejecutar.</p><style>
+</svg></div><figcaption><b>Una pregunta, dos vueltas al modelo.</b> Los participantes están arriba y el tiempo corre hacia abajo. ① El agente pregunta cuánto paga Carmen para reconectar; ② el asistente manda al modelo los mensajes y la lista de herramientas; ③ el modelo no responde: pide <code>calcular_total_reconexion(cuenta=20417)</code>; ④ el código valida la llamada y ⑤ la ejecuta en el motor de tarifas, que ⑥ devuelve 35,00; ⑦ el resultado vuelve al modelo como un mensaje <code>tool</code>; ⑧ el modelo redacta la respuesta y ⑨ el agente la recibe con el monto del sistema. A la derecha, las dos vueltas: la primera termina en una llamada a herramienta y la segunda, en texto.</figcaption></figure><div class="practica"><div class="practica-title"><span class="tag">En la terminal</span><h3>El ciclo completo con dos herramientas</h3></div><p>Vas a darle a tu modelo local dos herramientas (consultar una factura y calcular el total para reconectar) y a ver cómo las pide, cómo las ejecuta el código y cómo responde con el resultado. Necesitas Ollama con <code>llama3.2:3b</code> (capítulo 1), que acepta herramientas por su API compatible con OpenAI. Guarda este programa como <code>herramientas.py</code>:</p><div class="code-copia code-lineas"><pre><code><span class="ln">import json, urllib.request</span>
+<span class="ln"></span>
+<span class="ln">URL = "http://localhost:11434/v1/chat/completions"</span>
+<span class="ln">MODELO = "llama3.2:3b"</span>
+<span class="ln">MENSAJE = ("La clienta de la cuenta 20417 tiene vencida la factura F-88213 "</span>
+<span class="ln">           "y pide la reconexión. ¿Cuánto paga hoy?")</span>
+<span class="ln"></span>
+<span class="ln"># Los sistemas de verdad (aquí, datos de ejemplo en memoria)</span>
+<span class="ln">FACTURAS = {"F-88213": {"cuenta": 20417, "mes": "octubre",</span>
+<span class="ln">                        "monto": 30.00, "estado": "vencida"}}</span>
+<span class="ln">RECONEXION = 5.00</span>
+<span class="ln"></span>
+<span class="ln">def consultar_factura(numero):</span>
+<span class="ln">    f = FACTURAS.get(numero)</span>
+<span class="ln">    if f is None:</span>
+<span class="ln">        return {"error": "factura_no_existe",</span>
+<span class="ln">                "detalle": f"No hay ninguna factura {numero}. Pide el número correcto."}</span>
+<span class="ln">    return {"numero": numero, **f}</span>
+<span class="ln"></span>
+<span class="ln">def calcular_total_reconexion(cuenta):</span>
+<span class="ln">    vencidas = [f["monto"] for f in FACTURAS.values()</span>
+<span class="ln">                if f["cuenta"] == cuenta and f["estado"] == "vencida"]</span>
+<span class="ln">    return {"cuenta": cuenta, "facturas_vencidas": len(vencidas),</span>
+<span class="ln">            "total": sum(vencidas) + RECONEXION}</span>
+<span class="ln"></span>
+<span class="ln">FUNCIONES = {"consultar_factura": consultar_factura,</span>
+<span class="ln">             "calcular_total_reconexion": calcular_total_reconexion}</span>
+<span class="ln"></span>
+<span class="ln">HERRAMIENTAS = [</span>
+<span class="ln">    {"type": "function", "function": {</span>
+<span class="ln">        "name": "consultar_factura",</span>
+<span class="ln">        "description": ("Devuelve el mes, el monto, la cuenta y el estado de una factura. "</span>
+<span class="ln">                        "Úsala cuando la persona menciona un número de factura (F-#####)."),</span>
+<span class="ln">        "parameters": {"type": "object",</span>
+<span class="ln">                       "properties": {"numero": {"type": "string",</span>
+<span class="ln">                                                 "description": "Número de factura, por ejemplo F-88213"}},</span>
+<span class="ln">                       "required": ["numero"]}}},</span>
+<span class="ln">    {"type": "function", "function": {</span>
+<span class="ln">        "name": "calcular_total_reconexion",</span>
+<span class="ln">        "description": ("Calcula cuánto paga una cuenta para reconectar: facturas vencidas "</span>
+<span class="ln">                        "más el cargo de reconexión. Úsala siempre que pregunten un monto a pagar."),</span>
+<span class="ln">        "parameters": {"type": "object",</span>
+<span class="ln">                       "properties": {"cuenta": {"type": "integer",</span>
+<span class="ln">                                                 "description": "Número de cuenta del cliente"}},</span>
+<span class="ln">                       "required": ["cuenta"]}}},</span>
+<span class="ln">]</span>
+<span class="ln"></span>
+<span class="ln">def llamar(mensajes):</span>
+<span class="ln">    cuerpo = {"model": MODELO, "temperature": 0,</span>
+<span class="ln">              "messages": mensajes, "tools": HERRAMIENTAS}</span>
+<span class="ln">    pedido = urllib.request.Request(URL, data=json.dumps(cuerpo).encode("utf-8"),</span>
+<span class="ln">                                    headers={"Content-Type": "application/json"})</span>
+<span class="ln">    with urllib.request.urlopen(pedido) as r:</span>
+<span class="ln">        return json.load(r)["choices"][0]["message"]</span>
+<span class="ln"></span>
+<span class="ln">def ejecutar(nombre, args):</span>
+<span class="ln">    funcion = FUNCIONES.get(nombre)</span>
+<span class="ln">    if funcion is None:</span>
+<span class="ln">        return {"error": "herramienta_desconocida", "detalle": nombre}</span>
+<span class="ln">    try:</span>
+<span class="ln">        return funcion(**args)</span>
+<span class="ln">    except TypeError as e:  # argumentos que no calzan con la función</span>
+<span class="ln">        return {"error": "argumentos_invalidos", "detalle": str(e)}</span>
+<span class="ln"></span>
+<span class="ln">mensajes = [</span>
+<span class="ln">    {"role": "system", "content": ("Eres el asistente de los agentes de atención. "</span>
+<span class="ln">                                   "Usa las herramientas para todo dato o monto; nunca inventes cifras. "</span>
+<span class="ln">                                   "Responde en español, en una o dos frases.")},</span>
+<span class="ln">    {"role": "user", "content": MENSAJE},</span>
+<span class="ln">]</span>
+<span class="ln"></span>
+<span class="ln">for vuelta in range(1, 5):  # tope de vueltas: nunca un ciclo infinito</span>
+<span class="ln">    respuesta = llamar(mensajes)</span>
+<span class="ln">    llamadas = respuesta.get("tool_calls") or []</span>
+<span class="ln">    if not llamadas:</span>
+<span class="ln">        print("\nRespuesta final:", respuesta.get("content"))</span>
+<span class="ln">        break</span>
+<span class="ln">    mensajes.append(respuesta)</span>
+<span class="ln">    for llamada in llamadas:</span>
+<span class="ln">        nombre = llamada["function"]["name"]</span>
+<span class="ln">        args = llamada["function"]["arguments"]</span>
+<span class="ln">        if isinstance(args, str):</span>
+<span class="ln">            args = json.loads(args or "{}")</span>
+<span class="ln">        print(f"[vuelta {vuelta}] el modelo pide {nombre}({args})")</span>
+<span class="ln">        resultado = ejecutar(nombre, args)</span>
+<span class="ln">        print(f"           el código devuelve {resultado}")</span>
+<span class="ln">        mensajes.append({"role": "tool", "tool_call_id": llamada.get("id", ""),</span>
+<span class="ln">                         "content": json.dumps(resultado, ensure_ascii=False)})</span>
+<span class="ln">else:</span>
+<span class="ln">    print("Se alcanzó el tope de vueltas: se escala a una persona.")</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><div class="cmds"><div class="cmd-tabs" role="tablist" aria-label="Sistema operativo"><button type="button" role="tab" data-so="win">Windows</button><button type="button" role="tab" data-so="mac linux">macOS y Linux</button></div><div class="cmd-panel" role="tabpanel" data-so="win"><div class="cmd-l"><code>python herramientas.py</code><button type="button" class="copiar">Copiar</button></div></div><div class="cmd-panel" role="tabpanel" data-so="mac linux"><div class="cmd-l"><code>python3 herramientas.py</code><button type="button" class="copiar">Copiar</button></div></div></div><ol class="steps"><li><span>Ejecuta el programa y anota qué herramientas pide el modelo, con qué argumentos y en cuántas vueltas.</span></li><li><span>Compara el monto de la respuesta final con el que devolvió <code>calcular_total_reconexion</code>.</span></li><li><span>Borra la línea <code>"tools": HERRAMIENTAS</code> del cuerpo, vuelve a correrlo y mira qué responde el modelo sin herramientas.</span></li></ol><p><b>Qué observar:</b> el modelo no calcula: pide una o las dos herramientas, el código las ejecuta y el total (US$ 35,00) sale de la función. Los argumentos llegan como JSON que el código decodifica y valida. Sin herramientas, el modelo responde de inmediato y tiene que adivinar el cargo de reconexión. Un modelo pequeño a veces pide una herramienta que no hacía falta, o la misma dos veces; por eso el código tiene un tope de vueltas. El mismo programa sirve con un proveedor comercial cambiando la dirección, el modelo y la clave.</p></div><div class="lab" id="09-lab-1"><div class="lab-title"><span class="tag">Laboratorio</span><h3>El ciclo de una llamada a herramienta, paso a paso</h3></div><p class="hint">Elige un caso y avanza con «Siguiente paso». Arriba se enciende quién actúa en cada momento; abajo crece la lista de mensajes que viaja al modelo en cada vuelta. Mira cuándo el modelo pide una herramienta, qué devuelve el código, qué pasa con un error y por qué la escritura se detiene antes de ejecutar.</p><style>
 [id="09-lab-1"] .c9l1-act{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 [id="09-lab-1"] .c9l1-a{border:1px solid var(--line);border-radius:10px;padding:7px 6px;text-align:center;font:600 .8rem/1.25 var(--f-display);color:var(--muted);background:var(--card);transition:background .2s,border-color .2s}
 [id="09-lab-1"] .c9l1-a small{display:block;font-weight:500;font-size:.7rem}
@@ -231,20 +231,20 @@ else:
 </div>
 <ol class="c9l1-msgs" id="c9l1-msgs" aria-label="Mensajes que viajan al modelo"></ol>
 <div class="readout texto" id="c9l1-out" aria-live="polite"></div></div></section>
-<section><h2>Definir una herramienta: nombre, descripción y esquema de entrada</h2><div class="prose"><p>Para el modelo, una herramienta es solo texto: lo que dicen su nombre, su descripción y su esquema. No ve el código. Si la descripción es vaga, elegirá mal; si el esquema es flojo, mandará argumentos que el código no entiende.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un formulario de ventanilla bien hecho dice arriba para qué sirve («Solicitud de cambio de domicilio»), aclara cuándo no usarlo («para cambio de titular, use el formulario B») y pone al lado de cada casilla qué va ahí y en qué formato («fecha: DD/MM/AAAA»). Un formulario que solo dice «Datos» recibe cualquier cosa.</p></div><div class="prose"><p>Una definición tiene tres partes:</p><ul><li><b>Nombre.</b> Un verbo y un objeto del negocio, en minúsculas y sin espacios: <code>consultar_factura</code>, <code>reprogramar_visita</code>. Que se entienda solo. Evita nombres genéricos (<code>procesar</code>, <code>accion1</code>) y nombres casi iguales entre sí.</li><li><b>Descripción.</b> Qué hace, cuándo usarla, cuándo no usarla y qué devuelve. Es, en la práctica, una parte del prompt, y se escribe con el mismo cuidado que las plantillas del capítulo 4.</li><li><b>Esquema de entrada</b> (<i>input schema</i>). Un <b>esquema JSON</b> (<i>JSON Schema</i>), como en el capítulo 5: cada parámetro con su tipo, su descripción, sus valores permitidos (<code>enum</code>), su formato (<code>pattern</code>, <code>minimum</code>) y cuáles son obligatorios. <code>additionalProperties: false</code> rechaza campos inventados.</li></ul><p>Así quedó la definición de la herramienta de escritura de la versión 0.7:</p><div class="code-copia"><pre><code>{
-  "name": "reprogramar_visita",
-  "description": "Cambia el día y la franja de la visita técnica de una orden de trabajo abierta. Úsala solo cuando la persona pide mover una visita ya agendada; para agendar una visita nueva no sirve. Devuelve la orden con su nueva fecha, o un error que explica por qué no se pudo.",
-  "parameters": {
-    "type": "object",
-    "additionalProperties": false,
-    "properties": {
-      "orden": {"type": "integer", "description": "Número de la orden de trabajo, por ejemplo 4471"},
-      "fecha": {"type": "string", "format": "date", "description": "Día nuevo, en formato AAAA-MM-DD"},
-      "franja": {"type": "string", "enum": ["manana", "tarde"]}
-    },
-    "required": ["orden", "fecha", "franja"]
-  }
-}</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Fíjate en tres decisiones. La fecha va en formato canónico y no como «el jueves», porque el modelo puede traducir «el jueves» a una fecha (sabe la de hoy si se la pones en el contexto) y el código no debería tener que interpretar lenguaje. La franja es una enumeración, no texto libre. Y la descripción dice qué devuelve cuando falla, lo que le enseña al modelo qué hacer con un error.</p></div></section>
+<section><h2>Definir una herramienta: nombre, descripción y esquema de entrada</h2><div class="prose"><p>Para el modelo, una herramienta es solo texto: lo que dicen su nombre, su descripción y su esquema. No ve el código. Si la descripción es vaga, elegirá mal; si el esquema es flojo, mandará argumentos que el código no entiende.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un formulario de ventanilla bien hecho dice arriba para qué sirve («Solicitud de cambio de domicilio»), aclara cuándo no usarlo («para cambio de titular, use el formulario B») y pone al lado de cada casilla qué va ahí y en qué formato («fecha: DD/MM/AAAA»). Un formulario que solo dice «Datos» recibe cualquier cosa.</p></div><div class="prose"><p>Una definición tiene tres partes:</p><ul><li><b>Nombre.</b> Un verbo y un objeto del negocio, en minúsculas y sin espacios: <code>consultar_factura</code>, <code>reprogramar_visita</code>. Que se entienda solo. Evita nombres genéricos (<code>procesar</code>, <code>accion1</code>) y nombres casi iguales entre sí.</li><li><b>Descripción.</b> Qué hace, cuándo usarla, cuándo no usarla y qué devuelve. Es, en la práctica, una parte del prompt, y se escribe con el mismo cuidado que las plantillas del capítulo 4.</li><li><b>Esquema de entrada</b> (<i>input schema</i>). Un <b>esquema JSON</b> (<i>JSON Schema</i>), como en el capítulo 5: cada parámetro con su tipo, su descripción, sus valores permitidos (<code>enum</code>), su formato (<code>pattern</code>, <code>minimum</code>) y cuáles son obligatorios. <code>additionalProperties: false</code> rechaza campos inventados.</li></ul><p>Así quedó la definición de la herramienta de escritura de la versión 0.7:</p><div class="code-copia code-lineas"><pre><code><span class="ln">{</span>
+<span class="ln">  "name": "reprogramar_visita",</span>
+<span class="ln">  "description": "Cambia el día y la franja de la visita técnica de una orden de trabajo abierta. Úsala solo cuando la persona pide mover una visita ya agendada; para agendar una visita nueva no sirve. Devuelve la orden con su nueva fecha, o un error que explica por qué no se pudo.",</span>
+<span class="ln">  "parameters": {</span>
+<span class="ln">    "type": "object",</span>
+<span class="ln">    "additionalProperties": false,</span>
+<span class="ln">    "properties": {</span>
+<span class="ln">      "orden": {"type": "integer", "description": "Número de la orden de trabajo, por ejemplo 4471"},</span>
+<span class="ln">      "fecha": {"type": "string", "format": "date", "description": "Día nuevo, en formato AAAA-MM-DD"},</span>
+<span class="ln">      "franja": {"type": "string", "enum": ["manana", "tarde"]}</span>
+<span class="ln">    },</span>
+<span class="ln">    "required": ["orden", "fecha", "franja"]</span>
+<span class="ln">  }</span>
+<span class="ln">}</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>Fíjate en tres decisiones. La fecha va en formato canónico y no como «el jueves», porque el modelo puede traducir «el jueves» a una fecha (sabe la de hoy si se la pones en el contexto) y el código no debería tener que interpretar lenguaje. La franja es una enumeración, no texto libre. Y la descripción dice qué devuelve cuando falla, lo que le enseña al modelo qué hacer con un error.</p></div></section>
 <section><h2>El registro de herramientas: metadatos, riesgo, permisos y dueño</h2><div class="prose"><p>La definición es lo que ve el modelo. El código necesita saber mucho más de cada herramienta, y lo guarda en un <b>registro de herramientas</b> (<i>tool registry</i>): un catálogo versionado, con una ficha por herramienta, que es la fuente de verdad para armar la lista que se manda al modelo y para decidir qué se ejecuta.</p></div><div class="analogia"><b>Imagínalo así</b><p>En un hospital, el carro de medicamentos tiene una etiqueta visible en cada cajón (nombre y dosis) y una hoja de control que la enfermera no le lee al paciente: quién puede administrarlo, si requiere doble firma, qué farmacia lo repone y cuándo vence. La etiqueta es la descripción; la hoja de control es el registro.</p></div><figure class="fig fig-esquema" id="09-diagrama-3"><div class="lienzo"><svg viewBox="0 0 920 460" style="min-width:740px" role="img" aria-label="Ficha de la herramienta reprogramar_visita en el registro. A la izquierda lo que ve el modelo: nombre, descripción y esquema de entrada. A la derecha lo que lee solo el código: versión, efecto, riesgo, roles, aprobación, idempotencia, límites y dueño. Abajo, las tres decisiones del código: si entra en la lista, si se ejecuta sola y qué queda en la traza">
 <defs>
 <marker id="c9d3-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-red"/></marker>
@@ -293,24 +293,24 @@ else:
 <line x1="460" y1="292" x2="460" y2="334" class="ln s-red" style="stroke-width:2" marker-end="url(#c9d3-r)"/>
 <line x1="753" y1="292" x2="753" y2="334" class="ln s-red" style="stroke-width:2" marker-end="url(#c9d3-r)"/>
 </svg></div><figcaption><b>La ficha de una herramienta en el registro.</b> A la izquierda, lo que viaja al modelo: nombre, descripción y esquema de entrada. Arriba, el nombre y la versión de la ficha. A la derecha, lo que solo lee el código: tipo de efecto, nivel de riesgo, roles que pueden usarla, si pide aprobación, si es idempotente, límites de tiempo y de uso, y el equipo dueño. Abajo, las tres decisiones que toma el código con esa ficha: si la herramienta entra en la lista de esta persona, si la llamada se ejecuta sola o espera a alguien, y qué queda en la traza.</figcaption></figure><div class="prose"><p>Los campos típicos de la ficha:</p><div class="tbl"><table><thead><tr><th>Campo</th><th>Para qué sirve</th><th>Ejemplo en <code>reprogramar_visita</code></th></tr></thead><tbody><tr><td>Versión</td><td>Cambiar la herramienta sin romper a quien la usa</td><td><code>2</code> (la 1 no tenía franja)</td></tr><tr><td>Efecto</td><td>Lectura, escritura reversible o irreversible</td><td>escritura reversible</td></tr><tr><td>Riesgo</td><td>Cuánto daño hace un error</td><td>medio</td></tr><tr><td>Roles</td><td>Quién puede pedirla, en nombre de quién actúa</td><td>agentes de atención, supervisora</td></tr><tr><td>Aprobación</td><td>Si se ejecuta sola o espera a una persona</td><td>sí, por ahora (capítulo 11)</td></tr><tr><td>Idempotente</td><td>Si repetirla con los mismos datos da el mismo efecto</td><td>sí, con clave por orden y fecha</td></tr><tr><td>Límites</td><td>Tiempo máximo, tamaño de la respuesta, llamadas por minuto</td><td>5 s, 20 por minuto</td></tr><tr><td>Dueño</td><td>Quién responde si falla</td><td>equipo de órdenes de trabajo</td></tr></tbody></table></div><p>Con el registro, la lista de herramientas deja de ser fija. Un técnico y un agente de reclamos ven listas distintas, porque cada uno solo recibe las herramientas que su rol permite. Lo que el modelo no conoce, no lo puede pedir, y eso es más seguro que confiar en que «no lo pedirá». Cómo se ejecutan y validan las herramientas dentro de un agente, con su registro de capacidades, está en <a href="https://aaramirez.github.io/arneses/03-herramientas.html" target="_blank" rel="noopener">El runtime de herramientas</a>.</p></div></section>
-<section><h2>Cada slice de VSA como herramienta</h2><div class="prose"><p>¿De dónde salen las herramientas? La respuesta mala es escribir funciones nuevas «para la IA» junto a la aplicación de siempre, con su propia lógica de negocio. A los tres meses hay dos formas de reprogramar una visita, y cada una valida distinto.</p><p>La respuesta buena aprovecha cómo está construida la aplicación. En una <b>arquitectura de cortes verticales</b> (<i>Vertical Slice Architecture</i>, VSA), cada funcionalidad es un <b>slice</b> (corte) que tiene todo lo suyo: el pedido, la validación, la lógica, el acceso a datos y la respuesta. «Reprogramar visita» es un slice; «consultar factura», otro. La arquitectura a fondo está en <a href="https://aaramirez.github.io/backend/temario.html" target="_blank" rel="noopener">Backend y APIs</a>.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un banco tiene una sola bóveda y un solo sistema de cuentas, pero dos formas de retirar dinero: la ventanilla y el cajero automático. Las reglas son las mismas (saldo, límite diario, identificación); lo único distinto es por dónde entra el pedido. Nadie construye una segunda bóveda para el cajero.</p></div><div class="prose"><p>Un slice bien hecho ya tiene lo que pide una herramienta: un pedido con esquema, una validación y un resultado estructurado. Solo le falta una segunda puerta. La primera es el endpoint REST que usa la pantalla de órdenes; la segunda es un <b>adaptador de herramienta</b> que traduce el esquema del pedido a la definición que ve el modelo y llama al mismo manejador:</p><div class="code-copia"><pre><code># slices/reprogramar_visita.py  (esbozo)
-class Pedido(BaseModel):            # el mismo esquema para las dos puertas
-    orden: int
-    fecha: date
-    franja: Literal["manana", "tarde"]
-
-def manejar(pedido: Pedido, usuario: Usuario) -&gt; Resultado:
-    ...                             # reglas de negocio, una sola vez
-
-# Puerta 1: la pantalla de órdenes
-@app.post("/v1/ordenes/{orden}/reprogramacion")
-def endpoint(orden: int, cuerpo: Pedido, usuario = Depends(usuario_actual)):
-    return manejar(cuerpo, usuario)
-
-# Puerta 2: el asistente
-registro.agregar(herramienta_desde(Pedido, nombre="reprogramar_visita",
-                                   descripcion=DESCRIPCION, manejar=manejar,
-                                   efecto="escritura", riesgo="medio"))</code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>El adaptador hace tres cosas más: pasa la identidad de la persona que pidió (el asistente actúa <b>en nombre de</b> ella, nunca con permisos propios más amplios), convierte las excepciones en errores con explicación y registra la llamada en la traza. En el capítulo 10, la misma puerta se publica por MCP para que otras aplicaciones la usen.</p></div><figure class="fig fig-arquitectura" id="09-diagrama-2"><div class="lienzo"><svg viewBox="0 0 960 480" style="min-width:760px" role="img" aria-label="Arquitectura: tres slices de la aplicación (consultar factura, estado de ticket, reprogramar visita), cada uno con validación, lógica y datos. A la izquierda la pantalla de tickets entra por endpoints REST; a la derecha el asistente entra por adaptadores de herramienta que pasan por el registro de permisos y riesgo. Abajo, los sistemas de facturación, tickets y órdenes">
+<section><h2>Cada slice de VSA como herramienta</h2><div class="prose"><p>¿De dónde salen las herramientas? La respuesta mala es escribir funciones nuevas «para la IA» junto a la aplicación de siempre, con su propia lógica de negocio. A los tres meses hay dos formas de reprogramar una visita, y cada una valida distinto.</p><p>La respuesta buena aprovecha cómo está construida la aplicación. En una <b>arquitectura de cortes verticales</b> (<i>Vertical Slice Architecture</i>, VSA), cada funcionalidad es un <b>slice</b> (corte) que tiene todo lo suyo: el pedido, la validación, la lógica, el acceso a datos y la respuesta. «Reprogramar visita» es un slice; «consultar factura», otro. La arquitectura a fondo está en <a href="https://aaramirez.github.io/backend/temario.html" target="_blank" rel="noopener">Backend y APIs</a>.</p></div><div class="analogia"><b>Imagínalo así</b><p>Un banco tiene una sola bóveda y un solo sistema de cuentas, pero dos formas de retirar dinero: la ventanilla y el cajero automático. Las reglas son las mismas (saldo, límite diario, identificación); lo único distinto es por dónde entra el pedido. Nadie construye una segunda bóveda para el cajero.</p></div><div class="prose"><p>Un slice bien hecho ya tiene lo que pide una herramienta: un pedido con esquema, una validación y un resultado estructurado. Solo le falta una segunda puerta. La primera es el endpoint REST que usa la pantalla de órdenes; la segunda es un <b>adaptador de herramienta</b> que traduce el esquema del pedido a la definición que ve el modelo y llama al mismo manejador:</p><div class="code-copia code-lineas"><pre><code><span class="ln"># slices/reprogramar_visita.py  (esbozo)</span>
+<span class="ln">class Pedido(BaseModel):            # el mismo esquema para las dos puertas</span>
+<span class="ln">    orden: int</span>
+<span class="ln">    fecha: date</span>
+<span class="ln">    franja: Literal["manana", "tarde"]</span>
+<span class="ln"></span>
+<span class="ln">def manejar(pedido: Pedido, usuario: Usuario) -&gt; Resultado:</span>
+<span class="ln">    ...                             # reglas de negocio, una sola vez</span>
+<span class="ln"></span>
+<span class="ln"># Puerta 1: la pantalla de órdenes</span>
+<span class="ln">@app.post("/v1/ordenes/{orden}/reprogramacion")</span>
+<span class="ln">def endpoint(orden: int, cuerpo: Pedido, usuario = Depends(usuario_actual)):</span>
+<span class="ln">    return manejar(cuerpo, usuario)</span>
+<span class="ln"></span>
+<span class="ln"># Puerta 2: el asistente</span>
+<span class="ln">registro.agregar(herramienta_desde(Pedido, nombre="reprogramar_visita",</span>
+<span class="ln">                                   descripcion=DESCRIPCION, manejar=manejar,</span>
+<span class="ln">                                   efecto="escritura", riesgo="medio"))</span></code></pre><button type="button" class="copiar copiar-todo">Copiar</button></div><p>El adaptador hace tres cosas más: pasa la identidad de la persona que pidió (el asistente actúa <b>en nombre de</b> ella, nunca con permisos propios más amplios), convierte las excepciones en errores con explicación y registra la llamada en la traza. En el capítulo 10, la misma puerta se publica por MCP para que otras aplicaciones la usen.</p></div><figure class="fig fig-arquitectura" id="09-diagrama-2"><div class="lienzo"><svg viewBox="0 0 960 480" style="min-width:760px" role="img" aria-label="Arquitectura: tres slices de la aplicación (consultar factura, estado de ticket, reprogramar visita), cada uno con validación, lógica y datos. A la izquierda la pantalla de tickets entra por endpoints REST; a la derecha el asistente entra por adaptadores de herramienta que pasan por el registro de permisos y riesgo. Abajo, los sistemas de facturación, tickets y órdenes">
 <defs>
 <marker id="c9d2-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="fl-muted"/></marker>
 <marker id="c9d2-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="k-red"/></marker>
